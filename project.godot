@@ -9,7 +9,7 @@ config_version=5
 
 config/name="Descent"
 config/description="Turn-based tactical dungeon crawler (DCC-style)"
-config/features=PackedStringArray("4.3", "Forward Plus")
+config/features=PackedStringArray("4.4", "GL Compatibility")
 run/main_scene="res://scenes/Main.tscn"
 config/icon="res://icon.svg"
 
@@ -26,4 +26,5 @@ window/size/resizable=true
 
 [rendering]
 
-renderer/rendering_method="forward_plus"
+renderer/rendering_method="gl_compatibility"
+renderer/rendering_method.mobile="gl_compatibility"
