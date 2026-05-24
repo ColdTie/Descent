@@ -1,0 +1,708 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>DESCENT — Dungeon Crawler Carl</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: #07050c; display: flex; justify-content: center;
+         align-items: center; min-height: 100vh; overflow: hidden; }
+  canvas { display: block; cursor: pointer; }
+</style>
+</head>
+<body>
+<canvas id="c" width="1400" height="760"></canvas>
+<script>
+'use strict';
+// ═══════════════════════════════════════════════════════════════════════════
+// DESCENT — single-file browser game  v2  (bigger dungeon, two rooms)
+// ═══════════════════════════════════════════════════════════════════════════
+
+// ── RNG (seeded XOR-shift, deterministic) ───────────────────────────────────
+let seed = 42;
+function rng()           { seed ^= seed<<13; seed ^= seed>>17; seed ^= seed<<5; return (seed>>>0)/0x100000000; }
+function roll(s)         { return Math.floor(rng()*s)+1; }
+function rollDice(nota)  { const [n,s]=nota.split('d').map(Number); let t=0; for(let i=0;i<n;i++) t+=roll(s); return t; }
+function d20()           { return roll(20); }
+
+// ── Grid layout ─────────────────────────────────────────────────────────────
+const COLS=20, ROWS=13, CS=55;   // cells × pixels-per-cell
+const GX=15, GY=15;               // grid top-left on canvas
+
+// Walls: outer border + dividing wall (col 9, minus archway rows 5-7) + rocks
+const WALL_SET = new Set();
+
+// Border walls
+for(let c=0;c<COLS;c++){ WALL_SET.add(`${c},0`); WALL_SET.add(`${c},${ROWS-1}`); }
+for(let r=0;r<ROWS;r++){ WALL_SET.add(`0,${r}`); WALL_SET.add(`${COLS-1},${r}`); }
+
+// Dividing wall col=9 (skip archway rows 5,6,7)
+for(let r=0;r<ROWS;r++){
+  if(r<5||r>7) WALL_SET.add(`9,${r}`);
+}
+
+// Room 1 interior rocks (cols 1-8)
+[[3,2],[4,2],[2,5],[2,6],[7,4],[6,6],[5,9],[6,9],[3,10],[4,10]]
+  .forEach(([c,r])=>WALL_SET.add(`${c},${r}`));
+
+// Room 2 interior rocks (cols 10-18)
+[[12,2],[13,2],[11,5],[15,6],[16,6],[17,9],[18,9],[11,10],[14,10],[16,2]]
+  .forEach(([c,r])=>WALL_SET.add(`${c},${r}`));
+
+const isWall    = (c,r) => WALL_SET.has(`${c},${r}`);
+const inBounds  = (c,r) => c>=0&&c<COLS&&r>=0&&r<ROWS;
+const walkable  = (c,r) => inBounds(c,r)&&!isWall(c,r);
+const isArchway = (c,r) => c===9&&r>=5&&r<=7;
+
+// ── Cell ↔ world helpers ────────────────────────────────────────────────────
+const cx = c => GX + c*CS + CS/2;
+const cy = r => GY + r*CS + CS/2;
+const cellRect = (c,r) => [GX+c*CS, GY+r*CS, CS, CS];
+
+// ── Occupancy ───────────────────────────────────────────────────────────────
+const occ = new Map();
+const occKey = (c,r) => `${c},${r}`;
+const getOcc = (c,r) => occ.get(occKey(c,r))||null;
+const setOcc = (c,r,u) => occ.set(occKey(c,r),u);
+const clrOcc = (c,r)   => occ.delete(occKey(c,r));
+const isOcc  = (c,r)   => occ.has(occKey(c,r));
+
+// ── Pathfinding ──────────────────────────────────────────────────────────────
+function findPath(fc,fr,tc,tr){
+  if(!walkable(tc,tr)) return [];
+  const key=(c,r)=>`${c},${r}`;
+  const open=[{c:fc,r:fr,g:0,f:Math.abs(fc-tc)+Math.abs(fr-tr),prev:null}];
+  const gMap=new Map([[key(fc,fr),0]]);
+  while(open.length){
+    open.sort((a,b)=>a.f-b.f);
+    const cur=open.shift();
+    if(cur.c===tc&&cur.r===tr){
+      const path=[]; let n=cur;
+      while(n){path.push([n.c,n.r]);n=n.prev;}
+      return path.reverse();
+    }
+    for(const [dc,dr] of [[0,-1],[0,1],[-1,0],[1,0]]){
+      const nc=cur.c+dc, nr=cur.r+dr;
+      if(!walkable(nc,nr)) continue;
+      const ng=cur.g+1;
+      if(!gMap.has(key(nc,nr))||ng<gMap.get(key(nc,nr))){
+        gMap.set(key(nc,nr),ng);
+        open.push({c:nc,r:nr,g:ng,f:ng+Math.abs(nc-tc)+Math.abs(nr-tr),prev:cur});
+      }
+    }
+  }
+  return [];
+}
+
+function getReachable(oc,or_,maxSteps,mover){
+  const result=[], visited=new Set([occKey(oc,or_)]);
+  const queue=[[oc,or_,0]];
+  while(queue.length){
+    const [c,r,steps]=queue.shift();
+    if(steps>0) result.push([c,r]);
+    if(steps>=maxSteps) continue;
+    for(const [dc,dr] of [[0,-1],[0,1],[-1,0],[1,0]]){
+      const nc=c+dc, nr=r+dr, k=occKey(nc,nr);
+      if(visited.has(k)||!walkable(nc,nr)) continue;
+      const o=getOcc(nc,nr);
+      if(o&&o!==mover) continue;
+      visited.add(k);
+      queue.push([nc,nr,steps+1]);
+    }
+  }
+  return result;
+}
+
+// Chebyshev distance for weapon range
+const dist = (c1,r1,c2,r2) => Math.max(Math.abs(c1-c2),Math.abs(r1-r2));
+
+// ── Weapons ──────────────────────────────────────────────────────────────────
+const W_SHIV    = {name:'Rusty Shiv',  range:1, toHit:2, dice:'1d4', consumable:false};
+const W_BANDAGE = {name:'Bandage',     range:0, toHit:0, healDice:'1d6', consumable:true};
+const W_CLAW    = {name:'Goblin Claw', range:1, toHit:2, dice:'1d4', consumable:false};
+const W_CLUB    = {name:'Heavy Club',  range:1, toHit:1, dice:'1d8', consumable:false};
+
+// ── Units ────────────────────────────────────────────────────────────────────
+function makeUnit(name,col,row,hp,move,def,isPlayer,color,weapons,scale){
+  return { name,col,row,hp,maxHp:hp,move,def,isPlayer,color,
+           weapons:[...weapons],scale:scale||1.0,alive:true,active:false,
+           alpha:1.0,flashT:0,_animX:undefined,_animY:undefined };
+}
+
+let units = [
+  makeUnit('Carl',         1,  6, 12, 5, 12, true,  '#4a78e0', [W_SHIV, W_BANDAGE]),
+  makeUnit('Goblin',      11,  2,  5, 4, 11, false, '#3a9a3a', [W_CLAW]),
+  makeUnit('Goblin',      17,  4,  5, 4, 11, false, '#3a9a3a', [W_CLAW]),
+  makeUnit('Goblin',      18,  9,  5, 4, 11, false, '#3a9a3a', [W_CLAW]),
+  makeUnit('Goblin Brute',13,  7, 14, 3, 13, false, '#1a6a20', [W_CLUB], 1.3),
+];
+
+// ── Turn state ───────────────────────────────────────────────────────────────
+let turnOrder=[], turnIdx=0, active=null;
+let moveSpent=false, actionSpent=false;
+let moveCells=[], attackCells=[];
+let battleOver=false, playerWon=false;
+let animating=false;
+
+// Panel geometry
+const PANEL_X = GX + COLS*CS + 18;
+const PANEL_W = 1400 - PANEL_X - 10;
+const BTN         = {x:PANEL_X,   y:118, w:PANEL_W, h:38};
+const BANDAGE_BTN = {x:PANEL_X,   y:164, w:PANEL_W, h:38};
+
+// Combat log
+const LOG_MAX=22;
+let logLines=[];
+function logAdd(line){ logLines.push(line); if(logLines.length>LOG_MAX) logLines.shift(); draw(); }
+
+// Hover
+let hoverCell=null;
+
+// ── Narrator ─────────────────────────────────────────────────────────────────
+const CANNED={
+  battle_start:["The System identifies four hostiles.","Carl squints. 'Oh, come ON.'","Initiative rolled. Combat begins."],
+  hit:  ["{atk} hits {def} for {dmg} damage!","Crack! {atk} smashes {def} — {dmg} dmg.","{atk} connects with {def}. {dmg} damage."],
+  miss: ["{atk} swings at {def}… and misses.","{def} dodges {atk}'s attack!","Whiff — {atk} misses {def}."],
+  kill: ["{def} collapses!","{def} is down!","The System: '{def} eliminated.'"],
+  carl_hurt:["Carl takes {dmg} dmg! ({hp} HP left)","Ouch — Carl at {hp} HP.","Carl grits his teeth ({hp} HP)."],
+  victory:["VICTORY! All enemies slain.","Carl: 'Yeah! That's what I'm talking about!'","The System: 'Combat cleared. Proceeding.'"],
+  defeat:["DEFEAT. Carl has fallen.","The System: 'Contestant eliminated.'","Darkness takes Carl…"],
+};
+function announce(evt,ctx){
+  const pool=CANNED[evt]||[evt];
+  let line=pool[Math.floor(rng()*pool.length)];
+  for(const [k,v] of Object.entries(ctx)) line=line.replaceAll(`{${k}}`,v);
+  logAdd(line);
+}
+
+// ── Initiative ────────────────────────────────────────────────────────────────
+function rollInitiative(){
+  const pairs=units.map(u=>({u,roll:d20()}));
+  pairs.sort((a,b)=>a.roll!==b.roll?b.roll-a.roll:(a.u.isPlayer?-1:1));
+  turnOrder=pairs.map(p=>p.u);
+  turnIdx=0;
+  announce('battle_start',{});
+}
+
+// ── Turn loop ─────────────────────────────────────────────────────────────────
+function startTurn(){
+  if(battleOver||!turnOrder.length) return;
+  active=turnOrder[turnIdx];
+  moveSpent=false; actionSpent=false;
+  if(active.isPlayer){ updateHighlights(); }
+  else { draw(); setTimeout(()=>goblinTurn(active),520); }
+}
+
+function advanceTurn(){
+  if(active) active.active=false;
+  moveCells=[]; attackCells=[];
+  if(!turnOrder.length) return;
+  turnIdx=(turnIdx+1)%turnOrder.length;
+  startTurn();
+}
+
+// ── Highlights ────────────────────────────────────────────────────────────────
+function updateHighlights(){
+  moveCells=[];
+  if(!moveSpent) moveCells=getReachable(active.col,active.row,active.move,active);
+  attackCells=[];
+  if(!actionSpent){
+    const wp=active.weapons[0];
+    if(wp&&!wp.consumable){
+      for(const u of units){
+        if(u.isPlayer||!u.alive) continue;
+        if(dist(active.col,active.row,u.col,u.row)<=wp.range) attackCells.push([u.col,u.row]);
+      }
+    }
+  }
+  draw();
+}
+
+// ── Player click ──────────────────────────────────────────────────────────────
+function handleClick(px,py){
+  if(battleOver||animating||!active||!active.isPlayer) return;
+
+  // End Turn
+  if(inBtn(BTN,px,py)){ advanceTurn(); return; }
+
+  // Bandage
+  if(!actionSpent){
+    const band=active.weapons.find(w=>w.consumable&&w.healDice);
+    if(band&&inBtn(BANDAGE_BTN,px,py)){
+      const heal=rollDice(band.healDice);
+      active.hp=Math.min(active.maxHp,active.hp+heal);
+      actionSpent=true;
+      active.weapons=active.weapons.filter(w=>w!==band);
+      logAdd(`Carl uses Bandage — heals ${heal} HP! (${active.hp}/${active.maxHp})`);
+      updateHighlights(); return;
+    }
+  }
+
+  // Grid
+  const c=Math.floor((px-GX)/CS), r=Math.floor((py-GY)/CS);
+  if(!inBounds(c,r)) return;
+
+  if(!actionSpent&&attackCells.some(([ac,ar])=>ac===c&&ar===r)){
+    const target=getOcc(c,r);
+    if(target){ playerAttack(target); return; }
+  }
+  if(!moveSpent&&moveCells.some(([mc,mr])=>mc===c&&mr===r)){
+    playerMove(c,r);
+  }
+}
+
+function inBtn(b,px,py){ return px>=b.x&&px<=b.x+b.w&&py>=b.y&&py<=b.y+b.h; }
+
+function playerMove(tc,tr){
+  animating=true;
+  clrOcc(active.col,active.row);
+  const unit=active;
+  animateMove(unit,tc,tr,()=>{
+    unit.col=tc; unit.row=tr; setOcc(tc,tr,unit);
+    moveSpent=true; animating=false;
+    if(!battleOver) updateHighlights();
+  });
+}
+
+function playerAttack(target){
+  animating=true;
+  const unit=active;
+  animateJab(unit,target,()=>{
+    doAttack(unit,target); actionSpent=true; animating=false;
+    checkBattle();
+    if(!battleOver) updateHighlights();
+  });
+}
+
+// ── Animations ────────────────────────────────────────────────────────────────
+function animateMove(unit,tc,tr,cb){
+  const sx=cx(unit.col),sy=cy(unit.row),ex=cx(tc),ey=cy(tr);
+  const dur=220, t0=performance.now();
+  function step(t){
+    const p=Math.min(1,(t-t0)/dur);
+    const e=p<0.5?2*p*p:1-Math.pow(-2*p+2,2)/2;
+    unit._animX=sx+(ex-sx)*e; unit._animY=sy+(ey-sy)*e; draw();
+    if(p<1) requestAnimationFrame(step);
+    else { unit._animX=undefined; unit._animY=undefined; cb(); }
+  }
+  requestAnimationFrame(step);
+}
+
+function animateJab(unit,target,cb){
+  const sx=cx(unit.col),sy=cy(unit.row);
+  const jx=sx+(cx(target.col)-sx)*0.35, jy=sy+(cy(target.row)-sy)*0.35;
+  const dur=200, t0=performance.now();
+  function step(t){
+    const p=Math.min(1,(t-t0)/dur);
+    const q=p<0.4?p/0.4:1-(p-0.4)/0.6;
+    unit._animX=sx+(jx-sx)*q; unit._animY=sy+(jy-sy)*q; draw();
+    if(p<1) requestAnimationFrame(step);
+    else { unit._animX=undefined; unit._animY=undefined; cb(); }
+  }
+  requestAnimationFrame(step);
+}
+
+// ── Combat ────────────────────────────────────────────────────────────────────
+function doAttack(atk,def){
+  const wp=atk.weapons[0];
+  const r20=d20()+wp.toHit;
+  if(r20>=def.def){
+    const dmg=rollDice(wp.dice);
+    def.hp-=dmg; def.flashT=0.5;
+    announce('hit',{atk:atk.name,def:def.name,dmg});
+    if(def.isPlayer) announce('carl_hurt',{dmg,hp:def.hp});
+    if(def.hp<=0) killUnit(def);
+  } else {
+    announce('miss',{atk:atk.name,def:def.name});
+  }
+}
+
+function killUnit(u){
+  announce('kill',{def:u.name});
+  u.alive=false; clrOcc(u.col,u.row);
+  const idx=turnOrder.indexOf(u);
+  if(idx!==-1){
+    turnOrder.splice(idx,1);
+    if(idx<turnIdx&&turnIdx>0) turnIdx--;
+    else if(turnIdx>=turnOrder.length&&turnOrder.length>0) turnIdx=0;
+  }
+  units=units.filter(x=>x!==u);
+  // fade out
+  const t0=performance.now(),dur=400;
+  function fade(t){ u.alpha=Math.max(0,1-(t-t0)/dur); draw(); if(u.alpha>0) requestAnimationFrame(fade); }
+  requestAnimationFrame(fade);
+}
+
+function checkBattle(){
+  const p=units.filter(u=>u.isPlayer).length;
+  const e=units.filter(u=>!u.isPlayer).length;
+  if(e===0) endBattle(true);
+  else if(p===0) endBattle(false);
+}
+
+function endBattle(won){
+  battleOver=true; playerWon=won;
+  moveCells=[]; attackCells=[];
+  announce(won?'victory':'defeat',{});
+  draw();
+}
+
+// ── Goblin AI ──────────────────────────────────────────────────────────────────
+function goblinTurn(goblin){
+  if(!goblin.alive||battleOver||goblin!==active){ advanceTurn(); return; }
+  const players=units.filter(u=>u.isPlayer&&u.alive);
+  if(!players.length){ advanceTurn(); return; }
+
+  // Nearest player by path length
+  let target=null, bestLen=99999;
+  for(const p of players){
+    const path=findPath(goblin.col,goblin.row,p.col,p.row);
+    const l=path.length?path.length-1:99999;
+    if(l<bestLen){bestLen=l;target=p;}
+  }
+  if(!target){advanceTurn();return;}
+
+  const wp=goblin.weapons[0];
+
+  function doAttackPhase(){
+    const d=dist(goblin.col,goblin.row,target.col,target.row);
+    if(d<=wp.range&&goblin.alive&&target.alive&&!battleOver){
+      animateJab(goblin,target,()=>{
+        doAttack(goblin,target); checkBattle();
+        setTimeout(()=>{ if(!battleOver) advanceTurn(); },350);
+      });
+    } else {
+      if(!battleOver) advanceTurn();
+    }
+  }
+
+  // Move if out of range
+  if(dist(goblin.col,goblin.row,target.col,target.row)>wp.range){
+    const path=findPath(goblin.col,goblin.row,target.col,target.row);
+    if(path.length>=2){
+      let steps=0, cur=[goblin.col,goblin.row];
+      for(let i=1;i<path.length;i++){
+        if(steps>=goblin.move) break;
+        const [nc,nr]=path[i];
+        if(isOcc(nc,nr)) break;
+        clrOcc(cur[0],cur[1]); cur=[nc,nr]; setOcc(nc,nr,goblin); steps++;
+      }
+      if(steps>0){
+        goblin.col=cur[0]; goblin.row=cur[1];
+        animateMove(goblin,cur[0],cur[1],doAttackPhase);
+        return;
+      }
+    }
+  }
+  doAttackPhase();
+}
+
+// ── Draw ──────────────────────────────────────────────────────────────────────
+const cv=document.getElementById('c');
+const ctx=cv.getContext('2d');
+
+function draw(){
+  ctx.clearRect(0,0,1400,760);
+  ctx.fillStyle='#07050c'; ctx.fillRect(0,0,1400,760);
+  drawGrid();
+  drawRoomLabels();
+  drawUnits();
+  drawPanel();
+}
+
+function drawGrid(){
+  for(let r=0;r<ROWS;r++){
+    for(let c=0;c<COLS;c++){
+      const [x,y,w,h]=cellRect(c,r);
+      if(isWall(c,r)){
+        ctx.fillStyle='#100d1a'; ctx.fillRect(x,y,w,h);
+        ctx.strokeStyle='#3a2f55'; ctx.lineWidth=0.8;
+        ctx.beginPath();
+        ctx.moveTo(x+7,y+7); ctx.lineTo(x+w/2-3,y+h/2-3);
+        ctx.moveTo(x+w/2+3,y+h/2+3); ctx.lineTo(x+w-7,y+h-7);
+        ctx.moveTo(x+7,y+h-7); ctx.lineTo(x+w/2-3,y+h/2+3);
+        ctx.stroke();
+      } else if(isArchway(c,r)){
+        ctx.fillStyle='#2b2042'; ctx.fillRect(x,y,w,h);
+        ctx.strokeStyle='#6644aa'; ctx.lineWidth=1.5;
+        ctx.strokeRect(x+3,y+3,w-6,h-6);
+        // archway dot hint
+        ctx.fillStyle='#5533aa';
+        ctx.beginPath(); ctx.arc(x+w/2,y+h/2,3,0,Math.PI*2); ctx.fill();
+      } else {
+        ctx.fillStyle=(c>=10)?'#1e1a30':'#231e38';
+        ctx.fillRect(x,y,w,h);
+      }
+      // grid line
+      ctx.strokeStyle='rgba(70,55,110,0.30)'; ctx.lineWidth=0.5;
+      ctx.strokeRect(x,y,w,h);
+
+      // move highlight
+      if(moveCells.some(([mc,mr])=>mc===c&&mr===r)){
+        ctx.fillStyle='rgba(55,130,255,0.22)'; ctx.fillRect(x,y,w,h);
+        ctx.strokeStyle='rgba(100,160,255,0.45)'; ctx.lineWidth=1;
+        ctx.strokeRect(x+1,y+1,w-2,h-2);
+      }
+      // attack highlight
+      if(attackCells.some(([ac,ar])=>ac===c&&ar===r)){
+        ctx.fillStyle='rgba(255,60,40,0.28)'; ctx.fillRect(x,y,w,h);
+        ctx.strokeStyle='rgba(255,100,80,0.5)'; ctx.lineWidth=1;
+        ctx.strokeRect(x+1,y+1,w-2,h-2);
+      }
+      // hover
+      if(hoverCell&&hoverCell[0]===c&&hoverCell[1]===r&&!isWall(c,r)){
+        ctx.fillStyle='rgba(255,240,180,0.16)'; ctx.fillRect(x,y,w,h);
+      }
+    }
+  }
+  // Vignette
+  const gw=COLS*CS, gh=ROWS*CS;
+  const v=ctx.createRadialGradient(GX+gw/2,GY+gh/2,gh*0.28,GX+gw/2,GY+gh/2,gh*0.82);
+  v.addColorStop(0,'rgba(0,0,0,0)'); v.addColorStop(1,'rgba(0,0,0,0.50)');
+  ctx.fillStyle=v; ctx.fillRect(GX,GY,gw,gh);
+}
+
+function drawRoomLabels(){
+  ctx.save(); ctx.globalAlpha=0.16;
+  ctx.fillStyle='#c0b0e8'; ctx.font='bold 12px monospace'; ctx.textAlign='center';
+  ctx.fillText('ENTRANCE',   GX+4.5*CS, GY+11.5*CS);
+  ctx.fillText('INNER SANCTUM', GX+14.5*CS, GY+11.5*CS);
+  ctx.restore();
+}
+
+function drawUnits(){
+  for(const u of [...units]){
+    if(!u.alive&&u.alpha<=0.01) continue;
+    ctx.save(); ctx.globalAlpha=u.alpha;
+    if(u.flashT>0){ u.flashT=Math.max(0,u.flashT-0.02); }
+    const ux=u._animX!==undefined?u._animX:cx(u.col);
+    const uy=u._animY!==undefined?u._animY:cy(u.row);
+    const sz=Math.round(CS*0.40*u.scale);
+    if(u.isPlayer) drawCarl(ux,uy,sz,u);
+    else drawGoblin(ux,uy,sz,u);
+    drawHpBar(ux,uy,sz,u);
+    ctx.restore();
+  }
+}
+
+function drawCarl(x,y,sz,u){
+  const fl=u.flashT>0;
+  ctx.fillStyle=fl?'#ee6666':'#3560cc'; // robe
+  ctx.beginPath(); ctx.ellipse(x,y+sz*0.15,sz*0.52,sz*0.68,0,0,Math.PI*2); ctx.fill();
+  ctx.strokeStyle='#1a3888'; ctx.lineWidth=2;
+  ctx.beginPath();
+  ctx.moveTo(x,y-sz*0.28); ctx.lineTo(x-sz*0.12,y+sz*0.38);
+  ctx.moveTo(x,y-sz*0.28); ctx.lineTo(x+sz*0.12,y+sz*0.38);
+  ctx.stroke();
+  ctx.fillStyle='#0d2070'; // belt
+  ctx.fillRect(x-sz*0.42,y+sz*0.10,sz*0.84,sz*0.12);
+  ctx.fillStyle=fl?'#ffaaaa':'#e8c888'; // head
+  ctx.beginPath(); ctx.ellipse(x,y-sz*0.58,sz*0.30,sz*0.34,0,0,Math.PI*2); ctx.fill();
+  ctx.strokeStyle='#5c3a12'; ctx.lineWidth=2.5; // hair
+  ctx.beginPath(); ctx.arc(x,y-sz*0.63,sz*0.26,Math.PI,0); ctx.stroke();
+  ctx.fillStyle='#1a1a2a'; // eyes
+  ctx.beginPath();
+  ctx.arc(x-sz*0.09,y-sz*0.58,1.8,0,Math.PI*2);
+  ctx.arc(x+sz*0.09,y-sz*0.58,1.8,0,Math.PI*2);
+  ctx.fill();
+  if(u===active){ // active outline
+    ctx.strokeStyle='rgba(255,255,255,0.80)'; ctx.lineWidth=2.5;
+    ctx.beginPath(); ctx.ellipse(x,y+sz*0.05,sz*0.62,sz*0.88,0,0,Math.PI*2); ctx.stroke();
+  }
+}
+
+function drawGoblin(x,y,sz,u){
+  const fl=u.flashT>0, br=u.scale>1;
+  ctx.fillStyle=fl?'#88ee88':u.color;
+  ctx.beginPath(); ctx.ellipse(x,y+sz*0.08,sz*(br?0.60:0.48),sz*0.66,0,0,Math.PI*2); ctx.fill();
+  ctx.fillStyle=fl?'#aaffaa':(br?'#2a7830':u.color);
+  ctx.beginPath();
+  ctx.ellipse(x-sz*0.36,y-sz*0.14,sz*0.20,sz*0.16,Math.PI*0.25,0,Math.PI*2);
+  ctx.ellipse(x+sz*0.36,y-sz*0.14,sz*0.20,sz*0.16,-Math.PI*0.25,0,Math.PI*2);
+  ctx.fill();
+  ctx.fillStyle=fl?'#99ff99':(br?'#1a5018':'#2c7a2c'); // head
+  ctx.beginPath(); ctx.ellipse(x,y-sz*0.54,sz*0.32,sz*0.30,0,0,Math.PI*2); ctx.fill();
+  ctx.beginPath(); // ears
+  ctx.ellipse(x-sz*0.28,y-sz*0.58,sz*0.09,sz*0.15,Math.PI*0.3,0,Math.PI*2);
+  ctx.ellipse(x+sz*0.28,y-sz*0.58,sz*0.09,sz*0.15,-Math.PI*0.3,0,Math.PI*2);
+  ctx.fill();
+  ctx.fillStyle='#dd1111'; // eyes
+  ctx.beginPath();
+  ctx.arc(x-sz*0.11,y-sz*0.55,br?3.2:2.2,0,Math.PI*2);
+  ctx.arc(x+sz*0.11,y-sz*0.55,br?3.2:2.2,0,Math.PI*2);
+  ctx.fill();
+  ctx.fillStyle='rgba(255,180,180,0.6)'; // gleam
+  ctx.beginPath(); ctx.arc(x-sz*0.09,y-sz*0.57,0.9,0,Math.PI*2); ctx.fill();
+  ctx.strokeStyle='#ddcc88'; ctx.lineWidth=br?2.5:1.5; // tusks
+  ctx.beginPath();
+  ctx.moveTo(x-sz*0.09,y-sz*0.43); ctx.lineTo(x-sz*0.13,y-sz*0.31);
+  ctx.moveTo(x+sz*0.09,y-sz*0.43); ctx.lineTo(x+sz*0.13,y-sz*0.31);
+  ctx.stroke();
+  if(br){ // brute dark outline
+    ctx.strokeStyle='#091809'; ctx.lineWidth=2;
+    ctx.beginPath(); ctx.ellipse(x,y+sz*0.08,sz*0.60,sz*0.66,0,0,Math.PI*2); ctx.stroke();
+  }
+  if(u===active){
+    ctx.strokeStyle='rgba(255,70,50,0.85)'; ctx.lineWidth=2.5;
+    ctx.beginPath(); ctx.ellipse(x,y,sz*0.70,sz*0.88,0,0,Math.PI*2); ctx.stroke();
+  }
+}
+
+function drawHpBar(x,y,sz,u){
+  const bw=CS*0.72, bh=5, bx=x-bw/2, by=y+sz*0.85;
+  ctx.fillStyle='#2a0808'; ctx.fillRect(bx,by,bw,bh);
+  const pct=Math.max(0,u.hp/u.maxHp);
+  ctx.fillStyle=pct>0.33?'#22cc44':'#dd2222';
+  ctx.fillRect(bx,by,bw*pct,bh);
+  ctx.strokeStyle='rgba(0,0,0,0.5)'; ctx.lineWidth=0.5;
+  ctx.strokeRect(bx,by,bw,bh);
+}
+
+function drawPanel(){
+  const px=PANEL_X, pw=PANEL_W;
+  ctx.fillStyle='#0f0d1c'; ctx.fillRect(px-5,0,pw+15,760);
+  ctx.strokeStyle='#332855'; ctx.lineWidth=1;
+  ctx.beginPath(); ctx.moveTo(px-5,0); ctx.lineTo(px-5,760); ctx.stroke();
+
+  // Title
+  ctx.textAlign='center';
+  ctx.fillStyle='#c0a0ff'; ctx.font='bold 17px monospace';
+  ctx.fillText('DESCENT', px+pw/2, 28);
+  ctx.fillStyle='#5545888'; ctx.font='10px monospace';
+  ctx.fillStyle='#554488';
+  ctx.fillText('Dungeon Crawler Carl', px+pw/2, 44);
+
+  // Floor label
+  ctx.fillStyle='#3a3060'; ctx.font='10px monospace';
+  ctx.fillText('Floor 1 — The Dungeon', px+pw/2, 62);
+
+  // Status
+  ctx.textAlign='left';
+  if(battleOver){
+    ctx.fillStyle=playerWon?'#44ff88':'#ff4444';
+    ctx.font='bold 15px monospace';
+    ctx.fillText(playerWon?'VICTORY!':'DEFEAT', px+8, 98);
+    ctx.fillStyle='#9080b0'; ctx.font='11px monospace';
+    ctx.fillText(playerWon?'All enemies slain.':'Carl has fallen.', px+8, 114);
+  } else if(active){
+    ctx.fillStyle=active.isPlayer?'#88aaff':'#ff7755';
+    ctx.font='bold 13px monospace';
+    ctx.fillText(active.isPlayer?'YOUR TURN':'ENEMY TURN', px+8, 96);
+    ctx.fillStyle='#9080a0'; ctx.font='11px monospace';
+    const hint=active.isPlayer
+      ?(moveSpent&&actionSpent?'Press E or End Turn to pass':(!moveSpent?'Blue=move ':'')+(!actionSpent?'Red=attack':''))
+      :`${active.name} is thinking…`;
+    ctx.fillText(hint, px+8, 112);
+  }
+
+  // End Turn button
+  const canEnd=!battleOver&&!animating&&active&&active.isPlayer;
+  ctx.fillStyle=canEnd?'#222060':'#141228';
+  ctx.fillRect(BTN.x,BTN.y,BTN.w,BTN.h);
+  roundRect(ctx,BTN.x,BTN.y,BTN.w,BTN.h,4);
+  ctx.strokeStyle=canEnd?'#5544cc':'#2a1a44'; ctx.lineWidth=1.5; ctx.stroke();
+  ctx.fillStyle=canEnd?'#aaaaee':'#443355';
+  ctx.font='bold 12px monospace'; ctx.textAlign='center';
+  ctx.fillText('End Turn  [E]', BTN.x+BTN.w/2, BTN.y+25);
+
+  // Bandage button
+  const hasBandage=active&&active.isPlayer&&active.weapons.find(w=>w.consumable&&w.healDice);
+  const canBandage=!!(hasBandage&&!actionSpent&&!battleOver&&!animating);
+  ctx.fillStyle=canBandage?'#1a2e1a':'#111820';
+  ctx.fillRect(BANDAGE_BTN.x,BANDAGE_BTN.y,BANDAGE_BTN.w,BANDAGE_BTN.h);
+  roundRect(ctx,BANDAGE_BTN.x,BANDAGE_BTN.y,BANDAGE_BTN.w,BANDAGE_BTN.h,4);
+  ctx.strokeStyle=canBandage?'#2a5a2a':'#1a1a2a'; ctx.lineWidth=1.5; ctx.stroke();
+  ctx.fillStyle=canBandage?'#77cc77':'#334433';
+  ctx.font='bold 11px monospace'; ctx.textAlign='center';
+  ctx.fillText('Use Bandage (1d6 heal)', BANDAGE_BTN.x+BANDAGE_BTN.w/2, BANDAGE_BTN.y+25);
+
+  // Unit roster
+  const rY=218;
+  ctx.fillStyle='#6a5898'; ctx.font='bold 11px monospace'; ctx.textAlign='left';
+  ctx.fillText('── UNITS ──', px+8, rY);
+  let ry=rY+18;
+  const sorted=[...units].sort((a,b)=>a.isPlayer?-1:b.isPlayer?1:0);
+  for(const u of sorted){
+    // dot color
+    ctx.fillStyle=u.isPlayer?'#4466ee':'#cc3333';
+    ctx.fillRect(px+8,ry-9,8,8);
+    ctx.fillStyle=(u===active)?'#ffffff':'#c0b0d8';
+    ctx.font=(u===active)?'bold 11px monospace':'11px monospace';
+    ctx.fillText(u.name, px+22, ry);
+    // hp bar
+    const bw=pw-46;
+    ctx.fillStyle='#250a0a';
+    ctx.fillRect(px+22,ry+3,bw,4);
+    const pct=Math.max(0,u.hp/u.maxHp);
+    ctx.fillStyle=pct>0.33?'#33aa55':'#cc2222';
+    ctx.fillRect(px+22,ry+3,bw*pct,4);
+    ctx.fillStyle='#707080'; ctx.font='10px monospace'; ctx.textAlign='right';
+    ctx.fillText(`${u.hp}/${u.maxHp}`, px+pw-2, ry);
+    ctx.textAlign='left';
+    if(u===active){ ctx.fillStyle='#ffff44'; ctx.fillText('◄', px+pw-18, ry); }
+    ry+=22;
+  }
+
+  // Combat log
+  const logStartY=rY+18+sorted.length*22+16;
+  ctx.fillStyle='#6a5898'; ctx.font='bold 11px monospace'; ctx.textAlign='left';
+  ctx.fillText('── LOG ──', px+8, logStartY);
+  ctx.fillStyle='#0d0b18';
+  ctx.fillRect(px+4,logStartY+5,pw-2,760-logStartY-12);
+
+  const lh=14, lx=px+8;
+  const visLines=Math.floor((760-logStartY-18)/lh);
+  const startLine=Math.max(0,logLines.length-visLines);
+  for(let i=startLine;i<logLines.length;i++){
+    const age=logLines.length-1-i;
+    const alpha=age===0?1:age===1?0.85:age<4?0.65:0.45;
+    ctx.globalAlpha=alpha;
+    ctx.fillStyle='#c8b8e8'; ctx.font='10px monospace';
+    ctx.fillText(logLines[i], lx, logStartY+16+(i-startLine)*lh, pw-16);
+  }
+  ctx.globalAlpha=1;
+}
+
+function roundRect(c,x,y,w,h,r){
+  c.beginPath();
+  c.moveTo(x+r,y); c.lineTo(x+w-r,y); c.quadraticCurveTo(x+w,y,x+w,y+r);
+  c.lineTo(x+w,y+h-r); c.quadraticCurveTo(x+w,y+h,x+w-r,y+h);
+  c.lineTo(x+r,y+h); c.quadraticCurveTo(x,y+h,x,y+h-r);
+  c.lineTo(x,y+r); c.quadraticCurveTo(x,y,x+r,y);
+  c.closePath();
+}
+
+// ── Input ─────────────────────────────────────────────────────────────────────
+document.addEventListener('keydown',e=>{
+  if((e.key==='e'||e.key==='E')&&!battleOver&&!animating&&active&&active.isPlayer) advanceTurn();
+});
+
+cv.addEventListener('mousemove',e=>{
+  const rect=cv.getBoundingClientRect();
+  const px=(e.clientX-rect.left)*(1400/rect.width);
+  const py=(e.clientY-rect.top)*(760/rect.height);
+  const c=Math.floor((px-GX)/CS), r=Math.floor((py-GY)/CS);
+  const nh=(inBounds(c,r)&&!isWall(c,r))?[c,r]:null;
+  if(JSON.stringify(nh)!==JSON.stringify(hoverCell)){ hoverCell=nh; draw(); }
+});
+
+cv.addEventListener('click',e=>{
+  const rect=cv.getBoundingClientRect();
+  handleClick(
+    (e.clientX-rect.left)*(1400/rect.width),
+    (e.clientY-rect.top)*(760/rect.height)
+  );
+});
+
+// ── Boot ──────────────────────────────────────────────────────────────────────
+function init(){
+  for(const u of units) setOcc(u.col,u.row,u);
+  rollInitiative();
+  startTurn();
+  draw();
+}
+
+init();
+</script>
+</body>
+</html>
