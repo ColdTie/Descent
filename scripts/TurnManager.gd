@@ -205,7 +205,7 @@ func _find_nearest_player(from: Unit) -> Unit:
 	for u: Unit in all_units:
 		if not u.is_player:
 			continue
-		var path: Array[Vector2i] = grid.get_path(from.grid_cell, u.grid_cell)
+		var path: Array[Vector2i] = grid.find_path(from.grid_cell, u.grid_cell)
 		var d: int = (path.size() - 1) if not path.is_empty() else 99999
 		if d < best_d:
 			best_d = d
@@ -216,7 +216,7 @@ func _find_nearest_player(from: Unit) -> Unit:
 ## Move goblin along A* path (walls only) up to its move budget.
 ## Clears+sets occupancy step-by-step, then tweens to final position.
 func _goblin_move_toward(goblin: Unit, target: Unit) -> void:
-	var path: Array[Vector2i] = grid.get_path(goblin.grid_cell, target.grid_cell)
+	var path: Array[Vector2i] = grid.find_path(goblin.grid_cell, target.grid_cell)
 	if path.size() < 2:
 		return
 

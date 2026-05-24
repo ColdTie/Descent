@@ -161,7 +161,8 @@ func get_reachable_cells(
 ## Returns an A* path (wall-only blocking) from [param from_cell] to
 ## [param to_cell] as an ordered array of Vector2i cells.
 ## Empty if no path exists or destination is a wall.
-func get_path(from_cell: Vector2i, to_cell: Vector2i) -> Array[Vector2i]:
+## Named find_path (not get_path) to avoid shadowing Node.get_path()->NodePath.
+func find_path(from_cell: Vector2i, to_cell: Vector2i) -> Array[Vector2i]:
 	if not is_walkable(to_cell):
 		return []
 	var path: Array[Vector2i] = []
