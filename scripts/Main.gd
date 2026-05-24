@@ -1,8 +1,10 @@
-## Main — entry point scene script.
-## In later milestones this will instantiate BattleScene.
-extends Control
+## Main — entry point.  Loads and starts the BattleScene.
+extends Node
+
+const BattleSceneScene: PackedScene = preload("res://scenes/BattleScene.tscn")
 
 
 func _ready() -> void:
-	System.announce(&"battle_start", {})
-	print("DESCENT: Main scene ready. GameRng seed = %d" % GameRng.DEFAULT_SEED)
+	print("DESCENT: Main ready — loading BattleScene")
+	var battle: Node = BattleSceneScene.instantiate()
+	add_child(battle)

@@ -1,0 +1,13 @@
+[gd_scene load_steps=3 format=3 uid="uid://descent_battle"]
+
+[ext_resource type="Script" path="res://scripts/BattleScene.gd" id="1_battle"]
+[ext_resource type="Script" path="res://scripts/Grid.gd" id="2_grid"]
+
+[node name="BattleScene" type="Node2D"]
+script = ExtResource("1_battle")
+
+[node name="Grid" type="Node2D" parent="."]
+position = Vector2(20, 20)
+script = ExtResource("2_grid")
+
+[node name="UnitsContainer" type="Node2D" parent="."]
