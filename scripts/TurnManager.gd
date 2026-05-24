@@ -1,8 +1,9 @@
-## TurnManager — initiative order, player input, goblin AI, win/lose detection.
+## TurnManager — initiative order, player input, goblin AI, win/lose, tweens.
+## Milestone 8: position tweens for move + attack, death-fade on kill.
 extends Node
 class_name TurnManager
 
-# ── Dependencies (injected via setup()) ──────────────────────────────────────
+# ── Dependencies ──────────────────────────────────────────────────────────────
 
 var grid: Grid
 var all_units: Array[Unit]
@@ -19,6 +20,9 @@ var _active:      Unit = null
 var _move_spent:   bool = false
 var _action_spent: bool = false
 var _battle_over:  bool = false
+
+## True while a tween animation is playing.  Blocks player input.
+var _animating:    bool = false
 
 var _move_cells:   Array[Vector2i] = []
 var _attack_cells: Array[Vector2i] = []
@@ -40,7 +44,7 @@ func setup(g: Grid, units: Array[Unit], label: Label) -> void:
 
 
 func end_player_turn() -> void:
-	if _battle_over or _active == null or not _active.is_player:
+	if _battle_over or _animating or _active == null or not _active.is_player:
 		return
 	_advance_turn()
 
@@ -52,11 +56,10 @@ func _roll_initiative() -> void:
 		var roll: int = GameRng.d20()
 		pairs.append([roll, u])
 		print("Initiative %d — %s" % [roll, u.unit_name])
-
 	pairs.sort_custom(func(a: Array, b: Array) -> bool:
 		if a[0] != b[0]:
 			return a[0] > b[0]
-		return a[1].is_player      # player wins ties
+		return a[1].is_player
 	)
 	turn_order.clear()
 	for p: Array in pairs:
@@ -100,7 +103,6 @@ func _update_player_highlights() -> void:
 	_move_cells = []
 	if not _move_spent:
 		_move_cells = grid.get_reachable_cells(_active.grid_cell, _active.move_range, _active)
-
 	_attack_cells = []
 	if not _action_spent:
 		var weapon: Weapon = _active.get_attack_weapon()
@@ -110,51 +112,63 @@ func _update_player_highlights() -> void:
 					continue
 				if grid.cell_distance(_active.grid_cell, u.grid_cell) <= weapon.weapon_range:
 					_attack_cells.append(u.grid_cell)
-
 	grid.set_move_highlights(_move_cells)
 	grid.set_attack_highlights(_attack_cells)
 
 
 func _handle_player_click(cell: Vector2i) -> void:
-	if _battle_over or _active == null or not _active.is_player:
+	if _battle_over or _animating or _active == null or not _active.is_player:
 		return
-	# Attack first (click on a highlighted enemy cell).
 	if not _action_spent and cell in _attack_cells:
 		var target: Unit = grid.get_occupant(cell) as Unit
 		if target != null:
-			_execute_player_attack(target)
+			_player_attack_async(target)
 			return
-	# Move (click on a highlighted movement cell).
 	if not _move_spent and cell in _move_cells:
-		_execute_player_move(cell)
+		_player_move_async(cell)
 
 
-func _execute_player_move(dest: Vector2i) -> void:
-	_move_unit(_active, dest)
+## Async player move: update state immediately, then tween.
+func _player_move_async(dest: Vector2i) -> void:
+	_animating = true
+	grid.clear_highlights()
+
+	# Update logical state before tween so occupancy is consistent.
+	grid.clear_occupied(_active.grid_cell)
+	_active.grid_cell = dest
+	grid.set_occupied(dest, _active)
 	_move_spent = true
-	_update_player_highlights()
-	_set_status("Your turn — %s\nmoved to %s" % [_active.unit_name, dest])
+
+	await _tween_move(_active, dest)
+	_animating = false
+
+	if not _battle_over:
+		_update_player_highlights()
+		_set_status("Your turn — %s\nmoved to %s" % [_active.unit_name, dest])
 
 
-func _execute_player_attack(target: Unit) -> void:
+## Async player attack: tween jab, then resolve.
+func _player_attack_async(target: Unit) -> void:
+	_animating = true
+	grid.clear_highlights()
+
+	await _tween_jab(_active, target)
 	_do_attack(_active, target)
 	_action_spent = true
-	_update_player_highlights()
+	_animating = false
+
+	if not _battle_over:
+		_update_player_highlights()
 
 # ── Enemy turn — goblin AI ────────────────────────────────────────────────────
 
 func _begin_enemy_turn() -> void:
 	_set_status("%s is thinking…" % _active.unit_name)
-	# Defer one frame so the label updates before we start the async work.
 	call_deferred("_run_goblin_ai", _active)
 
 
-## Async goblin AI: find nearest player → move if needed → attack if in range.
 func _run_goblin_ai(goblin: Unit) -> void:
-	# Wait a moment so the player can see it's the goblin's turn.
-	await get_tree().create_timer(0.45).timeout
-
-	# Guard: goblin might have died (shouldn't happen but be safe).
+	await get_tree().create_timer(0.40).timeout
 	if not goblin.is_alive or _battle_over:
 		return
 
@@ -168,32 +182,30 @@ func _run_goblin_ai(goblin: Unit) -> void:
 		_advance_turn()
 		return
 
-	# ── Step 1: move toward target if not already in range ────────────────────
+	# Move toward target if out of range.
 	var dist: int = grid.cell_distance(goblin.grid_cell, target.grid_cell)
 	if dist > weapon.weapon_range:
-		_goblin_move_toward(goblin, target)
+		await _goblin_move_toward(goblin, target)
 		dist = grid.cell_distance(goblin.grid_cell, target.grid_cell)
 
-	# ── Step 2: attack if now in range ────────────────────────────────────────
-	if dist <= weapon.weapon_range:
+	# Attack if now in range.
+	if dist <= weapon.weapon_range and goblin.is_alive and not _battle_over:
+		await _tween_jab(goblin, target)
 		_do_attack(goblin, target)
-		# Brief pause after the attack so the player can read the status.
-		await get_tree().create_timer(0.40).timeout
+		if not _battle_over:
+			await get_tree().create_timer(0.30).timeout
 
-	# ── Hand off ──────────────────────────────────────────────────────────────
 	if not _battle_over:
 		_advance_turn()
 
 
-## Find the living player unit closest to [param from] by A* path length.
 func _find_nearest_player(from: Unit) -> Unit:
-	var best: Unit    = null
-	var best_d: int   = 99999
+	var best: Unit  = null
+	var best_d: int = 99999
 	for u: Unit in all_units:
 		if not u.is_player:
 			continue
 		var path: Array[Vector2i] = grid.get_path(from.grid_cell, u.grid_cell)
-		# path includes start cell; length = path.size()-1 steps.
 		var d: int = (path.size() - 1) if not path.is_empty() else 99999
 		if d < best_d:
 			best_d = d
@@ -201,13 +213,12 @@ func _find_nearest_player(from: Unit) -> Unit:
 	return best
 
 
-## Move [param goblin] step-by-step along the A* path toward [param target],
-## up to its move_range, stopping before occupied cells.
+## Move goblin along A* path (walls only) up to its move budget.
+## Clears+sets occupancy step-by-step, then tweens to final position.
 func _goblin_move_toward(goblin: Unit, target: Unit) -> void:
-	# get_path gives wall-only A* path including both start and goal.
 	var path: Array[Vector2i] = grid.get_path(goblin.grid_cell, target.grid_cell)
 	if path.size() < 2:
-		return   # No path, or already adjacent.
+		return
 
 	var current: Vector2i = goblin.grid_cell
 	var steps:   int      = 0
@@ -216,10 +227,8 @@ func _goblin_move_toward(goblin: Unit, target: Unit) -> void:
 		if steps >= goblin.move_range:
 			break
 		var next_cell: Vector2i = path[i]
-		# Never step onto the target's cell or any occupied cell.
 		if grid.is_occupied(next_cell):
 			break
-		# Advance occupancy one step at a time.
 		grid.clear_occupied(current)
 		current = next_cell
 		grid.set_occupied(current, goblin)
@@ -227,8 +236,29 @@ func _goblin_move_toward(goblin: Unit, target: Unit) -> void:
 
 	if steps > 0:
 		goblin.grid_cell = current
-		goblin.position  = grid.position + grid.cell_to_world(current)
-		_set_status("%s moves → %s" % [goblin.unit_name, current])
+		await _tween_move(goblin, current)
+		_set_status("%s moves" % goblin.unit_name)
+
+# ── Tweens ────────────────────────────────────────────────────────────────────
+
+## Smooth position tween to cell [param dest].
+func _tween_move(unit: Unit, dest: Vector2i) -> void:
+	var dest_pos: Vector2 = grid.position + grid.cell_to_world(dest)
+	var tween: Tween = unit.create_tween()
+	tween.set_ease(Tween.EASE_IN_OUT)
+	tween.set_trans(Tween.TRANS_SINE)
+	tween.tween_property(unit, "position", dest_pos, 0.20)
+	await tween.finished
+
+
+## Quick forward-and-back jab toward [param target].
+func _tween_jab(attacker: Unit, target: Unit) -> void:
+	var start_pos: Vector2 = attacker.position
+	var toward:    Vector2 = start_pos.lerp(target.position, 0.36)
+	var tween: Tween = attacker.create_tween()
+	tween.tween_property(attacker, "position", toward,    0.08)
+	tween.tween_property(attacker, "position", start_pos, 0.12)
+	await tween.finished
 
 # ── Shared attack logic ───────────────────────────────────────────────────────
 
@@ -256,26 +286,17 @@ func _do_attack(attacker: Unit, defender: Unit) -> void:
 		})
 
 	_set_status("%s → %s  roll %d  %s" % [
-		attacker.unit_name,
-		defender.unit_name,
-		result.roll,
+		attacker.unit_name, defender.unit_name, result.roll,
 		"HIT  (%d dmg)" % result.damage if result.hit else "MISS",
 	])
-
-
-## Teleport [param unit] to [param dest], updating grid occupancy.
-func _move_unit(unit: Unit, dest: Vector2i) -> void:
-	grid.clear_occupied(unit.grid_cell)
-	unit.grid_cell = dest
-	unit.position  = grid.position + grid.cell_to_world(dest)
-	grid.set_occupied(dest, unit)
 
 # ── Death handling ────────────────────────────────────────────────────────────
 
 func _on_unit_died(unit: Unit) -> void:
 	System.announce(&"kill", {"defender": unit.unit_name})
-	all_units.erase(unit)
 
+	# Remove from tracking arrays before the fade tween starts.
+	all_units.erase(unit)
 	var dead_idx: int = turn_order.find(unit)
 	if dead_idx != -1:
 		turn_order.erase(unit)
@@ -285,8 +306,12 @@ func _on_unit_died(unit: Unit) -> void:
 			_turn_idx = 0
 
 	grid.clear_occupied(unit.grid_cell)
-	unit.queue_free()
 	_check_battle_over()
+
+	# Fade out then free — the unit stays alive visually for 0.35 s.
+	var tween: Tween = unit.create_tween()
+	tween.tween_property(unit, "modulate:a", 0.0, 0.35)
+	tween.tween_callback(unit.queue_free)
 
 
 func _check_battle_over() -> void:
@@ -304,15 +329,14 @@ func _end_battle(player_won: bool) -> void:
 	grid.clear_highlights()
 	if _active != null:
 		_active.set_active(false)
-	var ev := &"victory" if player_won else &"defeat"
-	System.announce(ev, {})
+	System.announce(&"victory" if player_won else &"defeat", {})
 	_set_status("═══ BATTLE OVER ═══\n%s" % ("VICTORY!" if player_won else "DEFEAT."))
 	battle_ended.emit(player_won)
 
 # ── Input ─────────────────────────────────────────────────────────────────────
 
 func _unhandled_input(event: InputEvent) -> void:
-	if _battle_over or _active == null or not _active.is_player:
+	if _battle_over or _animating or _active == null or not _active.is_player:
 		return
 	if event is InputEventMouseButton:
 		var mb := event as InputEventMouseButton
