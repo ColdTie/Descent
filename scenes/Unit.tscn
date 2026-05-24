@@ -1,4 +1,4 @@
-[gd_scene load_steps=2 format=3 uid="uid://descent_unit"]
+[gd_scene load_steps=2 format=3 uid="uid://b7n4e6q1y8z5p"]
 
 [ext_resource type="Script" path="res://scripts/unit.gd" id="1_unit"]
 

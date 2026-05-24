@@ -1,4 +1,4 @@
-[gd_scene load_steps=3 format=3 uid="uid://descent_battle"]
+[gd_scene load_steps=3 format=3 uid="uid://dw8k2r5t9v3m1"]
 
 [ext_resource type="Script" path="res://scripts/BattleScene.gd" id="1_battle"]
 [ext_resource type="Script" path="res://scripts/Grid.gd" id="2_grid"]
