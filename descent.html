@@ -117,7 +117,7 @@ function getReachable(oc,or_,maxSteps,mover){
 const dist = (c1,r1,c2,r2) => Math.max(Math.abs(c1-c2),Math.abs(r1-r2));
 
 // ── Weapons ──────────────────────────────────────────────────────────────────
-const W_SHIV    = {name:'Rusty Shiv',  range:1, toHit:2, dice:'1d4', consumable:false};
+const W_CROWBAR = {name:'Crowbar',     range:1, toHit:2, dice:'1d6', consumable:false};
 const W_BANDAGE = {name:'Bandage',     range:0, toHit:0, healDice:'1d6', consumable:true};
 const W_CLAW    = {name:'Goblin Claw', range:1, toHit:2, dice:'1d4', consumable:false};
 const W_CLUB    = {name:'Heavy Club',  range:1, toHit:1, dice:'1d8', consumable:false};
@@ -130,11 +130,11 @@ function makeUnit(name,col,row,hp,move,def,isPlayer,color,weapons,scale){
 }
 
 let units = [
-  makeUnit('Carl',         1,  6, 12, 5, 12, true,  '#4a78e0', [W_SHIV, W_BANDAGE]),
+  makeUnit('Carl',         1,  6, 14, 5, 12, true,  '#4a78e0', [W_CROWBAR, W_BANDAGE]),
   makeUnit('Goblin',      11,  2,  5, 4, 11, false, '#3a9a3a', [W_CLAW]),
   makeUnit('Goblin',      17,  4,  5, 4, 11, false, '#3a9a3a', [W_CLAW]),
   makeUnit('Goblin',      18,  9,  5, 4, 11, false, '#3a9a3a', [W_CLAW]),
-  makeUnit('Goblin Brute',13,  7, 14, 3, 13, false, '#1a6a20', [W_CLUB], 1.3),
+  makeUnit('Goblin Brute',13,  7, 10, 3, 11, false, '#1a6a20', [W_CLUB], 1.3),
 ];
 
 // ── Turn state ───────────────────────────────────────────────────────────────
