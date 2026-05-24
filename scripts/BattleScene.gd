@@ -26,11 +26,14 @@ const GOBLIN_CELLS: Array[Vector2i] = [
 
 var all_units: Array[Unit] = []
 
-# ── UI (built in _ready) ──────────────────────────────────────────────────────
+# ── UI nodes ──────────────────────────────────────────────────────────────────
 
-var _status_label: Label
-var _end_turn_btn: Button
-var _turn_manager: TurnManager
+var _status_label:  Label
+var _end_turn_btn:  Button
+var _log_rtl:       RichTextLabel   ## Combat narrative log
+var _banner_bg:     ColorRect       ## Dark overlay behind result text
+var _result_banner: Label           ## VICTORY / DEFEAT overlay
+var _turn_manager:  TurnManager
 
 # ── Lifecycle ─────────────────────────────────────────────────────────────────
 
@@ -74,9 +77,8 @@ func _place_unit(unit: Unit, cell: Vector2i) -> void:
 
 # ── UI ────────────────────────────────────────────────────────────────────────
 
-## Builds the right-side panel: status label + End Turn button.
-## All UI goes into a CanvasLayer so it draws over the 2D scene and
-## isn't affected by any future camera transforms.
+## Builds the right-side panel (status, End Turn, combat log) plus the
+## center-screen result banner (hidden until battle ends).
 func _build_ui() -> void:
 	var ui_layer := CanvasLayer.new()
 	ui_layer.name = "UILayer"
@@ -84,37 +86,79 @@ func _build_ui() -> void:
 
 	# ── Right panel background ────────────────────────────────────────────────
 	var panel_bg := ColorRect.new()
-	panel_bg.color = Color(0.10, 0.08, 0.14)
-	# Grid ends at x=20+768=788; panel starts at 796
-	panel_bg.set_position(Vector2(796, 0))
-	panel_bg.set_size(Vector2(484, 720))
+	panel_bg.color        = Color(0.08, 0.06, 0.12, 1.0)
+	panel_bg.position     = Vector2(796, 0)
+	panel_bg.size         = Vector2(484, 720)
 	ui_layer.add_child(panel_bg)
 
-	# ── Status label ──────────────────────────────────────────────────────────
+	# ── Status label (whose turn, last action) ────────────────────────────────
 	_status_label = Label.new()
-	_status_label.position = Vector2(806, 20)
-	_status_label.size     = Vector2(464, 100)
-	_status_label.text     = "Rolling initiative…"
-	_status_label.add_theme_font_size_override("font_size", 16)
+	_status_label.position      = Vector2(806, 14)
+	_status_label.size          = Vector2(464, 80)
+	_status_label.text          = "Rolling initiative…"
 	_status_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_status_label.add_theme_font_size_override("font_size", 15)
 	ui_layer.add_child(_status_label)
 
 	# ── End Turn button ───────────────────────────────────────────────────────
-	_end_turn_btn = Button.new()
-	_end_turn_btn.position = Vector2(806, 130)
-	_end_turn_btn.size     = Vector2(200, 48)
+	_end_turn_btn          = Button.new()
+	_end_turn_btn.position = Vector2(806, 100)
+	_end_turn_btn.size     = Vector2(200, 44)
 	_end_turn_btn.text     = "End Turn"
-	_end_turn_btn.add_theme_font_size_override("font_size", 16)
+	_end_turn_btn.add_theme_font_size_override("font_size", 15)
 	ui_layer.add_child(_end_turn_btn)
 
-	# ── Initiative legend (static) ────────────────────────────────────────────
+	# ── "Combat Log" section header ───────────────────────────────────────────
+	var log_hdr := Label.new()
+	log_hdr.position = Vector2(806, 156)
+	log_hdr.size     = Vector2(464, 22)
+	log_hdr.text     = "— Combat Log —"
+	log_hdr.add_theme_font_size_override("font_size", 13)
+	log_hdr.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	log_hdr.modulate             = Color(0.65, 0.60, 0.80)
+	ui_layer.add_child(log_hdr)
+
+	# ── Combat log RichTextLabel ──────────────────────────────────────────────
+	_log_rtl                     = RichTextLabel.new()
+	_log_rtl.position            = Vector2(806, 182)
+	_log_rtl.size                = Vector2(464, 490)
+	_log_rtl.bbcode_enabled      = true
+	_log_rtl.scroll_active       = true
+	_log_rtl.scroll_following    = true
+	_log_rtl.add_theme_font_size_override("font_size", 13)
+	ui_layer.add_child(_log_rtl)
+
+	# Wire the log to System so all announce() calls appear here.
+	System.set_log_label(_log_rtl)
+
+	# ── Legend ────────────────────────────────────────────────────────────────
 	var legend := Label.new()
-	legend.position = Vector2(806, 640)
-	legend.size     = Vector2(464, 70)
-	legend.text     = "[Blue] = reachable cells\n[Red]  = attackable enemies"
-	legend.add_theme_font_size_override("font_size", 13)
-	legend.modulate  = Color(0.7, 0.7, 0.7)
+	legend.position      = Vector2(806, 682)
+	legend.size          = Vector2(464, 34)
+	legend.text          = "Blue = move range    Red = attack range"
+	legend.add_theme_font_size_override("font_size", 11)
+	legend.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	legend.modulate             = Color(0.55, 0.55, 0.65)
 	ui_layer.add_child(legend)
+
+	# ── Result banner (hidden until battle ends) ──────────────────────────────
+	_banner_bg          = ColorRect.new()
+	_banner_bg.color    = Color(0.02, 0.02, 0.05, 0.82)
+	_banner_bg.position = Vector2(0, 0)
+	_banner_bg.size     = Vector2(796, 720)
+	_banner_bg.visible  = false
+	ui_layer.add_child(_banner_bg)
+
+	_result_banner                    = Label.new()
+	_result_banner.position           = Vector2(0, 280)
+	_result_banner.size               = Vector2(796, 160)
+	_result_banner.text               = ""
+	_result_banner.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_result_banner.vertical_alignment   = VERTICAL_ALIGNMENT_CENTER
+	_result_banner.add_theme_font_size_override("font_size", 54)
+	_result_banner.visible            = false
+	_result_banner.name               = "ResultBanner"
+	ui_layer.add_child(_result_banner)
 
 # ── TurnManager ───────────────────────────────────────────────────────────────
 
@@ -124,3 +168,13 @@ func _start_turn_manager() -> void:
 	add_child(_turn_manager)
 	_turn_manager.setup(grid, all_units, _status_label)
 	_end_turn_btn.pressed.connect(_turn_manager.end_player_turn)
+	_turn_manager.battle_ended.connect(_on_battle_ended)
+
+
+func _on_battle_ended(player_won: bool) -> void:
+	_banner_bg.visible     = true
+	_result_banner.text    = "✦  VICTORY  ✦" if player_won else "✦  DEFEAT  ✦"
+	_result_banner.modulate = Color(0.95, 0.90, 0.40) if player_won \
+		else Color(0.90, 0.30, 0.25)
+	_result_banner.visible = true
+	_end_turn_btn.disabled = true
