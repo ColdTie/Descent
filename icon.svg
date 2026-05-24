@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
+  <!-- Descent placeholder icon: dungeon door silhouette -->
+  <rect width="128" height="128" fill="#14101a"/>
+  <!-- Door frame -->
+  <rect x="36" y="24" width="56" height="88" rx="28" fill="#2a1f3a"/>
+  <!-- Door arch glow -->
+  <ellipse cx="64" cy="52" rx="24" ry="28" fill="#6a3fa0" opacity="0.6"/>
+  <!-- Descending arrow -->
+  <polygon points="64,40 76,60 70,60 70,84 58,84 58,60 52,60" fill="#c8a0f0"/>
+</svg>
