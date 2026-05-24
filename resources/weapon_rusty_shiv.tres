@@ -1,0 +1,12 @@
+[gd_resource type="Resource" script_class="Weapon" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/Weapon.gd" id="1_weapon"]
+
+[resource]
+script = ExtResource("1_weapon")
+weapon_name = "Rusty Shiv"
+weapon_range = 1
+to_hit = 2
+damage_dice = "1d4"
+is_consumable = false
+heal_dice = ""
