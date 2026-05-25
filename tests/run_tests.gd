@@ -14,6 +14,7 @@ func _run_all() -> void:
 	_run_suite("RNG", TestRng.new())
 	_run_suite("Hex", TestHex.new())
 	_run_suite("Combat", TestCombat.new())
+	_run_suite("Abilities", TestAbilities.new())
 
 func _run_suite(name: String, suite: Object) -> void:
 	print("\n--- %s ---" % name)
@@ -22,7 +23,6 @@ func _run_suite(name: String, suite: Object) -> void:
 		if not mname.begins_with("test_"):
 			continue
 		suite.call(mname)
-		# Collect results from suite
 	var s_pass: int = suite.get("_passes") if suite.get("_passes") != null else 0
 	var s_fail: int = suite.get("_failures") if suite.get("_failures") != null else 0
 	_passes += s_pass
@@ -31,7 +31,7 @@ func _run_suite(name: String, suite: Object) -> void:
 class BaseTest:
 	var _passes: int = 0
 	var _failures: int = 0
-	
+
 	func assert_eq(a: Variant, b: Variant, msg: String = "") -> void:
 		if a == b:
 			_passes += 1
@@ -39,7 +39,7 @@ class BaseTest:
 		else:
 			_failures += 1
 			print("  FAIL: %s -- got %s, expected %s" % [msg, str(a), str(b)])
-	
+
 	func assert_true(val: bool, msg: String = "") -> void:
 		if val:
 			_passes += 1
@@ -47,7 +47,10 @@ class BaseTest:
 		else:
 			_failures += 1
 			print("  FAIL: %s" % msg)
-	
+
+	func assert_false(val: bool, msg: String = "") -> void:
+		assert_true(not val, msg)
+
 	func assert_gt(a: Variant, b: Variant, msg: String = "") -> void:
 		if a > b:
 			_passes += 1
