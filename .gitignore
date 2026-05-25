@@ -1,2 +1,7 @@
 .godot/
 *.import
+# Screenshots (CI artifacts)
+screenshot_*.png
+
+# Godot .uid cache files
+*.uid
