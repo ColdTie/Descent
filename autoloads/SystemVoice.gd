@@ -53,6 +53,37 @@ const LINES: Dictionary = {
 		"Choose your doomed archetype.",
 		"Pick wisely. Or don't. You'll probably die anyway.",
 	],
+	"hero_move": [
+		"You moved. The dungeon was unimpressed.",
+		"Tactical repositioning. Bold.",
+		"Moving. The System approves of not standing in lava.",
+		"Footwork noted. Barely.",
+	],
+	"lava_step": [
+		"You stepped in lava. This was avoidable.",
+		"Lava. Hot. Who knew.",
+		"The floor is literally on fire. You walked on it anyway.",
+	],
+	"vanish": [
+		"You disappear. The dungeon squints, confused.",
+		"Gone from sight. Triple damage incoming. Try not to waste it.",
+		"Vanished. The System recommends making this count.",
+	],
+	"taunt": [
+		"You taunt the enemy horde. They are, in fact, taunted.",
+		"Provocateur. Armor up.",
+		"You invite their attention. And their wrath. +5 armor. Good luck.",
+	],
+	"fireball": [
+		"Fire deployed. Effective, if imprecise.",
+		"Combustion event detected. Multiple hostiles singed.",
+		"Fireball. Classic. The System notes the scorched floor.",
+	],
+	"frost_nova": [
+		"Temperature drop registered. Enemies frozen.",
+		"Frost Nova. Everyone stops moving. Briefly.",
+		"Ice applied to enemy surfaces. Tactical pause granted.",
+	],
 }
 
 var _last_indices: Dictionary = {}
