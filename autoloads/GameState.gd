@@ -15,6 +15,7 @@ var hero_level: int = 1
 var hero_gold: int = 0
 var hero_abilities: Array[String] = []
 var hero_base_stats: Dictionary = {}
+var enemies_killed: int = 0  # total across run
 
 const XP_PER_LEVEL: int = 100
 
@@ -28,10 +29,15 @@ func start_run(class_id: String, seed_val: int = -1) -> void:
 	hero_xp = 0
 	hero_level = 1
 	hero_gold = 0
+	enemies_killed = 0
 	var cls_data: Dictionary = Classes.get_class_data(class_id)
 	hero_max_hp = cls_data.get("hp", 100)
 	hero_hp = hero_max_hp
-	hero_abilities = cls_data.get("abilities", []).duplicate()
+	# Must convert untyped Array from Dictionary to typed Array[String]
+	var raw_abilities: Array = cls_data.get("abilities", [])
+	hero_abilities.clear()
+	for a: String in raw_abilities:
+		hero_abilities.append(a)
 	hero_base_stats = cls_data.get("stats", {}).duplicate()
 	run_started.emit()
 

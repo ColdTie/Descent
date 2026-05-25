@@ -11,15 +11,15 @@ size = Vector2(1280, 720)
 color = Color(0.04, 0.03, 0.06, 1)
 
 [node name="HexLayer" type="Node2D" parent="."]
-name = "HexLayer"
+position = Vector2(640, 340)
+
+[node name="HighlightLayer" type="Node2D" parent="."]
 position = Vector2(640, 340)
 
 [node name="EntityLayer" type="Node2D" parent="."]
-name = "EntityLayer"
 position = Vector2(640, 340)
 
 [node name="UILayer" type="CanvasLayer" parent="."]
-name = "UILayer"
 
 [node name="FloorLabel" type="Label" parent="UILayer"]
 offset_left = 16.0
@@ -35,7 +35,6 @@ offset_left = 16.0
 offset_top = 56.0
 offset_right = 280.0
 offset_bottom = 84.0
-name = "TurnIndicator"
 text = "..."
 theme_override_font_sizes/font_size = 16
 theme_override_colors/font_color = Color(0.4, 1, 0.4, 1)
@@ -46,7 +45,6 @@ offset_top = 16.0
 offset_right = 1060.0
 offset_bottom = 66.0
 visible = false
-name = "SystemBanner"
 
 [node name="SystemText" type="Label" parent="UILayer/SystemBanner"]
 layout_mode = 1
@@ -65,7 +63,6 @@ offset_left = 0.0
 offset_top = 668.0
 offset_right = 1280.0
 offset_bottom = 720.0
-name = "HUD"
 
 [node name="AbilityBar" type="HBoxContainer" parent="UILayer/HUD"]
 layout_mode = 1
@@ -74,15 +71,23 @@ anchor_right = 1.0
 anchor_bottom = 1.0
 theme_override_constants/separation = 6
 alignment = 1
-name = "AbilityBar"
 
 [node name="HeroHPLabel" type="Label" parent="UILayer"]
 offset_left = 1070.0
 offset_top = 16.0
 offset_right = 1265.0
 offset_bottom = 50.0
-name = "HeroHPLabel"
 text = "HP: ---"
 horizontal_alignment = 2
 theme_override_colors/font_color = Color(0.35, 1, 0.35, 1)
 theme_override_font_sizes/font_size = 16
+
+[node name="EndTurnButton" type="Button" parent="UILayer"]
+offset_left = 1070.0
+offset_top = 54.0
+offset_right = 1265.0
+offset_bottom = 82.0
+text = "END TURN"
+visible = false
+theme_override_font_sizes/font_size = 13
+theme_override_colors/font_color = Color(1, 0.6, 0.1, 1)
