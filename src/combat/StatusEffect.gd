@@ -12,3 +12,15 @@ static func fortified(duration: int = 2, armor_bonus: int = 3) -> Dictionary:
 
 static func poisoned(duration: int = 4, dpt: int = 3) -> Dictionary:
 	return {"id": "poisoned", "name": "Poisoned", "duration": duration, "damage_per_turn": dpt, "armor_mod": 0}
+
+static func vanish() -> Dictionary:
+	## Persists until consumed by an attack. Next attack deals 3× damage.
+	return {
+		"id": "vanish",
+		"name": "Vanished",
+		"duration": 99,          # persists; removed via consume_status
+		"damage_per_turn": 0,
+		"armor_mod": 0,
+		"no_tick": true,         # never decremented by tick_statuses
+		"damage_multiplier": 3.0,
+	}

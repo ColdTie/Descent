@@ -12,6 +12,7 @@ const ENEMIES: Array[Dictionary] = [
 		"xp_reward": 20,
 		"sprite_key": "imp",
 		"min_floor": 1,
+		"ai_behavior": "rush",    # rushes toward hero
 	},
 	{
 		"id": "goblin",
@@ -23,6 +24,7 @@ const ENEMIES: Array[Dictionary] = [
 		"xp_reward": 25,
 		"sprite_key": "goblin",
 		"min_floor": 1,
+		"ai_behavior": "flank",   # tries to approach from the side
 	},
 	{
 		"id": "skeleton",
@@ -34,6 +36,7 @@ const ENEMIES: Array[Dictionary] = [
 		"xp_reward": 30,
 		"sprite_key": "skeleton",
 		"min_floor": 2,
+		"ai_behavior": "cautious", # only approaches if hero is far
 	},
 	{
 		"id": "demon_grunt",
@@ -45,6 +48,7 @@ const ENEMIES: Array[Dictionary] = [
 		"xp_reward": 45,
 		"sprite_key": "demon",
 		"min_floor": 3,
+		"ai_behavior": "rush",
 	},
 	{
 		"id": "lava_golem",
@@ -56,6 +60,7 @@ const ENEMIES: Array[Dictionary] = [
 		"xp_reward": 60,
 		"sprite_key": "golem",
 		"min_floor": 4,
+		"ai_behavior": "ranged",  # stays back, uses ranged attacks, retreats if adjacent
 	},
 ]
 
@@ -86,4 +91,5 @@ static func make_combatant(enemy_def: Dictionary, position: Vector2i, rng: Rando
 	c.abilities = typed_abilities
 	c.xp_reward = enemy_def.get("xp_reward", 20)
 	c.sprite_key = enemy_def.get("sprite_key", "imp")
+	c.ai_behavior = enemy_def.get("ai_behavior", "rush")
 	return c

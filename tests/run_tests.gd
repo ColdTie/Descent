@@ -11,9 +11,10 @@ func _init() -> void:
 	quit(_failures)
 
 func _run_all() -> void:
-	_run_suite("RNG", TestRng.new())
-	_run_suite("Hex", TestHex.new())
-	_run_suite("Combat", TestCombat.new())
+	_run_suite("RNG",      TestRng.new())
+	_run_suite("Hex",      TestHex.new())
+	_run_suite("Combat",   TestCombat.new())
+	_run_suite("Movement", TestMovement.new())
 
 func _run_suite(name: String, suite: Object) -> void:
 	print("\n--- %s ---" % name)

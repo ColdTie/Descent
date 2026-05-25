@@ -10,12 +10,14 @@ var faction: Faction = Faction.ENEMY
 var hp: int = 0
 var max_hp: int = 0
 var armor: int = 0
+var attack_bonus: int = 0  # added to all attack damage
 var speed: int = 0  # higher = acts earlier in turn order
 var position: Vector2i = Vector2i.ZERO  # hex grid coords (q, r)
 var status_effects: Array[Dictionary] = []
 var abilities: Array[String] = []
 var xp_reward: int = 0
 var sprite_key: String = ""  # references which placeholder sprite to use
+var ai_behavior: String = "rush"  # rush | flank | cautious | ranged
 
 func _init(p_id: String, p_name: String, p_faction: Faction, p_hp: int, p_speed: int = 10) -> void:
 	id = p_id
@@ -44,10 +46,14 @@ func apply_status(effect: Dictionary) -> void:
 	status_effects.append(effect)
 
 func tick_statuses() -> int:
-	## Applies per-turn effects, returns total damage taken
+	## Applies per-turn effects, returns total damage taken.
+	## Effects with "no_tick": true persist until explicitly consumed.
 	var total_dmg: int = 0
 	var remaining: Array[Dictionary] = []
 	for eff in status_effects:
+		if eff.get("no_tick", false):
+			remaining.append(eff)
+			continue
 		if eff.has("damage_per_turn"):
 			var dmg: int = eff["damage_per_turn"]
 			hp = max(0, hp - dmg)
@@ -57,6 +63,27 @@ func tick_statuses() -> int:
 			remaining.append(eff)
 	status_effects = remaining
 	return total_dmg
+
+func has_status(status_id: String) -> bool:
+	for eff: Dictionary in status_effects:
+		if eff.get("id", "") == status_id:
+			return true
+	return false
+
+func consume_status(status_id: String) -> bool:
+	## Remove the first matching status. Returns true if found and removed.
+	for i: int in range(status_effects.size()):
+		if status_effects[i].get("id", "") == status_id:
+			status_effects.remove_at(i)
+			return true
+	return false
+
+func has_skip_turn() -> bool:
+	## True if any active status effect causes the combatant to skip their turn.
+	for eff: Dictionary in status_effects:
+		if eff.get("skip_turn", false):
+			return true
+	return false
 
 func get_effective_armor() -> int:
 	var bonus: int = 0
