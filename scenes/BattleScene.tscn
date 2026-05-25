@@ -1,18 +1,88 @@
-[gd_scene load_steps=3 format=3 uid="uid://dw8k2r5t9v3m1"]
+[gd_scene load_steps=2 format=3]
 
-[ext_resource type="Script" path="res://scripts/BattleScene.gd" id="1_battle"]
-[ext_resource type="Script" path="res://scripts/Grid.gd" id="2_grid"]
+[ext_resource type="Script" path="res://scenes/BattleScene.gd" id="1_bs"]
 
 [node name="BattleScene" type="Node2D"]
-script = ExtResource("1_battle")
+script = ExtResource("1_bs")
 
 [node name="Background" type="ColorRect" parent="."]
-color = Color(0.06, 0.05, 0.08, 1)
-position = Vector2(-50, -50)
-size = Vector2(1400, 820)
+position = Vector2(0, 0)
+size = Vector2(1280, 720)
+color = Color(0.04, 0.03, 0.06, 1)
 
-[node name="Grid" type="Node2D" parent="."]
-position = Vector2(20, 20)
-script = ExtResource("2_grid")
+[node name="HexLayer" type="Node2D" parent="."]
+name = "HexLayer"
+position = Vector2(640, 340)
 
-[node name="UnitsContainer" type="Node2D" parent="."]
+[node name="EntityLayer" type="Node2D" parent="."]
+name = "EntityLayer"
+position = Vector2(640, 340)
+
+[node name="UILayer" type="CanvasLayer" parent="."]
+name = "UILayer"
+
+[node name="FloorLabel" type="Label" parent="UILayer"]
+offset_left = 16.0
+offset_top = 16.0
+offset_right = 220.0
+offset_bottom = 52.0
+text = "Floor 1"
+theme_override_font_sizes/font_size = 28
+theme_override_colors/font_color = Color(1, 0.78, 0.18, 1)
+
+[node name="TurnIndicator" type="Label" parent="UILayer"]
+offset_left = 16.0
+offset_top = 56.0
+offset_right = 280.0
+offset_bottom = 84.0
+name = "TurnIndicator"
+text = "..."
+theme_override_font_sizes/font_size = 16
+theme_override_colors/font_color = Color(0.4, 1, 0.4, 1)
+
+[node name="SystemBanner" type="Panel" parent="UILayer"]
+offset_left = 240.0
+offset_top = 16.0
+offset_right = 1060.0
+offset_bottom = 66.0
+visible = false
+name = "SystemBanner"
+
+[node name="SystemText" type="Label" parent="UILayer/SystemBanner"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+text = ""
+horizontal_alignment = 1
+vertical_alignment = 1
+theme_override_colors/font_color = Color(0.92, 0.92, 0.65, 1)
+theme_override_font_sizes/font_size = 14
+autowrap_mode = 3
+
+[node name="HUD" type="Panel" parent="UILayer"]
+offset_left = 0.0
+offset_top = 668.0
+offset_right = 1280.0
+offset_bottom = 720.0
+name = "HUD"
+
+[node name="AbilityBar" type="HBoxContainer" parent="UILayer/HUD"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+theme_override_constants/separation = 6
+alignment = 1
+name = "AbilityBar"
+
+[node name="HeroHPLabel" type="Label" parent="UILayer"]
+offset_left = 1070.0
+offset_top = 16.0
+offset_right = 1265.0
+offset_bottom = 50.0
+name = "HeroHPLabel"
+text = "HP: ---"
+horizontal_alignment = 2
+theme_override_colors/font_color = Color(0.35, 1, 0.35, 1)
+theme_override_font_sizes/font_size = 16
