@@ -164,13 +164,23 @@ func enemy_ai_action(enemy: Combatant, map: DungeonMap = null) -> void:
 			perform_attack(enemy, target, ability_id)
 
 func _move_toward(mover: Combatant, goal: Vector2i, map: DungeonMap) -> void:
-	## Move one step toward goal, picking passable neighbor closest to goal
+	## Move one step toward goal, picking passable, unoccupied neighbor closest to goal.
+	## Collision avoidance: skip hexes occupied by any other living combatant.
 	var neighbors: Array[Vector2i] = HexGrid.neighbors(mover.position)
 	var best: Vector2i = mover.position
 	var best_dist: int = HexGrid.hex_distance(mover.position, goal)
+
+	# Build set of positions occupied by other living combatants
+	var occupied: Array[Vector2i] = []
+	for c: Combatant in combatants:
+		if c.id != mover.id and c.is_alive():
+			occupied.append(c.position)
+
 	for n: Vector2i in neighbors:
 		if not map.is_passable(n):
 			continue
+		if occupied.has(n):
+			continue  # don't stack on an occupied hex
 		var d: int = HexGrid.hex_distance(n, goal)
 		if d < best_dist:
 			best_dist = d
