@@ -18,7 +18,7 @@ DESCENT is a turn-based tactical dungeon crawler in the spirit of **Dungeon Craw
 3. **Autoloads**: `GameRng`, `GameState`, `SystemVoice` — always available
 4. **Signals over direct calls** for cross-system communication
 
-## Godot 4.4.1 API Gotchas (learned in Runs 1–2)
+## Godot 4.4.1 API Gotchas (learned in Runs 1–3)
 - `RandomNumberGenerator` has NO `.shuffle()` method — use Fisher-Yates manually or `Array.shuffle()` (global seed, not deterministic)
 - `Array[T].filter(callable)` returns an untyped `Array`, not `Array[T]`
 - `Classes.get_class()` conflicts with `Object.get_class()` — renamed to `get_class_data()`
@@ -27,8 +27,11 @@ DESCENT is a turn-based tactical dungeon crawler in the spirit of **Dungeon Craw
 - Autoloads are NOT type-checked in `--script` mode; keep tests free of autoload references
 - `Combatant.to_dict()` does NOT include a `stats` key — use the new `attack_bonus` field directly
 - Signal handlers with `await` become coroutines and return to caller at the first `await` — don't assume they block
+- Array literal `[a] + array_b` creates an **untyped** Array — always build typed arrays with `append`/`append_array`
+- `Array.filter()` / `Array + Array` always return untyped — iterate to append into a typed `Array[T]`
+- `GameState.hero_abilities` is `Array[String]` — must iterate to append from Dictionary-sourced arrays, same for `_all_combatants: Array[Combatant]`
 
-## Current State (Run 2 — Movement, Abilities, Atmosphere)
+## Current State (Run 3 — Ability Charges, Enemy Scaling, Lava Hazard, Victory)
 ### Implemented ✅
 **Run 1 (Bootstrap):**
 - `GameRng`, `GameState`, `SystemVoice` autoloads
@@ -51,24 +54,29 @@ DESCENT is a turn-based tactical dungeon crawler in the spirit of **Dungeon Craw
 - **Status icon labels** on entity nodes (🔥❄☠🛡👁)
 - **Death overlay** — "YOU DIED" with System quip, floor/kill/level stats, animated fade, "TRY AGAIN" button → back to class select
 - **Level-up screen** (`LevelUp.tscn/.gd`) — 6-upgrade pool shuffled to 3 choices; atk/spd/hp/def/xp/heal variants; DCC quip on each
-- **Enemy AI variety:**
-  - Golem: stays put, ranged attack only when in range 3
-  - Goblin: moves one step toward hero, then attacks if adjacent
-  - Imp: always rushes toward hero, attacks on contact
-  - Default: random ability, no movement
-- **`attack_bonus` on Combatant** — hero stat bonuses (from loot/level-up) now correctly apply to damage
-- **`perform_aoe_attack`** on BattleEngine — hits multiple targets, returns Array[int] of damage dealt
-- **`is_combatant_frozen`** on BattleEngine — checks status_effects for frozen id
-- **69 headless tests** — all passing: RNG (5), HexGrid (13), Combat (27), Movement+Abilities (24)
+- **Enemy AI variety:** Golem (ranged wait), Goblin (flank), Imp (rush), Default (random)
+- **`attack_bonus` on Combatant** — hero stat bonuses correctly apply to damage
+- **69 headless tests**
 
-### Next Priorities (Run 3)
-1. **Ability charges/cooldown tracking** — wire the existing `Ability` class into BattleScene; show charges remaining in HUD; prevent using depleted abilities
-2. **Enemy collision avoidance** — prevent two enemies from occupying the same hex when moving
-3. **Lava damage on movement** — if hero moves into lava (should be blocked, but) if hero is adjacent to lava, fire damage ticks; make lava a tactical hazard
-4. **Victory screen** — a proper post-floor "CLEARED!" screen showing XP, level, kills before Loot screen
-5. **Hero portrait / class icon** — replace letter initial with a distinct polygon silhouette per class (Brawler=shield, Rogue=dagger shape, Arcanist=star)
-6. **Sounds** — even a minimal audio pass: hit, kill, move, ability sounds (synthesized or imported)
-7. **Floor progression** — enemies should scale in count and HP by floor; currently capped at floor_num+3 but HP/stats don't scale
+**Run 3 (Charges/Cooldown, Scaling, Lava, Victory, Portraits):**
+- **Ability charges/cooldown HUD** — Each hero ability is now backed by an `Ability` object tracking `current_charges`, `cooldown_remaining`. HUD buttons show `∞` (unlimited), `●●` (charged dots), `○●` (partial), or `⏳N` (cooldown) and gray out when depleted. `can_use()` is checked before executing; abilities that miss cooldown window show a banner.
+- **Ability cooldown ticking** — `_tick_hero_ability_cooldowns()` runs at the start of each hero turn; charges refill when cooldown hits 0.
+- **Enemy collision avoidance** — `BattleEngine._move_toward()` now skips hexes occupied by other living combatants; enemies cannot stack.
+- **Floor-based enemy scaling** — `EnemyDefs.make_combatant(…, floor_num)` now adds HP (+10/floor above min_floor), armor (+1 per 2 floors), attack_bonus (+2/floor), and XP reward (+5/floor) — later floors are meaningfully harder.
+- **Lava hazard** — At the start of each hero turn, adjacent lava tiles deal 2 HP damage per tile; System banner quip shown. Hero start and its 6 neighbors are now lava-free so floor 1 start isn't immediately punishing.
+- **Victory overlay** — When battle_ended fires with hero_won=true, a "FLOOR N CLEARED!" overlay appears with System quip, kill count, XP, HP remaining, and animated CONTINUE button before transitioning to loot/level-up.
+- **Hero class portraits** — Replaced letter initial with distinct polygon shapes: Brawler=gold shield (pentagon), Rogue=green dagger (elongated diamond), Arcanist=bright cyan 4-pointed star.
+- **Typed array bug fix** — Fixed `GameState.hero_abilities` and `BattleScene._all_combatants` assignments that were failing with "Trying to assign an array of type Array to Array[T]".
+- **95 headless tests** — all passing: RNG (5), Hex (13), Combat (27), Movement+Abilities (24), Run3 (26)
+
+### Next Priorities (Run 4)
+1. **Rogue class — Backstab ignores armor** — `Abilities.DATA["backstab"]` has `"ignore_armor": true` but `BattleEngine._calculate_damage()` doesn't check it; wire it in
+2. **Enemy-type based health bars** — Show enemy HP numbers on hover; current thin bar is hard to read at a glance
+3. **Sounds** — minimal audio pass (synthesized using AudioStreamGenerator): hit, kill, move, ability sounds; no audio assets needed
+4. **Multi-floor progression visuals** — floor depth should visually change (more lava density, darker modulate, different stalagmite density on deeper floors)
+5. **Ranged attack visual** — show a projectile Line2D for golem fireball and enemy ranged attacks, not just instant damage
+6. **Turn queue preview** — Show upcoming turn order as small icons in a strip so players can plan around it
+7. **Loot: ability unlock items** — Add "unlock new ability" loot type (e.g., Poison Dart, Shield Slam) so the player's kit grows across floors
 
 ## File Map
 ```
@@ -105,6 +113,7 @@ tests/
   test_hex.gd        — HexGrid geometry tests
   test_combat.gd     — Combatant + BattleEngine tests
   test_movement.gd   — movement, ability effects, AI variants, attack_bonus (Run 2)
+  test_run3.gd       — Run3: Ability charges/cooldown, collision avoidance, floor scaling (Run 3)
 ```
 
 ## Running Tests

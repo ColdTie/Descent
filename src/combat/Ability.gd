@@ -24,22 +24,40 @@ func _init(p_id: String, p_name: String) -> void:
 	display_name = p_name
 
 func can_use() -> bool:
-	return (current_charges > 0 or cooldown_remaining == 0)
+	## max_charges < 0 = unlimited (basic attack style)
+	if max_charges < 0:
+		return true
+	return current_charges > 0
 
 func use() -> bool:
 	if not can_use():
 		return false
-	if max_charges > 0:
+	if max_charges >= 0:
 		current_charges -= 1
-	cooldown_remaining = cooldown_turns
+		if current_charges <= 0 and cooldown_turns > 0:
+			cooldown_remaining = cooldown_turns
 	return true
 
 func tick_cooldown() -> void:
 	if cooldown_remaining > 0:
 		cooldown_remaining -= 1
-	if cooldown_remaining == 0 and current_charges < max_charges:
-		current_charges = min(max_charges, current_charges + 1)
+		if cooldown_remaining == 0 and max_charges >= 0 and current_charges < max_charges:
+			current_charges = min(max_charges, current_charges + 1)
 
 func recharge_full() -> void:
-	current_charges = max_charges
+	if max_charges >= 0:
+		current_charges = max_charges
 	cooldown_remaining = 0
+
+func charge_display() -> String:
+	## Returns a compact string for HUD: "∞", "●●", "○●", "⏳3"
+	if max_charges < 0:
+		return "∞"
+	if cooldown_remaining > 0:
+		return "⏳%d" % cooldown_remaining
+	var s: String = ""
+	for _i: int in range(current_charges):
+		s += "●"
+	for _i: int in range(max(0, max_charges - current_charges)):
+		s += "○"
+	return s
