@@ -15,6 +15,7 @@ func _run_all() -> void:
 	_run_suite("Hex", TestHex.new())
 	_run_suite("Combat", TestCombat.new())
 	_run_suite("Movement+Abilities", TestMovement.new())
+	_run_suite("Ability Charges+Scaling", TestAbilities.new())
 
 func _run_suite(name: String, suite: Object) -> void:
 	print("\n--- %s ---" % name)

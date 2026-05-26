@@ -27,8 +27,10 @@ DESCENT is a turn-based tactical dungeon crawler in the spirit of **Dungeon Craw
 - Autoloads are NOT type-checked in `--script` mode; keep tests free of autoload references
 - `Combatant.to_dict()` does NOT include a `stats` key — use the new `attack_bonus` field directly
 - Signal handlers with `await` become coroutines and return to caller at the first `await` — don't assume they block
+- `Button.disabled = true` suppresses the `pressed` signal entirely — good for greyed-out abilities
+- `match` arm variables are scoped to their arm — safe to reuse `var pts` across arms
 
-## Current State (Run 2 — Movement, Abilities, Atmosphere)
+## Current State (Run 3 — Charges, Lava, Victory, Scaling, Icons)
 ### Implemented ✅
 **Run 1 (Bootstrap):**
 - `GameRng`, `GameState`, `SystemVoice` autoloads
@@ -41,34 +43,35 @@ DESCENT is a turn-based tactical dungeon crawler in the spirit of **Dungeon Craw
 **Run 2 (Movement + Abilities + Polish):**
 - **Hero movement** — click adjacent passable empty hex to move (costs a turn); animated with Tween
 - **Hex highlights** — green for valid moves, red for attack targets, orange for AOE zones, blue for frost, purple for self-buffs; clears on turn end
-- **Ability effects fully implemented:**
-  - `fireball` — AOE damage (radius 2) centered on clicked hex; orange flash visual
-  - `frost_nova` — freezes all adjacent enemies for 2 turns (frozen enemies skip AI action)
-  - `taunt` — applies `fortified` status (+5 armor, 3 turns) to hero
-  - `vanish` — applies `vanished` status; next attack deals 3× damage (consumed on use)
-- **Self-target UX** — pressing an already-selected self-target ability button uses it immediately
-- **Cave atmosphere** — `CanvasModulate` blue-purple tint; dark stalagmite polygons in outer rings (6–7); lava tiles pulse orange↔dim with staggered tweens
+- **Ability effects fully implemented** (fireball AOE, frost_nova freeze, taunt fortified, vanish 3× damage)
+- **Cave atmosphere** — `CanvasModulate` blue-purple tint; stalagmite polygons; lava tiles pulse
 - **Status icon labels** on entity nodes (🔥❄☠🛡👁)
-- **Death overlay** — "YOU DIED" with System quip, floor/kill/level stats, animated fade, "TRY AGAIN" button → back to class select
-- **Level-up screen** (`LevelUp.tscn/.gd`) — 6-upgrade pool shuffled to 3 choices; atk/spd/hp/def/xp/heal variants; DCC quip on each
-- **Enemy AI variety:**
-  - Golem: stays put, ranged attack only when in range 3
-  - Goblin: moves one step toward hero, then attacks if adjacent
-  - Imp: always rushes toward hero, attacks on contact
-  - Default: random ability, no movement
-- **`attack_bonus` on Combatant** — hero stat bonuses (from loot/level-up) now correctly apply to damage
-- **`perform_aoe_attack`** on BattleEngine — hits multiple targets, returns Array[int] of damage dealt
-- **`is_combatant_frozen`** on BattleEngine — checks status_effects for frozen id
-- **69 headless tests** — all passing: RNG (5), HexGrid (13), Combat (27), Movement+Abilities (24)
+- **Death overlay** — "YOU DIED" with quip, stats, TRY AGAIN → class select
+- **Level-up screen** — 3-of-6 upgrade choices per level
+- **Enemy AI variety** — Golem/Goblin/Imp/Default behaviours
+- **69 headless tests**
 
-### Next Priorities (Run 3)
-1. **Ability charges/cooldown tracking** — wire the existing `Ability` class into BattleScene; show charges remaining in HUD; prevent using depleted abilities
-2. **Enemy collision avoidance** — prevent two enemies from occupying the same hex when moving
-3. **Lava damage on movement** — if hero moves into lava (should be blocked, but) if hero is adjacent to lava, fire damage ticks; make lava a tactical hazard
-4. **Victory screen** — a proper post-floor "CLEARED!" screen showing XP, level, kills before Loot screen
-5. **Hero portrait / class icon** — replace letter initial with a distinct polygon silhouette per class (Brawler=shield, Rogue=dagger shape, Arcanist=star)
-6. **Sounds** — even a minimal audio pass: hit, kill, move, ability sounds (synthesized or imported)
-7. **Floor progression** — enemies should scale in count and HP by floor; currently capped at floor_num+3 but HP/stats don't scale
+**Run 3 (Charges + Lava + Victory + Scaling + Icons):**
+- **Ability charges/cooldown HUD** — `Ability` instances wired into BattleScene for every hero ability:
+  - Buttons show `[N/Max]` charges, `CD:N` when on cooldown, `[∞]` for infinite abilities
+  - Depleted buttons are disabled (grey); re-enable when cooldown expires
+  - Cooldowns tick at the START of the hero's turn (so feedback is immediate)
+  - All action handlers (`_do_hero_attack`, `_do_hero_aoe_ability`, `_do_hero_self_ability`) call `ability.use()` and refresh the bar
+- **Enemy collision avoidance** — `BattleEngine._move_toward()` now builds an occupied-positions list and skips occupied hexes; enemies never stack
+- **Lava adjacency damage** — at the start of the hero's turn, 4 fire damage is dealt per adjacent lava tile; displayed as orange floating number; if fatal, shows death overlay
+- **Victory screen overlay** — "FLOOR N CLEARED" title, System quip, XP/kill/level stats, HP bar, "DESCEND ▼" button (hero HP synced to GameState before emitting)
+- **Floor scaling** — enemies: +25% HP per floor, +2 attack per floor, +5 XP per floor
+- **Hero class icons** — polygon silhouettes replace letter initials: Brawler=shield pentagon, Rogue=dagger blade, Arcanist=6-pointed star
+- **Hero HP synced to GameState** on victory (fixing a Run 1–2 bug where HP reset each floor)
+- **107 headless tests** — all passing: RNG (5), HexGrid (13), Combat (27), Movement+Abilities (24), Ability Charges+Scaling (38)
+
+### Next Priorities (Run 4)
+1. **Sounds** — minimal audio pass: hit, kill, move, ability SFX (synthesized or imported .wav)
+2. **More enemy types / elite variants** — floor 5+ should have elite enemies with modifiers (armored, berserker, cursed)
+3. **Boss floors** — every 5 floors, spawn a named boss with a unique AI pattern and special drops
+4. **XP display in HUD** — show XP progress bar toward next level during battle
+5. **Loot rarity tiers** — common/rare/epic items with distinct visual styles; epic items should have real build synergies
+6. **Floor-exit mechanic** — a visible exit tile that hero must reach after clearing all enemies (rather than auto-transition)
 
 ## File Map
 ```
@@ -105,6 +108,7 @@ tests/
   test_hex.gd        — HexGrid geometry tests
   test_combat.gd     — Combatant + BattleEngine tests
   test_movement.gd   — movement, ability effects, AI variants, attack_bonus (Run 2)
+  test_abilities.gd  — Ability charge/cooldown tracking, floor scaling, collision avoidance (Run 3)
 ```
 
 ## Running Tests
