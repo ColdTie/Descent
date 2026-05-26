@@ -23,14 +23,19 @@ func generate(p_floor: int, rng: RandomNumberGenerator) -> void:
 		passable[h] = true
 	
 	# Place some lava tiles (10-15% of tiles)
+	# Protect hero start (center) and all its neighbors from lava — first move should be fair
 	var lava_count: int = rng.randi_range(int(all_hexes.size() * 0.10), int(all_hexes.size() * 0.15))
+	var hero_neighbors: Array[Vector2i] = HexGrid.neighbors(Vector2i.ZERO)
 	var shuffled: Array[Vector2i] = all_hexes.duplicate()
 	_shuffle_vec2i(shuffled, rng)
 	for i: int in range(lava_count):
 		var h: Vector2i = shuffled[i]
-		if h != Vector2i.ZERO:  # never lava on center
-			tile_types[h] = "lava"
-			passable[h] = false
+		if h == Vector2i.ZERO:  # never lava on center
+			continue
+		if h in hero_neighbors:  # never lava adjacent to hero start
+			continue
+		tile_types[h] = "lava"
+		passable[h] = false
 
 	# Hero starts at center
 	hero_start = Vector2i.ZERO

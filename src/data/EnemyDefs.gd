@@ -68,15 +68,23 @@ static func get_enemies_for_floor(floor_num: int) -> Array[Dictionary]:
 		result.append(ENEMIES[0])
 	return result
 
-static func make_combatant(enemy_def: Dictionary, position: Vector2i, rng: RandomNumberGenerator) -> Combatant:
+static func make_combatant(enemy_def: Dictionary, position: Vector2i, rng: RandomNumberGenerator, floor_num: int = 1) -> Combatant:
+	## Scale enemy stats by floor. Each floor above min_floor adds HP, attack, and XP.
+	var min_f: int = enemy_def.get("min_floor", 1)
+	var scale: int = max(0, floor_num - min_f)  # floors above first appearance
+
+	var base_hp: int = enemy_def["hp"]
+	var scaled_hp: int = base_hp + scale * 10  # +10 HP per floor above min
+
 	var c := Combatant.new(
 		enemy_def["id"] + "_" + str(rng.randi_range(1000, 9999)),
 		enemy_def["display_name"],
 		Combatant.Faction.ENEMY,
-		enemy_def["hp"],
+		scaled_hp,
 		enemy_def["speed"]
 	)
-	c.armor = enemy_def.get("armor", 0)
+	c.armor = enemy_def.get("armor", 0) + scale / 2  # slight armor scaling
+	c.attack_bonus = scale * 2  # +2 flat attack per floor above min
 	c.position = position
 	# Must convert untyped Array from Dictionary to typed Array[String]
 	var raw_abilities: Array = enemy_def.get("abilities", ["enemy_claw"])
@@ -84,6 +92,6 @@ static func make_combatant(enemy_def: Dictionary, position: Vector2i, rng: Rando
 	for a: String in raw_abilities:
 		typed_abilities.append(a)
 	c.abilities = typed_abilities
-	c.xp_reward = enemy_def.get("xp_reward", 20)
+	c.xp_reward = enemy_def.get("xp_reward", 20) + scale * 5  # more XP for tougher enemies
 	c.sprite_key = enemy_def.get("sprite_key", "imp")
 	return c
