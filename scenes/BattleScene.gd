@@ -1,6 +1,7 @@
 extends Node2D
 ## Visual driver for one battle encounter on the hex grid.
-## Run 2: hero movement, proper ability effects, cave atmosphere, death overlay.
+## Run 3: ability charges/cooldown HUD, enemy collision fix, victory overlay,
+##        floor scaling, class silhouettes.
 
 signal battle_complete(hero_won: bool, xp_earned: int)
 
@@ -17,6 +18,7 @@ const ATTACK_CLR     := Color(0.9, 0.15, 0.05, 0.55)
 const AOE_CLR        := Color(0.9, 0.45, 0.05, 0.35)
 const SELF_CLR       := Color(0.6, 0.3, 0.9, 0.5)
 const FROST_CLR      := Color(0.25, 0.65, 1.0, 0.5)
+const DEPLETED_CLR   := Color(0.40, 0.40, 0.40, 0.90)
 
 var _engine: BattleEngine
 var _map: DungeonMap
@@ -25,9 +27,10 @@ var _enemies: Array[Combatant] = []
 var _all_combatants: Array[Combatant] = []
 
 # Visual nodes
-var _hex_polys: Dictionary = {}    # Vector2i -> Polygon2D
-var _entity_nodes: Dictionary = {} # combatant.id -> Node2D
-var _ability_btns: Dictionary = {} # ability_id -> Button
+var _hex_polys: Dictionary = {}      # Vector2i -> Polygon2D
+var _entity_nodes: Dictionary = {}   # combatant.id -> Node2D
+var _ability_btns: Dictionary = {}   # ability_id -> Button
+var _ability_objects: Dictionary = {} # ability_id -> Ability (Run 3)
 var _highlight_hexes: Array[Vector2i] = []
 
 var _selected_ability: String = "basic_attack"
@@ -81,12 +84,25 @@ func _build_encounter() -> void:
 	_hero.abilities = typed_abilities
 	_hero.position = _map.hero_start
 
+	# Build Ability objects for the hero (Run 3: charges + cooldown tracking)
+	_ability_objects.clear()
+	for ability_id: String in _hero.abilities:
+		_ability_objects[ability_id] = Abilities.make_ability(ability_id)
+
 	_enemies.clear()
 	var pool: Array[Dictionary] = EnemyDefs.get_enemies_for_floor(GameState.floor_num)
 	for i: int in range(_map.spawn_points.size()):
 		var def: Dictionary = pool[_battle_rng.randi_range(0, pool.size() - 1)]
 		var e: Combatant = EnemyDefs.make_combatant(def, _map.spawn_points[i], _battle_rng)
 		_enemies.append(e)
+
+	# Floor scaling: enemies get tougher each floor (Run 3)
+	var floor_scale: float = 1.0 + float(GameState.floor_num - 1) * 0.18
+	var atk_scale: int = (GameState.floor_num - 1) * 3
+	for e: Combatant in _enemies:
+		e.max_hp = int(float(e.max_hp) * floor_scale)
+		e.hp = e.max_hp
+		e.attack_bonus += atk_scale
 
 	_all_combatants = [_hero] + _enemies
 	_engine = BattleEngine.new(_battle_rng)
@@ -206,16 +222,35 @@ func _spawn_entity_node(c: Combatant) -> void:
 	body.color = HERO_COLOR if c.faction == Combatant.Faction.HERO else ENEMY_COLOR
 	root.add_child(body)
 
-	# Letter initial
-	var lbl := Label.new()
-	lbl.text = c.display_name.left(1).to_upper()
-	lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	lbl.add_theme_font_size_override("font_size", 15)
-	lbl.add_theme_color_override("font_color", Color.WHITE)
-	lbl.size = Vector2(24.0, 24.0)
-	lbl.position = Vector2(-12.0, -12.0)
-	root.add_child(lbl)
+	if c.faction == Combatant.Faction.HERO:
+		# Run 3: Class-specific silhouette replaces letter initial
+		var silhouette := Polygon2D.new()
+		var sil_size: float = HEX_SIZE * 0.33
+		match GameState.hero_class:
+			"brawler":
+				silhouette.polygon = _make_shield_pts(sil_size)
+				silhouette.color = Color(0.95, 0.88, 0.65)
+			"rogue":
+				silhouette.polygon = _make_dagger_pts(sil_size)
+				silhouette.color = Color(0.65, 0.95, 0.65)
+			"arcanist":
+				silhouette.polygon = _make_star_pts(sil_size, 4)
+				silhouette.color = Color(0.70, 0.76, 1.0)
+			_:
+				silhouette.polygon = _make_hex_pts(sil_size * 0.75)
+				silhouette.color = Color(0.9, 0.9, 0.9)
+		root.add_child(silhouette)
+	else:
+		# Enemy: keep letter initial
+		var lbl := Label.new()
+		lbl.text = c.display_name.left(1).to_upper()
+		lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		lbl.add_theme_font_size_override("font_size", 15)
+		lbl.add_theme_color_override("font_color", Color.WHITE)
+		lbl.size = Vector2(24.0, 24.0)
+		lbl.position = Vector2(-12.0, -12.0)
+		root.add_child(lbl)
 
 	# HP bar background
 	var hp_bg := ColorRect.new()
@@ -243,7 +278,7 @@ func _spawn_entity_node(c: Combatant) -> void:
 	_entity_layer.add_child(root)
 	_entity_nodes[c.id] = root
 
-## ─── Ability Bar ──────────────────────────────────────────────────────────────
+## ─── Ability Bar (Run 3: charges + cooldown display) ─────────────────────────
 
 func _build_ability_bar() -> void:
 	for child: Node in _ability_bar.get_children():
@@ -252,21 +287,70 @@ func _build_ability_bar() -> void:
 
 	for ability_id: String in _hero.abilities:
 		var abl: Dictionary = Abilities.get_ability(ability_id)
+		var ab_obj: Ability = _ability_objects.get(ability_id)
 		var btn := Button.new()
-		btn.custom_minimum_size = Vector2(100.0, 52.0)
-		var atype: String = abl.get("target", "single_enemy")
-		var type_icon: String = "⚔"
-		if atype == "self":
-			type_icon = "✦"
-		elif atype == "all_enemies":
-			type_icon = "💥"
-		btn.text = "%s\n%s" % [type_icon, abl.get("display_name", ability_id)]
+		btn.custom_minimum_size = Vector2(115.0, 60.0)
+		var type_icon: String = _ability_type_icon(abl.get("target", "single_enemy"))
+		var charges_str: String = _get_charges_str(ab_obj)
+		btn.text = "%s %s\n%s" % [type_icon, abl.get("display_name", ability_id), charges_str]
 		btn.add_theme_font_size_override("font_size", 11)
-		if ability_id == _selected_ability:
-			btn.modulate = SELECTED_CLR
+		_style_ability_btn(btn, ability_id, ab_obj)
 		btn.pressed.connect(_on_ability_btn.bind(ability_id))
 		_ability_bar.add_child(btn)
 		_ability_btns[ability_id] = btn
+
+func _ability_type_icon(target_type: String) -> String:
+	match target_type:
+		"self":          return "✦"
+		"all_enemies":   return "💥"
+		_:               return "⚔"
+
+func _get_charges_str(ab: Ability) -> String:
+	## Returns a compact charge/cooldown indicator string.
+	if ab == null:
+		return ""
+	if ab.max_charges == -1:
+		return "∞"
+	if ab.cooldown_remaining > 0:
+		return "CD: %d" % ab.cooldown_remaining
+	# Filled/empty pip display: ● = available charge, ○ = spent
+	var dots: String = ""
+	for i: int in range(ab.max_charges):
+		dots += "●" if i < ab.current_charges else "○"
+	return dots
+
+func _style_ability_btn(btn: Button, ability_id: String, ab: Ability) -> void:
+	## Apply modulate/disabled state based on charges and selection.
+	if ab != null and not ab.can_use():
+		btn.modulate = DEPLETED_CLR
+		btn.disabled = true
+	elif ability_id == _selected_ability:
+		btn.modulate = SELECTED_CLR
+		btn.disabled = false
+	else:
+		btn.modulate = Color.WHITE
+		btn.disabled = false
+
+func _update_ability_bar_ui() -> void:
+	## Refresh button text + state without rebuilding (Run 3).
+	for ability_id: String in _ability_btns:
+		var btn: Button = _ability_btns.get(ability_id)
+		if btn == null:
+			continue
+		var abl: Dictionary = Abilities.get_ability(ability_id)
+		var ab_obj: Ability = _ability_objects.get(ability_id)
+		var type_icon: String = _ability_type_icon(abl.get("target", "single_enemy"))
+		var charges_str: String = _get_charges_str(ab_obj)
+		btn.text = "%s %s\n%s" % [type_icon, abl.get("display_name", ability_id), charges_str]
+		_style_ability_btn(btn, ability_id, ab_obj)
+
+func _tick_hero_ability_cooldowns() -> void:
+	## Called at end of each hero turn to advance cooldown timers.
+	for ability_id: String in _ability_objects:
+		var ab: Ability = _ability_objects.get(ability_id)
+		if ab != null:
+			ab.tick_cooldown()
+	_update_ability_bar_ui()
 
 ## ─── Turn Logic ───────────────────────────────────────────────────────────────
 
@@ -367,16 +451,22 @@ func _do_hero_move(hex: Vector2i) -> void:
 	]
 	_show_system_banner(quips[_battle_rng.randi_range(0, quips.size() - 1)], 1.5)
 	await get_tree().create_timer(0.28).timeout
+	_tick_hero_ability_cooldowns()
 	_engine.end_turn()
 	_next_turn()
 
 func _do_hero_attack(target: Combatant) -> void:
 	_player_turn = false
 	_clear_highlights()
+	# Consume ability charge before attack
+	var ab_obj: Ability = _ability_objects.get(_selected_ability)
+	if ab_obj != null:
+		ab_obj.use()
 	_engine.perform_attack(_hero, target, _selected_ability)
 	SystemVoice.speak("hit")
 	_update_all_hp_bars()
 	_update_hero_hp_label()
+	_tick_hero_ability_cooldowns()
 	_engine.end_turn()
 	await get_tree().create_timer(0.2).timeout
 	_next_turn()
@@ -386,7 +476,11 @@ func _do_hero_aoe_ability(center_hex: Vector2i) -> void:
 	_player_turn = false
 	_clear_highlights()
 
-	var abl: Dictionary = Abilities.get_ability(_selected_ability)
+	# Consume ability charge
+	var ab_obj: Ability = _ability_objects.get(_selected_ability)
+	if ab_obj != null:
+		ab_obj.use()
+
 	var aoe_radius: int = 2  # default AOE radius for fireball
 
 	if _selected_ability == "frost_nova":
@@ -418,6 +512,7 @@ func _do_hero_aoe_ability(center_hex: Vector2i) -> void:
 
 	_update_all_hp_bars()
 	_update_hero_hp_label()
+	_tick_hero_ability_cooldowns()
 	_engine.end_turn()
 	await get_tree().create_timer(0.35).timeout
 	_next_turn()
@@ -426,6 +521,11 @@ func _do_hero_self_ability() -> void:
 	## Use self-target ability (taunt, vanish)
 	_player_turn = false
 	_clear_highlights()
+
+	# Consume ability charge
+	var ab_obj: Ability = _ability_objects.get(_selected_ability)
+	if ab_obj != null:
+		ab_obj.use()
 
 	var abl: Dictionary = Abilities.get_ability(_selected_ability)
 	match _selected_ability:
@@ -447,6 +547,7 @@ func _do_hero_self_ability() -> void:
 			SystemVoice.speak_direct("Nothing happens. The System is confused too.")
 
 	_update_hero_hp_label()
+	_tick_hero_ability_cooldowns()
 	_engine.end_turn()
 	await get_tree().create_timer(0.3).timeout
 	_next_turn()
@@ -473,16 +574,18 @@ func _find_enemy_at(hex: Vector2i) -> Combatant:
 	return null
 
 func _on_ability_btn(ability_id: String) -> void:
+	# Guard: depleted abilities can't be selected
+	var ab_obj: Ability = _ability_objects.get(ability_id)
+	if ab_obj != null and not ab_obj.can_use():
+		_show_system_banner("Not ready. [CD: %d]" % ab_obj.cooldown_remaining, 1.2)
+		return
 	# If already selected and player's turn → self-target abilities fire immediately
 	var abl: Dictionary = Abilities.get_ability(ability_id)
 	if _selected_ability == ability_id and _player_turn and abl.get("target", "single_enemy") == "self":
 		_do_hero_self_ability()
 		return
 	_selected_ability = ability_id
-	for id: String in _ability_btns:
-		_ability_btns[id].modulate = Color.WHITE
-	if _ability_btns.has(ability_id):
-		_ability_btns[ability_id].modulate = SELECTED_CLR
+	_update_ability_bar_ui()
 	if _player_turn:
 		_update_highlights()
 
@@ -581,16 +684,101 @@ func _on_battle_ended(hero_won: bool, xp_earned: int) -> void:
 	_player_turn = false
 	_clear_highlights()
 	if hero_won:
-		_turn_indicator.text = "VICTORY!"
+		_turn_indicator.text = "FLOOR CLEARED!"
 		_turn_indicator.add_theme_color_override("font_color", Color(1.0, 0.85, 0.1))
-		SystemVoice.speak_direct("Enemies cleared. XP: %d. The System awards a grudging nod." % xp_earned)
-		await get_tree().create_timer(1.8).timeout
-		battle_complete.emit(true, xp_earned)
+		await get_tree().create_timer(0.4).timeout
+		_show_victory_overlay(xp_earned)
 	else:
 		_turn_indicator.text = "DEFEATED"
 		_turn_indicator.add_theme_color_override("font_color", Color(0.9, 0.1, 0.1))
 		SystemVoice.speak("death")
 		# Death overlay shown by _on_combatant_died when hero dies
+
+## ─── Victory Overlay (Run 3) ─────────────────────────────────────────────────
+
+func _show_victory_overlay(xp_earned: int) -> void:
+	var cl := CanvasLayer.new()
+	cl.layer = 10
+	add_child(cl)
+
+	# Dark semi-transparent backdrop
+	var bg := ColorRect.new()
+	bg.size = Vector2(1280.0, 720.0)
+	bg.color = Color(0.0, 0.0, 0.0, 0.0)
+	cl.add_child(bg)
+	var tw_bg: Tween = create_tween()
+	tw_bg.tween_property(bg, "color", Color(0.0, 0.0, 0.0, 0.80), 0.7)
+
+	await get_tree().create_timer(0.4).timeout
+
+	# Gold "FLOOR N CLEARED!" title
+	var title := Label.new()
+	title.text = "FLOOR %d CLEARED!" % GameState.floor_num
+	title.position = Vector2(200.0, 130.0)
+	title.custom_minimum_size = Vector2(880.0, 0.0)
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title.add_theme_font_size_override("font_size", 64)
+	title.add_theme_color_override("font_color", Color(1.0, 0.82, 0.08))
+	title.modulate.a = 0.0
+	cl.add_child(title)
+	var tw_title: Tween = create_tween()
+	tw_title.tween_property(title, "modulate:a", 1.0, 0.5)
+
+	# System victory quip
+	var victory_quips: Array[String] = [
+		"All hostiles eliminated. The System is... almost impressed.",
+		"Floor cleared. The dungeon notes your survival with quiet resentment.",
+		"Victory. The next floor will be worse. You have been warned.",
+		"Enemies neutralised. XP: %d. Grudging acknowledgement granted." % xp_earned,
+		"Well. That happened. The dungeon is recalibrating.",
+	]
+	var quip_lbl := Label.new()
+	quip_lbl.text = victory_quips[_battle_rng.randi_range(0, victory_quips.size() - 1)]
+	quip_lbl.position = Vector2(140.0, 250.0)
+	quip_lbl.custom_minimum_size = Vector2(1000.0, 0.0)
+	quip_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	quip_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	quip_lbl.add_theme_font_size_override("font_size", 18)
+	quip_lbl.add_theme_color_override("font_color", Color(0.82, 0.82, 0.65))
+	cl.add_child(quip_lbl)
+
+	# Run stats
+	var stats_lbl := Label.new()
+	stats_lbl.text = "Floor %d  ·  %d enemies slain  ·  XP earned: +%d  ·  Level %d" % [
+		GameState.floor_num, _enemies_killed, xp_earned, GameState.hero_level
+	]
+	stats_lbl.position = Vector2(140.0, 310.0)
+	stats_lbl.custom_minimum_size = Vector2(1000.0, 0.0)
+	stats_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	stats_lbl.add_theme_font_size_override("font_size", 15)
+	stats_lbl.add_theme_color_override("font_color", Color(0.55, 0.85, 0.55))
+	cl.add_child(stats_lbl)
+
+	# HP status line
+	var hp_lbl := Label.new()
+	hp_lbl.text = "HP: %d / %d" % [_hero.hp, _hero.max_hp]
+	hp_lbl.position = Vector2(140.0, 345.0)
+	hp_lbl.custom_minimum_size = Vector2(1000.0, 0.0)
+	hp_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	hp_lbl.add_theme_font_size_override("font_size", 14)
+	var hp_ratio: float = float(_hero.hp) / float(max(1, _hero.max_hp))
+	hp_lbl.add_theme_color_override("font_color",
+		Color(1.0 - hp_ratio * 0.6, 0.3 + hp_ratio * 0.6, 0.2))
+	cl.add_child(hp_lbl)
+
+	# "DESCEND DEEPER" button
+	var btn := Button.new()
+	btn.text = "DESCEND DEEPER  ▼"
+	btn.position = Vector2(465.0, 420.0)
+	btn.custom_minimum_size = Vector2(350.0, 60.0)
+	btn.add_theme_font_size_override("font_size", 22)
+	cl.add_child(btn)
+
+	# Use lambda-in-array pattern to safely pass xp_earned into the callback
+	var xp_ref: Array[int] = [xp_earned]
+	btn.pressed.connect(func() -> void:
+		battle_complete.emit(true, xp_ref[0])
+	)
 
 func _on_system_line(text: String, _dur: float) -> void:
 	_show_system_banner(text, 2.8)
@@ -748,4 +936,50 @@ func _make_hex_pts(size: float) -> PackedVector2Array:
 	for i: int in range(6):
 		var angle: float = deg_to_rad(60.0 * float(i) - 30.0)
 		pts.append(Vector2(cos(angle) * size, sin(angle) * size))
+	return pts
+
+## ─── Class Silhouette Helpers (Run 3) ────────────────────────────────────────
+
+func _make_shield_pts(size: float) -> PackedVector2Array:
+	## Kite-shield silhouette for Brawler
+	var pts := PackedVector2Array()
+	pts.append(Vector2(0.0, -size))              # top center
+	pts.append(Vector2(size * 0.85, -size * 0.45)) # upper right
+	pts.append(Vector2(size * 0.72, size * 0.30))  # lower right
+	pts.append(Vector2(0.0, size))               # bottom point
+	pts.append(Vector2(-size * 0.72, size * 0.30)) # lower left
+	pts.append(Vector2(-size * 0.85, -size * 0.45))# upper left
+	return pts
+
+func _make_dagger_pts(size: float) -> PackedVector2Array:
+	## Dagger silhouette for Rogue: blade tip + crossguard + handle
+	var pts := PackedVector2Array()
+	# Blade tip (top)
+	pts.append(Vector2(0.0, -size))
+	pts.append(Vector2(size * 0.14, -size * 0.2))
+	# Crossguard right
+	pts.append(Vector2(size * 0.45, -size * 0.05))
+	pts.append(Vector2(size * 0.45, size * 0.12))
+	# Handle right
+	pts.append(Vector2(size * 0.12, size * 0.20))
+	pts.append(Vector2(size * 0.12, size * 0.92))
+	# Pommel
+	pts.append(Vector2(0.0, size))
+	pts.append(Vector2(-size * 0.12, size * 0.92))
+	# Handle left
+	pts.append(Vector2(-size * 0.12, size * 0.20))
+	# Crossguard left
+	pts.append(Vector2(-size * 0.45, size * 0.12))
+	pts.append(Vector2(-size * 0.45, -size * 0.05))
+	pts.append(Vector2(-size * 0.14, -size * 0.2))
+	return pts
+
+func _make_star_pts(size: float, num_points: int) -> PackedVector2Array:
+	## N-pointed star for Arcanist
+	var pts := PackedVector2Array()
+	var inner_r: float = size * 0.40
+	for i: int in range(num_points * 2):
+		var angle: float = deg_to_rad(float(i) * 180.0 / float(num_points) - 90.0)
+		var r: float = size if i % 2 == 0 else inner_r
+		pts.append(Vector2(cos(angle) * r, sin(angle) * r))
 	return pts

@@ -147,3 +147,19 @@ static func all_ids() -> Array[String]:
 	for k: String in DATA.keys():
 		ids.append(k)
 	return ids
+
+## Factory: create a hydrated Ability object from the static data dict.
+## max_charges == -1 means infinite uses (never depleted).
+static func make_ability(id: String) -> Ability:
+	var data: Dictionary = get_ability(id)
+	var ab := Ability.new(id, data.get("display_name", id))
+	ab.description = data.get("description", "")
+	ab.max_charges = data.get("max_charges", 1)
+	# Unlimited abilities get current_charges = 1; use() won't decrement them.
+	ab.current_charges = max(ab.max_charges, 1)
+	ab.cooldown_turns = data.get("cooldown_turns", 0)
+	ab.cooldown_remaining = 0
+	ab.range_tiles = data.get("range", 1)
+	ab.xp_cost = data.get("xp_cost", 0)
+	ab.icon_key = data.get("icon_key", "")
+	return ab
