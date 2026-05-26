@@ -18,7 +18,7 @@ DESCENT is a turn-based tactical dungeon crawler in the spirit of **Dungeon Craw
 3. **Autoloads**: `GameRng`, `GameState`, `SystemVoice` — always available
 4. **Signals over direct calls** for cross-system communication
 
-## Godot 4.4.1 API Gotchas (learned in Runs 1–2)
+## Godot 4.4.1 API Gotchas (learned in Runs 1–3)
 - `RandomNumberGenerator` has NO `.shuffle()` method — use Fisher-Yates manually or `Array.shuffle()` (global seed, not deterministic)
 - `Array[T].filter(callable)` returns an untyped `Array`, not `Array[T]`
 - `Classes.get_class()` conflicts with `Object.get_class()` — renamed to `get_class_data()`
@@ -27,8 +27,10 @@ DESCENT is a turn-based tactical dungeon crawler in the spirit of **Dungeon Craw
 - Autoloads are NOT type-checked in `--script` mode; keep tests free of autoload references
 - `Combatant.to_dict()` does NOT include a `stats` key — use the new `attack_bonus` field directly
 - Signal handlers with `await` become coroutines and return to caller at the first `await` — don't assume they block
+- `_check_battle_end()` must guard `if battle_over: return true` to prevent double emission when lava kills trigger it AND `end_turn()` also calls it
 
-## Current State (Run 2 — Movement, Abilities, Atmosphere)
+## Current State (Run 3 — Charges, Scaling, Lava, Victory)
+
 ### Implemented ✅
 **Run 1 (Bootstrap):**
 - `GameRng`, `GameState`, `SystemVoice` autoloads
@@ -41,46 +43,46 @@ DESCENT is a turn-based tactical dungeon crawler in the spirit of **Dungeon Craw
 **Run 2 (Movement + Abilities + Polish):**
 - **Hero movement** — click adjacent passable empty hex to move (costs a turn); animated with Tween
 - **Hex highlights** — green for valid moves, red for attack targets, orange for AOE zones, blue for frost, purple for self-buffs; clears on turn end
-- **Ability effects fully implemented:**
-  - `fireball` — AOE damage (radius 2) centered on clicked hex; orange flash visual
-  - `frost_nova` — freezes all adjacent enemies for 2 turns (frozen enemies skip AI action)
-  - `taunt` — applies `fortified` status (+5 armor, 3 turns) to hero
-  - `vanish` — applies `vanished` status; next attack deals 3× damage (consumed on use)
+- **Ability effects fully implemented:** fireball (AOE), frost_nova (freeze), taunt (fortify), vanish (3× damage)
 - **Self-target UX** — pressing an already-selected self-target ability button uses it immediately
 - **Cave atmosphere** — `CanvasModulate` blue-purple tint; dark stalagmite polygons in outer rings (6–7); lava tiles pulse orange↔dim with staggered tweens
 - **Status icon labels** on entity nodes (🔥❄☠🛡👁)
 - **Death overlay** — "YOU DIED" with System quip, floor/kill/level stats, animated fade, "TRY AGAIN" button → back to class select
 - **Level-up screen** (`LevelUp.tscn/.gd`) — 6-upgrade pool shuffled to 3 choices; atk/spd/hp/def/xp/heal variants; DCC quip on each
-- **Enemy AI variety:**
-  - Golem: stays put, ranged attack only when in range 3
-  - Goblin: moves one step toward hero, then attacks if adjacent
-  - Imp: always rushes toward hero, attacks on contact
-  - Default: random ability, no movement
-- **`attack_bonus` on Combatant** — hero stat bonuses (from loot/level-up) now correctly apply to damage
-- **`perform_aoe_attack`** on BattleEngine — hits multiple targets, returns Array[int] of damage dealt
-- **`is_combatant_frozen`** on BattleEngine — checks status_effects for frozen id
-- **69 headless tests** — all passing: RNG (5), HexGrid (13), Combat (27), Movement+Abilities (24)
+- **Enemy AI variety:** Golem (ranged), Goblin (flanks), Imp (rushes), Default (random)
+- **69 headless tests** — all passing
 
-### Next Priorities (Run 3)
-1. **Ability charges/cooldown tracking** — wire the existing `Ability` class into BattleScene; show charges remaining in HUD; prevent using depleted abilities
-2. **Enemy collision avoidance** — prevent two enemies from occupying the same hex when moving
-3. **Lava damage on movement** — if hero moves into lava (should be blocked, but) if hero is adjacent to lava, fire damage ticks; make lava a tactical hazard
-4. **Victory screen** — a proper post-floor "CLEARED!" screen showing XP, level, kills before Loot screen
-5. **Hero portrait / class icon** — replace letter initial with a distinct polygon silhouette per class (Brawler=shield, Rogue=dagger shape, Arcanist=star)
-6. **Sounds** — even a minimal audio pass: hit, kill, move, ability sounds (synthesized or imported)
-7. **Floor progression** — enemies should scale in count and HP by floor; currently capped at floor_num+3 but HP/stats don't scale
+**Run 3 (Charges, Scaling, Lava, Victory):**
+- **Ability charges/cooldown tracking** — `Ability` objects now wired into BattleScene; HUD shows `∞` for unlimited, `N/N` for charges, `⏳N` for cooldown; depleted abilities grayed out and blocked; charges tick down after each hero turn
+- **Victory screen** (`VictoryScreen.tscn/.gd`) — "FLOOR N CLEARED" + System quip + stats (kills, XP, level, HP) + "DESCEND" button; shown after every battle win before LootScreen; XP applied only when player clicks Descend
+- **Enemy collision avoidance** — `_move_toward()` now checks for other living combatants before committing a step; enemies spread out naturally
+- **Floor progression scaling** — `EnemyDefs.make_combatant()` accepts `floor_num`; HP scales +15% per floor above 1; attack_bonus scales +2 per floor above 1
+- **Lava hazard** — `BattleEngine.apply_lava_damage()` checks all neighbors; 3 unmitigated fire damage per turn if adjacent to lava; triggers `lava_damaged` signal for visuals; can kill enemies (ends battle) or hero (death overlay)
+- **Hero class icons** — Brawler: pentagon shield, Rogue: narrow dagger diamond, Arcanist: 6-pointed star; white polygon replaces letter initial on hero entity
+- **Battle end guard** — `_check_battle_end()` now guards against double emission with `if battle_over: return true`
+- **GameState tracking** — `last_battle_kills` and `last_battle_xp` stored on GameState for VictoryScreen
+- **94 headless tests** — all passing: RNG (5), HexGrid (13), Combat (27), Movement+Abilities (24), Run3 (25)
+
+### Next Priorities (Run 4)
+1. **Sounds** — even minimal audio pass: hit, kill, move, ability sounds; game currently uses dummy audio driver (no hardware needed in container, but file-based synthesized sounds should work with `AudioStreamGenerator`)
+2. **Enemy icons** — enemies currently show a letter initial; add polygon icons per enemy type (imp=horns, goblin=spike, skeleton=skull outline, golem=hexagon)
+3. **Floor exit mechanic** — the `exit_pos` from DungeonMap is never shown or used; add a staircase icon and let hero walk to it to descend without killing all enemies
+4. **Status effect visuals** — show status icon overlays directly on the hex polygon (not just a label); make frozen enemies have a blue tint
+5. **Loot variety** — LootScreen pool has 8 items but could use more interesting trade-offs; "upgrade an ability" loot that permanently boosts one ability's damage/charges
+6. **Ability upgrade screen polish** — the `LevelUp` screen shows generic upgrade names; wire each upgrade to the hero's actual class abilities
+7. **HUD XP bar** — show XP progress toward next level; currently invisible until level-up fires
 
 ## File Map
 ```
 autoloads/
   GameRng.gd         — seeded RNG singleton
-  GameState.gd       — run-persistent hero state
+  GameState.gd       — run-persistent hero state (+ last_battle_kills, last_battle_xp)
   SystemVoice.gd     — The System commentary pools + signal
 
 src/combat/
   Combatant.gd       — pure fighter data class (+ attack_bonus field)
-  BattleEngine.gd    — pure turn engine (+ move_combatant, perform_aoe_attack, enemy AI variants)
-  Ability.gd         — charges/cooldown data object (not yet wired into BattleScene HUD)
+  BattleEngine.gd    — pure turn engine (+ collision avoidance, apply_lava_damage, lava_damaged signal, battle_end guard)
+  Ability.gd         — charges/cooldown data object (wired into BattleScene Run 3)
   StatusEffect.gd    — status dict factories: burning/frozen/vanished/fortified/poisoned
 
 src/map/
@@ -90,13 +92,14 @@ src/map/
 src/data/
   Classes.gd         — class definitions (Brawler/Rogue/Arcanist)
   Abilities.gd       — all ability definitions
-  EnemyDefs.gd       — enemy definitions + Combatant factory
+  EnemyDefs.gd       — enemy definitions + Combatant factory (+ floor_num scaling)
 
 scenes/
-  Main.tscn/.gd      — root, scene orchestration; handles death→class select
+  Main.tscn/.gd      — root, scene orchestration; Run 3: routes through VictoryScreen
   ClassSelect.tscn/.gd  — class picker front end
-  BattleScene.tscn/.gd  — hex battle visual driver (Run 2: movement, highlights, AOE, atmosphere, death overlay)
-  LevelUp.tscn/.gd   — upgrade screen (new in Run 2); 3 of 6 upgrades per level
+  BattleScene.tscn/.gd  — hex battle visual driver (Run 3: ability charges, lava, class icons, victory flow)
+  VictoryScreen.tscn/.gd — NEW Run 3: post-floor "FLOOR N CLEARED" screen
+  LevelUp.tscn/.gd   — upgrade screen; 3 of 6 upgrades per level
   LootScreen.tscn/.gd   — post-battle choose-one loot
 
 tests/
@@ -105,6 +108,7 @@ tests/
   test_hex.gd        — HexGrid geometry tests
   test_combat.gd     — Combatant + BattleEngine tests
   test_movement.gd   — movement, ability effects, AI variants, attack_bonus (Run 2)
+  test_run3.gd       — NEW Run 3: ability charges, floor scaling, collision, lava damage (25 tests)
 ```
 
 ## Running Tests

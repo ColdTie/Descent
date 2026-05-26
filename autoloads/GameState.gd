@@ -15,6 +15,9 @@ var hero_level: int = 1
 var hero_gold: int = 0
 var hero_abilities: Array[String] = []
 var hero_base_stats: Dictionary = {}
+## Last battle results (set by BattleScene before emitting battle_complete)
+var last_battle_kills: int = 0
+var last_battle_xp: int = 0
 
 const XP_PER_LEVEL: int = 100
 

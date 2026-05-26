@@ -9,6 +9,7 @@ signal combatant_died(combatant: Combatant)
 signal battle_ended(hero_won: bool, xp_earned: int)
 signal status_ticked(combatant: Combatant, damage: int)
 signal hero_moved(combatant: Combatant, from_hex: Vector2i, to_hex: Vector2i)
+signal lava_damaged(combatant: Combatant, damage: int)
 
 var combatants: Array[Combatant] = []
 var turn_order: Array[Combatant] = []
@@ -164,12 +165,21 @@ func enemy_ai_action(enemy: Combatant, map: DungeonMap = null) -> void:
 			perform_attack(enemy, target, ability_id)
 
 func _move_toward(mover: Combatant, goal: Vector2i, map: DungeonMap) -> void:
-	## Move one step toward goal, picking passable neighbor closest to goal
+	## Move one step toward goal, picking passable unoccupied neighbor closest to goal.
+	## Run 3: skip hexes occupied by other living combatants (collision avoidance).
 	var neighbors: Array[Vector2i] = HexGrid.neighbors(mover.position)
 	var best: Vector2i = mover.position
 	var best_dist: int = HexGrid.hex_distance(mover.position, goal)
 	for n: Vector2i in neighbors:
 		if not map.is_passable(n):
+			continue
+		# Collision avoidance: skip hexes occupied by other living combatants
+		var occupied: bool = false
+		for c: Combatant in combatants:
+			if c != mover and c.is_alive() and c.position == n:
+				occupied = true
+				break
+		if occupied:
 			continue
 		var d: int = HexGrid.hex_distance(n, goal)
 		if d < best_dist:
@@ -177,6 +187,21 @@ func _move_toward(mover: Combatant, goal: Vector2i, map: DungeonMap) -> void:
 			best = n
 	if best != mover.position:
 		mover.position = best
+
+func apply_lava_damage(combatant: Combatant, map: DungeonMap) -> void:
+	## Deal 3 unmitigated fire damage if combatant is adjacent to a lava tile.
+	## Emits lava_damaged signal. May trigger combatant_died and battle_ended.
+	if not combatant.is_alive():
+		return
+	for n: Vector2i in HexGrid.neighbors(combatant.position):
+		if map.get_tile_type(n) == "lava":
+			var dmg: int = 3
+			combatant.hp = max(0, combatant.hp - dmg)
+			lava_damaged.emit(combatant, dmg)
+			if not combatant.is_alive():
+				_on_combatant_died(combatant)
+				_check_battle_end()
+			return  # One lava neighbor is enough
 
 func end_turn() -> void:
 	current_turn_idx = (current_turn_idx + 1) % max(1, turn_order.size())
@@ -186,6 +211,8 @@ func _remove_dead_from_order() -> void:
 	turn_order = turn_order.filter(func(c: Combatant) -> bool: return c.is_alive())
 
 func _check_battle_end() -> bool:
+	if battle_over:
+		return true  # Guard: don't double-emit
 	var living_heroes: int = combatants.filter(
 		func(c: Combatant) -> bool: return c.faction == Combatant.Faction.HERO and c.is_alive()
 	).size()
