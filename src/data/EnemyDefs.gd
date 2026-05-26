@@ -1,5 +1,6 @@
 class_name EnemyDefs
 ## Procedural enemy definitions for each floor tier.
+## Enemy HP and armor scale with floor_num for progressive difficulty.
 
 const ENEMIES: Array[Dictionary] = [
 	{
@@ -68,15 +69,22 @@ static func get_enemies_for_floor(floor_num: int) -> Array[Dictionary]:
 		result.append(ENEMIES[0])
 	return result
 
-static func make_combatant(enemy_def: Dictionary, position: Vector2i, rng: RandomNumberGenerator) -> Combatant:
+static func make_combatant(enemy_def: Dictionary, position: Vector2i, rng: RandomNumberGenerator, floor_num: int = 1) -> Combatant:
+	## Create a Combatant from an enemy definition.
+	## HP and armor scale with floor_num: +20% HP and +1 armor per floor above 1.
+	var hp_scale: float = 1.0 + float(max(0, floor_num - 1)) * 0.20
+	var scaled_hp: int = int(float(enemy_def["hp"]) * hp_scale)
+	var base_armor: int = enemy_def.get("armor", 0)
+	var floor_armor_bonus: int = max(0, (floor_num - 1) / 2)  # +1 armor every 2 floors
+
 	var c := Combatant.new(
 		enemy_def["id"] + "_" + str(rng.randi_range(1000, 9999)),
 		enemy_def["display_name"],
 		Combatant.Faction.ENEMY,
-		enemy_def["hp"],
+		scaled_hp,
 		enemy_def["speed"]
 	)
-	c.armor = enemy_def.get("armor", 0)
+	c.armor = base_armor + floor_armor_bonus
 	c.position = position
 	# Must convert untyped Array from Dictionary to typed Array[String]
 	var raw_abilities: Array = enemy_def.get("abilities", ["enemy_claw"])

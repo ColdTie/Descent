@@ -3,10 +3,14 @@ extends Node
 
 const CLASS_SELECT_SCENE := "res://scenes/ClassSelect.tscn"
 const BATTLE_SCENE := "res://scenes/BattleScene.tscn"
+const VICTORY_SCENE := "res://scenes/VictoryScreen.tscn"
 const LOOT_SCENE := "res://scenes/LootScreen.tscn"
 const LEVEL_UP_SCENE := "res://scenes/LevelUp.tscn"
 
 var _current_scene: Node = null
+# Pending data from the last battle, used to pass to VictoryScreen
+var _pending_xp: int = 0
+var _pending_kills: int = 0
 
 func _ready() -> void:
 	GameState.run_started.connect(_on_run_started)
@@ -37,21 +41,34 @@ func _load_scene(path: String) -> void:
 		push_error("Failed to load scene: " + path)
 		return
 	_current_scene = packed.instantiate()
+	# Pass pending data to scenes that accept it (e.g. VictoryScreen)
+	if _current_scene.has_method("prepare"):
+		_current_scene.call("prepare", {"xp": _pending_xp, "kills": _pending_kills})
 	add_child(_current_scene)
+	# Connect signals
 	if _current_scene.has_signal("battle_complete"):
 		_current_scene.battle_complete.connect(_on_battle_complete)
+	if _current_scene.has_signal("floor_cleared"):
+		_current_scene.floor_cleared.connect(_on_floor_cleared)
 	if _current_scene.has_signal("loot_chosen"):
 		_current_scene.loot_chosen.connect(_on_loot_chosen)
 	if _current_scene.has_signal("upgrade_chosen"):
 		_current_scene.upgrade_chosen.connect(_on_upgrade_chosen)
 
-func _on_battle_complete(hero_won: bool, xp_earned: int) -> void:
+func _on_battle_complete(hero_won: bool, xp_earned: int, enemies_killed: int) -> void:
 	if not hero_won:
-		# Hero died — reset HP in GameState and go back to class select
+		# Hero died — reset and go back to class select
 		GameState.hero_hp = 0
 		_go_to_class_select()
 		return
-	var leveled_up: bool = GameState.gain_xp(xp_earned)
+	# Store data for VictoryScreen
+	_pending_xp = xp_earned
+	_pending_kills = enemies_killed
+	_load_scene(VICTORY_SCENE)
+
+func _on_floor_cleared() -> void:
+	## Called when player clicks "Descend Deeper" on the Victory Screen.
+	var leveled_up: bool = GameState.gain_xp(_pending_xp)
 	if leveled_up:
 		_load_scene(LEVEL_UP_SCENE)
 	else:
