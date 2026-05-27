@@ -1,6 +1,6 @@
 extends Control
 ## Level-up upgrade screen. Shown when hero gains a level.
-## Presents 3 upgrade choices; hero picks one then continues.
+## Run 4: Presents 3 upgrade choices — mix of stat upgrades and ability unlocks.
 
 signal upgrade_chosen(upgrade_id: String)
 
@@ -12,7 +12,7 @@ signal upgrade_chosen(upgrade_id: String)
 
 var _chosen: String = ""
 
-# Upgrade pool: each entry has id, name, desc, and an apply() callable-compatible dict
+# Stat upgrade pool
 const UPGRADES: Array[Dictionary] = [
 	{"id": "atk_up", "name": "Savage Strike", "desc": "+8 Attack. Your strikes land harder. The dungeon is unimpressed."},
 	{"id": "spd_up", "name": "Quick Reflexes", "desc": "+4 Speed. Act before they do. Simple math."},
@@ -20,6 +20,11 @@ const UPGRADES: Array[Dictionary] = [
 	{"id": "def_up", "name": "Thick Skin", "desc": "+4 Armor. You've learned to absorb punishment. Professionally."},
 	{"id": "xp_bonus", "name": "Combat Instincts", "desc": "Next floor grants +50% XP. The System upgrades your XP farm."},
 	{"id": "heal_big", "name": "Second Wind", "desc": "Restore 50 HP now. The dungeon sighs and patches you up."},
+]
+
+# All abilities a hero can unlock (non-enemy, learnable by anyone)
+const HERO_UNLOCKABLE: Array[String] = [
+	"power_strike", "backstab", "fireball", "frost_nova", "taunt", "vanish", "shield_bash"
 ]
 
 func _ready() -> void:
@@ -33,6 +38,22 @@ func _ready() -> void:
 
 func _generate_choices() -> void:
 	var pool: Array[Dictionary] = UPGRADES.duplicate()
+
+	# Add ability unlocks for abilities the hero doesn't already own
+	for ability_id: String in HERO_UNLOCKABLE:
+		if GameState.hero_abilities.has(ability_id):
+			continue  # already owned
+		var abl: Dictionary = Abilities.get_ability(ability_id)
+		var abl_name: String = abl.get("display_name", ability_id)
+		var abl_desc: String = abl.get("description", "")
+		pool.append({
+			"id": "unlock_" + ability_id,
+			"ability_id": ability_id,
+			"name": "⚡ NEW: " + abl_name,
+			"desc": abl_desc,
+			"is_unlock": true,
+		})
+
 	GameRng.shuffle(pool)
 	var choices: Array[Dictionary] = pool.slice(0, min(3, pool.size()))
 	for item: Dictionary in choices:
@@ -47,8 +68,11 @@ func _make_card(item: Dictionary) -> PanelContainer:
 	var name_lbl := Label.new()
 	name_lbl.text = item["name"]
 	name_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	name_lbl.add_theme_font_size_override("font_size", 20)
-	name_lbl.add_theme_color_override("font_color", Color(0.9, 0.7, 0.1))
+	name_lbl.add_theme_font_size_override("font_size", 18)
+	# Ability unlocks get cyan/teal color to stand out
+	var is_unlock: bool = item.get("is_unlock", false)
+	name_lbl.add_theme_color_override("font_color",
+		Color(0.2, 0.9, 0.8) if is_unlock else Color(0.9, 0.7, 0.1))
 	vbox.add_child(name_lbl)
 
 	var sep := HSeparator.new()
@@ -79,6 +103,15 @@ func _on_upgrade_selected(upgrade_id: String, item: Dictionary, panel: PanelCont
 	_continue_button.visible = true
 
 func _apply_upgrade(item: Dictionary) -> void:
+	# Handle ability unlock cards
+	if item.get("is_unlock", false):
+		var ability_id: String = item.get("ability_id", "")
+		if ability_id != "" and not GameState.hero_abilities.has(ability_id):
+			GameState.hero_abilities.append(ability_id)
+			var abl_name: String = Abilities.get_ability(ability_id).get("display_name", ability_id)
+			SystemVoice.speak("ability_unlock")
+		return
+
 	match item["id"]:
 		"atk_up":
 			GameState.hero_base_stats["attack"] = GameState.hero_base_stats.get("attack", 0) + 8

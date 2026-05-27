@@ -53,6 +53,57 @@ const LINES: Dictionary = {
 		"Choose your doomed archetype.",
 		"Pick wisely. Or don't. You'll probably die anyway.",
 	],
+	"hero_low_hp": [
+		"Warning: Hero HP critical. The System notes your impending doom.",
+		"Low HP detected. This would be a good time to panic.",
+		"You're nearly dead. Statistically, this should already be over.",
+		"Critical HP. The dungeon is holding its breath. Mockingly.",
+		"Hemorrhaging. Impressive. Not in a good way.",
+	],
+	"first_kill": [
+		"First blood. They won't be the last.",
+		"Kill confirmed. You have the System's reluctant attention.",
+		"One down. An embarrassing number to go.",
+		"That one's dead. Others have noticed. Good luck.",
+		"First fatality recorded. Yours eventually.",
+	],
+	"backstab_hit": [
+		"Backstab! Armor is irrelevant when you attack the soft bits.",
+		"Strike from shadow. The target did not appreciate the ambush.",
+		"Backstab connected. The System approves, grudgingly.",
+		"Cowardly and effective. The best kind of attack.",
+	],
+	"hero_near_lava": [
+		"You're standing next to lava. This is your fault.",
+		"Lava proximity detected. The System recommends moving. Immediately.",
+		"Adjacent to lava. The dungeon admires your optimism.",
+		"Heat damage is real. The System reminds you this was preventable.",
+	],
+	"hero_surrounded": [
+		"Surrounded. This is either bravery or catastrophic positioning.",
+		"Multiple hostiles in melee range. Statistical survival: low.",
+		"They've got you surrounded. How efficient of them.",
+		"Surrounded. The System recommends a different career path.",
+		"Encircled. The dungeon applauds your tactical creativity. Sarcastically.",
+	],
+	"shield_bash": [
+		"Shield Bash! Sent flying. Physics is your ally.",
+		"Knocked back. Gravity and momentum work in your favor. For once.",
+		"Bashed. They are now somewhere else. That's progress.",
+		"Shield Bash connects. The enemy disagrees with their new position.",
+	],
+	"ability_unlock": [
+		"New ability acquired. The dungeon is moderately concerned.",
+		"Unlocked. What will you do with it? The System is mildly curious.",
+		"Ability granted. Wield it well. Or at all. Set the bar low.",
+		"You've learned something. The dungeon revises its survival estimate upward. Slightly.",
+	],
+	"between_floors": [
+		"Resting. You've earned it. The dungeon finds this annoying.",
+		"Brief respite. The wounds close slightly. The danger does not.",
+		"Recovery phase. Enjoy it. The next floor is worse.",
+		"Patching you up. The System's investment in your survival continues.",
+	],
 }
 
 var _last_indices: Dictionary = {}

@@ -29,8 +29,11 @@ DESCENT is a turn-based tactical dungeon crawler in the spirit of **Dungeon Craw
 - Signal handlers with `await` become coroutines and return to caller at the first `await` — don't assume they block
 - **Architecture rule**: `BattleEngine._calculate_damage()` returns RAW damage (no armor). `Combatant.take_damage(amount, ignore_armor=false)` applies armor. Don't double-apply armor in both places.
 - `Combatant.take_damage(amount, ignore_armor)` — the `ignore_armor` parameter bypasses the `armor` field reduction (for backstab, env damage, etc.)
+- `BattleEngine.perform_knockback_attack(attacker, target, ability_id, map)` — returns `Array[int, Vector2i]` = [damage, push_to_hex]. Target stays at original position if no valid push direction. Knockback CAN push into lava tiles (that's the point).
+- `BattleEngine.get_push_hex(attacker_pos, target_pos, map)` — finds the neighbor of `target_pos` farthest from `attacker_pos` that is in the map's tile_types dict and unoccupied. "Wall" tiles (not in dict) are excluded; lava is allowed (tactical).
+- LevelUp ability unlocks: check `item.get("is_unlock", false)` before matching `item["id"]` — unlock entries have `"ability_id"` field and use `"unlock_" + ability_id` as their id key.
 
-## Current State (Run 3 — Charges, Scaling, Lava, Victory Screen)
+## Current State (Run 4 — Shield Bash, Mid-Battle Commentary, Ability Unlocks)
 ### Implemented ✅
 **Run 1 (Bootstrap):**
 - `GameRng`, `GameState`, `SystemVoice` autoloads
@@ -65,14 +68,37 @@ DESCENT is a turn-based tactical dungeon crawler in the spirit of **Dungeon Craw
 - **`apply_environment_damage`** on BattleEngine — deals armor-ignoring damage for lava/env hazards
 - **109 headless tests** — all passing: RNG (5), Hex (13), Combat (27), Movement+Abilities (24), Run3 (40)
 
-### Next Priorities (Run 4)
+**Run 4 (Shield Bash + Mid-Battle Commentary + Ability Unlocks):**
+- **Shield Bash (Brawler)** — Brawler now starts with `shield_bash` instead of `taunt`:
+  - 18 base damage + knocks enemy 1 hex away from attacker
+  - Tactically push enemies into lava tiles for extra burn damage
+  - Engine-level: `BattleEngine.perform_knockback_attack()` + `get_push_hex()` pure methods
+  - Signal: `combatant_pushed(target, from_hex, to_hex)` → BattleScene animates with `Tween.TRANS_BACK`
+  - Special System quip when pushed onto lava: "Into the lava! Poetic."
+- **Mid-battle System commentary** — 5 new contextual trigger categories:
+  - `hero_low_hp` — triggers once when hero HP < 20%, resets at 30% (debounce)
+  - `first_kill` — first enemy kill each battle uses "first_kill" pool, rest use "kill"
+  - `backstab_hit` — fires whenever backstab is used successfully
+  - `hero_near_lava` — 25% chance per hero turn if adjacent to lava (avoids spam)
+  - `hero_surrounded` — fires once when 3+ enemies are adjacent (debounce)
+  - `shield_bash` + `ability_unlock` + `between_floors` commentary pools added
+- **Ability unlocks on Level-Up** — `LevelUp.gd` now mixes ability unlock cards with stat upgrades:
+  - Any hero-unlockable ability the hero doesn't already own can appear as a choice
+  - Unlock cards tinted cyan/teal to stand out from gold stat upgrade cards
+  - On selection: ability appended to `GameState.hero_abilities` (active next battle)
+  - 7 unlockable abilities: power_strike, backstab, fireball, frost_nova, taunt, vanish, shield_bash
+  - Brawler/Rogue/Arcanist can now cross-class unlock any ability via level-up
+- **Between-floor HP regeneration** — `Main._on_floor_cleared()` heals 10% max HP (min 5) before routing to LevelUp/LootScreen
+- **136 headless tests** — all passing: +27 new Run4 tests covering knockback, push direction, signal, walls, SystemVoice categories, regen formula, unlock pool logic
+
+### Next Priorities (Run 5)
 1. **Sounds** — Even a minimal audio pass: hit, kill, move, ability sounds (use Godot's AudioStreamGenerator or import simple beeps)
-2. **Class abilities tab on upgrade screen** — the Level-up screen currently only shows stat upgrades; add a "NEW ABILITY" option so hero can unlock fireball/backstab/etc. mid-run
-3. **Pushback mechanic** — the Brawler class should have a "Shield Bash" that pushes enemies toward lava; makes lava truly tactical
-4. **Multi-floor run feel** — currently each floor starts fresh; heroes should FEEL stronger on floor 5 vs floor 1 — the scaling helps enemies but hero stat upgrades should visibly compound
-5. **The System mid-battle commentary** — trigger quips on: hero surviving below 20% HP, first kill of run, using backstab successfully, hero standing adjacent to lava, enemies surrounding hero
-6. **HP regeneration between floors** — currently hero HP is frozen between floors unless they take healing loot; add small passive regen (5-10 HP) between floors as a quality-of-life change
-7. **Minimap / floor preview** — small indicator showing which floor you're on out of N (generate run length at run start)
+2. **Enemy knockback awareness** — Enemies near lava should prioritize getting away from lava on their turn (currently they ignore it). Makes lava a real two-way hazard.
+3. **Multi-floor run feel** — hero upgrades should compound visibly. Consider showing a "Run summary so far" overlay at floor 3, 6, 10. Also add more interesting stat synergies in the upgrade pool.
+4. **Minimap / floor counter** — small "Floor N / 10" indicator (generate run length at start). Show a progress bar toward the boss floor.
+5. **Boss floor** — every 5 floors, spawn a boss enemy with a custom sprite key and unique abilities. Victory over the boss should give a special loot drop.
+6. **Loot screen polish** — currently loot choices are plain text. Show an icon, stat change preview, and The System commentary for each option.
+7. **XP-driven ability upgrade screen** (Run 4 LevelUp is stat-only or unlock; next: add PER-ABILITY upgrades within the LevelUp flow, e.g. "Power Strike: +5 damage" or "Backstab: +1 charge")
 
 ## File Map
 ```
@@ -83,7 +109,7 @@ autoloads/
 
 src/combat/
   Combatant.gd       — pure fighter data class (+take_damage ignore_armor param)
-  BattleEngine.gd    — pure turn engine (+apply_environment_damage, +enemy collision fix, +armor fix)
+  BattleEngine.gd    — pure turn engine (+knockback: perform_knockback_attack, get_push_hex, combatant_pushed signal)
   Ability.gd         — charges/cooldown data object (now wired into BattleScene HUD)
   StatusEffect.gd    — status dict factories: burning/frozen/vanished/fortified/poisoned
 
@@ -92,16 +118,16 @@ src/map/
   DungeonMap.gd      — procedural floor generator
 
 src/data/
-  Classes.gd         — class definitions (Brawler/Rogue/Arcanist)
-  Abilities.gd       — all ability definitions (+ignore_armor flag on backstab)
+  Classes.gd         — class definitions (Brawler now starts with shield_bash instead of taunt)
+  Abilities.gd       — all ability definitions (+shield_bash with knockback:1 flag)
   EnemyDefs.gd       — enemy definitions + Combatant factory (+floor_num scaling param)
 
 scenes/
-  Main.tscn/.gd      — root, scene orchestration; now routes through VictoryScreen
+  Main.tscn/.gd      — root, scene orchestration; +between-floor HP regen
   ClassSelect.tscn/.gd  — class picker front end
-  BattleScene.tscn/.gd  — hex battle visual driver (Run 3: charges HUD, lava heat, class glyphs)
-  VictoryScreen.tscn/.gd — NEW: post-battle floor clear screen (Run 3)
-  LevelUp.tscn/.gd   — upgrade screen; 3 of 6 upgrades per level
+  BattleScene.tscn/.gd  — hex battle (Run 4: shield_bash knockback, mid-battle commentary, combatant_pushed)
+  VictoryScreen.tscn/.gd — post-battle floor clear screen
+  LevelUp.tscn/.gd   — upgrade screen; now mixes stat upgrades AND ability unlock cards
   LootScreen.tscn/.gd   — post-battle choose-one loot
 
 tests/
@@ -111,6 +137,7 @@ tests/
   test_combat.gd     — Combatant + BattleEngine tests
   test_movement.gd   — movement, ability effects, AI variants, attack_bonus (Run 2)
   test_run3.gd       — ability charges, backstab armor, collision, floor scaling, env damage (Run 3)
+  test_run4.gd       — shield_bash, knockback logic, SystemVoice categories, regen, unlock pool (Run 4)
 ```
 
 ## Running Tests
