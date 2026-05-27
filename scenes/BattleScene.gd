@@ -1,6 +1,6 @@
 extends Node2D
 ## Visual driver for one battle encounter on the hex grid.
-## Run 3: ability charges/cooldowns in HUD, lava heat damage, floor scaling, enemy collision fix.
+## Run 4: shield bash knockback, mid-battle System commentary, ability unlock flow.
 
 signal battle_complete(hero_won: bool, xp_earned: int, enemies_killed: int)
 
@@ -38,6 +38,11 @@ var _selected_ability: String = "basic_attack"
 var _player_turn: bool = false
 var _battle_rng: RandomNumberGenerator
 var _enemies_killed: int = 0
+
+# Mid-battle commentary state (debounce flags)
+var _first_kill_spoken: bool = false
+var _hero_low_hp_spoken: bool = false
+var _hero_surrounded_spoken: bool = false
 
 @onready var _hex_layer: Node2D = $HexLayer
 @onready var _entity_layer: Node2D = $EntityLayer
@@ -115,6 +120,7 @@ func _build_encounter() -> void:
 	_engine.combatant_died.connect(_on_combatant_died)
 	_engine.status_ticked.connect(_on_status_ticked)
 	_engine.hero_moved.connect(_on_hero_moved)
+	_engine.combatant_pushed.connect(_on_combatant_pushed)
 	_engine.setup(_all_combatants)
 
 ## ─── Cave Atmosphere ──────────────────────────────────────────────────────────
@@ -368,6 +374,9 @@ func _next_turn() -> void:
 		if _engine.battle_over:
 			return
 
+		# Mid-battle System commentary
+		_check_hero_commentary(active)
+
 		_player_turn = true
 		_turn_indicator.text = "YOUR TURN — Click to move or attack"
 		_turn_indicator.add_theme_color_override("font_color", Color(0.35, 1.0, 0.35))
@@ -493,8 +502,25 @@ func _do_hero_attack(target: Combatant) -> void:
 
 	_player_turn = false
 	_clear_highlights()
-	_engine.perform_attack(_hero, target, _selected_ability)
-	SystemVoice.speak("hit")
+
+	# Check if ability has knockback (shield_bash)
+	var abl_data: Dictionary = Abilities.get_ability(_selected_ability)
+	if abl_data.get("knockback", 0) > 0:
+		var result: Array = _engine.perform_knockback_attack(_hero, target, _selected_ability, _map)
+		var push_to: Vector2i = result[1]
+		# Check if pushed onto/adjacent to lava — give a System quip
+		if _map.get_tile_type(push_to) == "lava":
+			SystemVoice.speak_direct("Into the lava! Poetic. The System is briefly delighted.")
+		else:
+			SystemVoice.speak("shield_bash")
+	else:
+		_engine.perform_attack(_hero, target, _selected_ability)
+		# Special backstab commentary
+		if _selected_ability == "backstab":
+			SystemVoice.speak("backstab_hit")
+		else:
+			SystemVoice.speak("hit")
+
 	# Consume the charge
 	if abl_obj != null:
 		abl_obj.use()
@@ -702,9 +728,57 @@ func _on_action_taken(_attacker: Combatant, target: Combatant, damage: int, _abi
 	_update_hp_bar(target)
 	_update_status_label(target)
 
+func _check_hero_commentary(hero: Combatant) -> void:
+	## Trigger contextual System commentary based on hero's current situation.
+	## Uses debounce flags to avoid spamming the same quip every turn.
+	var hp_ratio: float = float(hero.hp) / float(max(1, hero.max_hp))
+
+	# Low HP warning — speak once, reset when HP recovers above 30%
+	if hp_ratio < 0.20 and not _hero_low_hp_spoken:
+		SystemVoice.speak("hero_low_hp")
+		_hero_low_hp_spoken = true
+	elif hp_ratio >= 0.30:
+		_hero_low_hp_spoken = false  # reset so it fires again if HP drops low again
+
+	# Near lava — adjacent lava tile exists
+	var near_lava: bool = false
+	for n: Vector2i in HexGrid.neighbors(hero.position):
+		if _map.get_tile_type(n) == "lava":
+			near_lava = true
+			break
+	if near_lava and _battle_rng.randf() < 0.25:  # 25% chance per turn to avoid spam
+		SystemVoice.speak("hero_near_lava")
+
+	# Surrounded — 3+ living enemies adjacent
+	var adj_enemies: int = 0
+	for e: Combatant in _enemies:
+		if e.is_alive() and HexGrid.hex_distance(hero.position, e.position) <= 1:
+			adj_enemies += 1
+	if adj_enemies >= 3 and not _hero_surrounded_spoken:
+		SystemVoice.speak("hero_surrounded")
+		_hero_surrounded_spoken = true
+	elif adj_enemies < 2:
+		_hero_surrounded_spoken = false  # reset when no longer surrounded
+
+func _on_combatant_pushed(target: Combatant, _from_hex: Vector2i, to_hex: Vector2i) -> void:
+	## Animate enemy sliding to their new position after a knockback.
+	var node: Node2D = _entity_nodes.get(target.id)
+	if node != null:
+		var tw: Tween = create_tween()
+		tw.set_ease(Tween.EASE_OUT)
+		tw.set_trans(Tween.TRANS_BACK)
+		tw.tween_property(node, "position", HexGrid.hex_to_pixel(to_hex, HEX_SIZE), 0.30)
+	# If pushed onto lava, show a heat flash
+	if _map.get_tile_type(to_hex) == "lava":
+		_flash_hex_area(to_hex, 0, LAVA_HEAT_CLR)
+
 func _on_combatant_died(c: Combatant) -> void:
 	if c.faction == Combatant.Faction.ENEMY:
-		SystemVoice.speak("kill")
+		if not _first_kill_spoken:
+			SystemVoice.speak("first_kill")
+			_first_kill_spoken = true
+		else:
+			SystemVoice.speak("kill")
 		_enemies_killed += 1
 	else:
 		# Hero died — start death overlay after a moment

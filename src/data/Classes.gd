@@ -8,7 +8,7 @@ const DATA: Dictionary = {
 		"description": "A melee tank. High HP, heavy hits, no subtlety whatsoever.",
 		"hp": 150,
 		"stats": {"attack": 15, "defense": 5, "speed": 8},
-		"abilities": ["basic_attack", "power_strike", "taunt"],
+		"abilities": ["basic_attack", "power_strike", "shield_bash"],
 		"icon_color": Color(0.8, 0.2, 0.2),
 	},
 	"rogue": {

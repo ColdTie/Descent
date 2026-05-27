@@ -9,6 +9,7 @@ signal combatant_died(combatant: Combatant)
 signal battle_ended(hero_won: bool, xp_earned: int)
 signal status_ticked(combatant: Combatant, damage: int)
 signal hero_moved(combatant: Combatant, from_hex: Vector2i, to_hex: Vector2i)
+signal combatant_pushed(target: Combatant, from_hex: Vector2i, to_hex: Vector2i)
 
 var combatants: Array[Combatant] = []
 var turn_order: Array[Combatant] = []
@@ -246,3 +247,47 @@ func is_combatant_frozen(combatant: Combatant) -> bool:
 		if eff.get("id", "") == "frozen":
 			return true
 	return false
+
+func get_push_hex(attacker_pos: Vector2i, target_pos: Vector2i, map: DungeonMap) -> Vector2i:
+	## Returns the best hex to push target to (away from attacker).
+	## Prefers the hex farthest from attacker that is passable and unoccupied.
+	## Returns target_pos if no valid push destination exists.
+	if map == null:
+		return target_pos
+	var neighbors: Array[Vector2i] = HexGrid.neighbors(target_pos)
+	var best: Vector2i = target_pos
+	var best_dist: int = HexGrid.hex_distance(target_pos, attacker_pos)
+	for n: Vector2i in neighbors:
+		if not map.tile_types.has(n):
+			continue  # out of map
+		# Lava is impassable normally but knockback CAN land on it — makes lava tactical
+		# However "wall" (out of map) or tiles not in map dict are invalid
+		var tile: String = map.tile_types.get(n, "wall")
+		if tile == "wall":
+			continue
+		# Check not occupied by another living combatant
+		var occupied: bool = false
+		for c: Combatant in combatants:
+			if c.is_alive() and c != null and c.position == n:
+				occupied = true
+				break
+		if occupied:
+			continue
+		var d: int = HexGrid.hex_distance(n, attacker_pos)
+		if d > best_dist:
+			best_dist = d
+			best = n
+	return best
+
+func perform_knockback_attack(attacker: Combatant, target: Combatant, ability_id: String, map: DungeonMap) -> Array:
+	## Perform a shield bash / knockback attack: damage then push target away from attacker.
+	## Returns [damage_dealt: int, push_to: Vector2i].
+	var dmg: int = perform_attack(attacker, target, ability_id)
+	if not target.is_alive():
+		return [dmg, target.position]  # dead — no push needed
+	var from_hex: Vector2i = target.position
+	var push_to: Vector2i = get_push_hex(attacker.position, target.position, map)
+	if push_to != from_hex:
+		target.position = push_to
+		combatant_pushed.emit(target, from_hex, push_to)
+	return [dmg, push_to]
