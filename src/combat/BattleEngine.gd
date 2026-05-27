@@ -9,6 +9,7 @@ signal combatant_died(combatant: Combatant)
 signal battle_ended(hero_won: bool, xp_earned: int)
 signal status_ticked(combatant: Combatant, damage: int)
 signal hero_moved(combatant: Combatant, from_hex: Vector2i, to_hex: Vector2i)
+signal combatant_pushed(combatant: Combatant, from_hex: Vector2i, to_hex: Vector2i)
 
 var combatants: Array[Combatant] = []
 var turn_order: Array[Combatant] = []
@@ -231,6 +232,47 @@ func _check_battle_end() -> bool:
 
 func _on_combatant_died(c: Combatant) -> void:
 	combatant_died.emit(c)
+
+func perform_push(attacker: Combatant, target: Combatant, distance: int, map: DungeonMap = null) -> void:
+	## Push target away from attacker by 'distance' hexes in the nearest hex direction.
+	## Stops early on impassable terrain (if map provided) or a living combatant.
+	## Uses cube-coordinate dot product to find the closest of the 6 hex directions.
+	var from_hex: Vector2i = target.position
+	var delta: Vector2i = target.position - attacker.position
+	if delta == Vector2i.ZERO:
+		return  # attacker and target at same hex — nothing to push
+
+	# Find hex direction closest to delta using cube-space dot product.
+	# Cube coords: (q, r, -q-r). Dot product finds best angular match.
+	var best_dir: Vector2i = HexGrid.DIRECTIONS[0]
+	var best_dot: int = -999
+	for d: Vector2i in HexGrid.DIRECTIONS:
+		var d_s: int = -d.x - d.y
+		var delta_s: int = -delta.x - delta.y
+		var dot: int = d.x * delta.x + d.y * delta.y + d_s * delta_s
+		if dot > best_dot:
+			best_dot = dot
+			best_dir = d
+
+	var current: Vector2i = target.position
+	for _i: int in range(distance):
+		var next: Vector2i = current + best_dir
+		# Stop if impassable (only checked when map is provided)
+		if map != null and not map.is_passable(next):
+			break
+		# Stop if another living combatant occupies that hex
+		var blocked: bool = false
+		for c: Combatant in combatants:
+			if c.is_alive() and c != target and c.position == next:
+				blocked = true
+				break
+		if blocked:
+			break
+		current = next
+
+	if current != target.position:
+		target.position = current
+		combatant_pushed.emit(target, from_hex, current)
 
 func move_combatant(combatant: Combatant, to_hex: Vector2i) -> bool:
 	## Move combatant to target hex. Returns true if successful.

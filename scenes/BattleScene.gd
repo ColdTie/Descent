@@ -39,6 +39,10 @@ var _player_turn: bool = false
 var _battle_rng: RandomNumberGenerator
 var _enemies_killed: int = 0
 
+# Mid-battle commentary state
+var _low_hp_warned: bool = false       # triggers once when hero drops below 20%
+var _surrounded_warned: bool = false   # resets when hero is no longer surrounded
+
 @onready var _hex_layer: Node2D = $HexLayer
 @onready var _entity_layer: Node2D = $EntityLayer
 @onready var _floor_label: Label = $UILayer/FloorLabel
@@ -115,6 +119,7 @@ func _build_encounter() -> void:
 	_engine.combatant_died.connect(_on_combatant_died)
 	_engine.status_ticked.connect(_on_status_ticked)
 	_engine.hero_moved.connect(_on_hero_moved)
+	_engine.combatant_pushed.connect(_on_combatant_pushed)
 	_engine.setup(_all_combatants)
 
 ## ─── Cave Atmosphere ──────────────────────────────────────────────────────────
@@ -368,6 +373,9 @@ func _next_turn() -> void:
 		if _engine.battle_over:
 			return
 
+		# Mid-battle commentary: check surrounded
+		_check_surrounded_commentary()
+
 		_player_turn = true
 		_turn_indicator.text = "YOUR TURN — Click to move or attack"
 		_turn_indicator.add_theme_color_override("font_color", Color(0.35, 1.0, 0.35))
@@ -391,6 +399,18 @@ func _next_turn() -> void:
 			_engine.end_turn()
 			await get_tree().create_timer(0.25).timeout
 			_next_turn()
+
+func _check_surrounded_commentary() -> void:
+	## Fire a one-time quip when 3+ enemies are adjacent, reset once no longer surrounded.
+	var adj_enemies: int = 0
+	for e: Combatant in _enemies:
+		if e.is_alive() and HexGrid.hex_distance(_hero.position, e.position) <= 1:
+			adj_enemies += 1
+	if adj_enemies >= 3 and not _surrounded_warned:
+		_surrounded_warned = true
+		SystemVoice.speak("surrounded")
+	elif adj_enemies < 2:
+		_surrounded_warned = false  # reset when hero escapes
 
 func _apply_lava_heat(c: Combatant) -> void:
 	## Deal heat damage to a combatant for each adjacent lava tile.
@@ -494,7 +514,19 @@ func _do_hero_attack(target: Combatant) -> void:
 	_player_turn = false
 	_clear_highlights()
 	_engine.perform_attack(_hero, target, _selected_ability)
-	SystemVoice.speak("hit")
+
+	# Handle pushback if the ability has push_distance (e.g. Shield Bash)
+	var ability_data: Dictionary = Abilities.get_ability(_selected_ability)
+	var push_dist: int = ability_data.get("push_distance", 0)
+	if push_dist > 0 and target.is_alive():
+		_engine.perform_push(_hero, target, push_dist, _map)
+
+	# Commentary: backstab or regular hit
+	if _selected_ability == "backstab":
+		SystemVoice.speak("backstab_hit")
+	else:
+		SystemVoice.speak("hit")
+
 	# Consume the charge
 	if abl_obj != null:
 		abl_obj.use()
@@ -704,8 +736,13 @@ func _on_action_taken(_attacker: Combatant, target: Combatant, damage: int, _abi
 
 func _on_combatant_died(c: Combatant) -> void:
 	if c.faction == Combatant.Faction.ENEMY:
-		SystemVoice.speak("kill")
 		_enemies_killed += 1
+		GameState.total_kills += 1
+		if GameState.total_kills == 1:
+			# Very first kill of the entire run
+			SystemVoice.speak("first_kill")
+		else:
+			SystemVoice.speak("kill")
 	else:
 		# Hero died — start death overlay after a moment
 		await get_tree().create_timer(0.5).timeout
@@ -727,6 +764,24 @@ func _on_hero_moved(_combatant: Combatant, _from_hex: Vector2i, to_hex: Vector2i
 		tw.set_ease(Tween.EASE_OUT)
 		tw.set_trans(Tween.TRANS_QUART)
 		tw.tween_property(node, "position", HexGrid.hex_to_pixel(to_hex, HEX_SIZE), 0.22)
+
+func _on_combatant_pushed(combatant: Combatant, _from_hex: Vector2i, to_hex: Vector2i) -> void:
+	## Animate a pushed combatant sliding to its new hex.
+	var node: Node2D = _entity_nodes.get(combatant.id)
+	if node != null:
+		var tw: Tween = create_tween()
+		tw.set_ease(Tween.EASE_OUT)
+		tw.set_trans(Tween.TRANS_BACK)
+		tw.tween_property(node, "position", HexGrid.hex_to_pixel(to_hex, HEX_SIZE), 0.32)
+	SystemVoice.speak("push_hit")
+	# Bonus commentary if the pushed enemy lands adjacent to lava
+	var lava_adj: int = 0
+	for n: Vector2i in HexGrid.neighbors(to_hex):
+		if _map.get_tile_type(n) == "lava":
+			lava_adj += 1
+	if lava_adj > 0:
+		await get_tree().create_timer(0.5).timeout
+		SystemVoice.speak_direct("They're now adjacent to lava. Bold positioning choice.")
 
 func _on_battle_ended(hero_won: bool, xp_earned: int) -> void:
 	_player_turn = false
@@ -872,6 +927,10 @@ func _update_hero_hp_label() -> void:
 	var ratio: float = float(_hero.hp) / float(max(1, _hero.max_hp))
 	_hero_hp_label.add_theme_color_override("font_color",
 		Color(1.0 - ratio * 0.7, 0.2 + ratio * 0.7, 0.1))
+	# One-time low-HP warning when dropping below 20%
+	if not _low_hp_warned and ratio < 0.20 and _hero.hp > 0:
+		_low_hp_warned = true
+		SystemVoice.speak("low_hp")
 
 func _show_damage_number(c: Combatant, damage: int, color: Color = Color(1.0, 0.25, 0.1)) -> void:
 	var node: Node2D = _entity_nodes.get(c.id)

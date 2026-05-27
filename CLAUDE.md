@@ -18,7 +18,7 @@ DESCENT is a turn-based tactical dungeon crawler in the spirit of **Dungeon Craw
 3. **Autoloads**: `GameRng`, `GameState`, `SystemVoice` — always available
 4. **Signals over direct calls** for cross-system communication
 
-## Godot 4.4.1 API Gotchas (learned in Runs 1–3)
+## Godot 4.4.1 API Gotchas (learned in Runs 1–4)
 - `RandomNumberGenerator` has NO `.shuffle()` method — use Fisher-Yates manually or `Array.shuffle()` (global seed, not deterministic)
 - `Array[T].filter(callable)` returns an untyped `Array`, not `Array[T]`
 - `Classes.get_class()` conflicts with `Object.get_class()` — renamed to `get_class_data()`
@@ -29,8 +29,11 @@ DESCENT is a turn-based tactical dungeon crawler in the spirit of **Dungeon Craw
 - Signal handlers with `await` become coroutines and return to caller at the first `await` — don't assume they block
 - **Architecture rule**: `BattleEngine._calculate_damage()` returns RAW damage (no armor). `Combatant.take_damage(amount, ignore_armor=false)` applies armor. Don't double-apply armor in both places.
 - `Combatant.take_damage(amount, ignore_armor)` — the `ignore_armor` parameter bypasses the `armor` field reduction (for backstab, env damage, etc.)
+- `Array[Dictionary].slice()` returns an untyped Array — use explicit loop to build typed slice: `for i in range(n): arr.append(pool[i])`
+- **Push direction**: use cube-coordinate dot product (q, r, -q-r) to find nearest hex direction; plain axial dot product gives wrong results for e.g. (0,-1) direction
+- **Headless screenshots** (Xvfb): need `openbox` WM running first and ~15s for Godot to fully render before `scrot` captures correctly
 
-## Current State (Run 3 — Charges, Scaling, Lava, Victory Screen)
+## Current State (Run 4 — Shield Bash, Commentary, Ability Unlock, HP Regen)
 ### Implemented ✅
 **Run 1 (Bootstrap):**
 - `GameRng`, `GameState`, `SystemVoice` autoloads
@@ -52,56 +55,76 @@ DESCENT is a turn-based tactical dungeon crawler in the spirit of **Dungeon Craw
   - Buttons show charge dots (●●○), cooldown countdown (↻3), or ∞ for unlimited
   - Depleted abilities are greyed out and disabled; can't be clicked
   - Cooldowns tick at the START of each hero turn (so cooldown 4 = 4 of YOUR turns)
-  - Message shown when trying to use an ability on cooldown
 - **Backstab correctly ignores armor** — `ignore_armor` flag in `Abilities.DATA` + `Combatant.take_damage(amount, ignore_armor=false)` param
-- **Architecture fix**: `_calculate_damage` returns raw damage; `take_damage` is the single armor-application point. Eliminated double-armor bug from Run 1/2.
-- **Enemy collision avoidance** — `BattleEngine._move_toward` checks for living combatants at target hex; enemies can't stack
-- **Lava heat damage** — Any entity starting their turn adjacent to lava takes heat damage (3 + 3*(adjacent_count-1)), bypassing armor. Makes lava tiles tactically significant.
-- **Victory screen** (`VictoryScreen.tscn/.gd`) — "FLOOR N CLEARED!" with gold title, System quip, stats (kills / XP / level / HP), "DESCEND DEEPER" button
-  - Flow: BattleScene → VictoryScreen → (level check) → LevelUp or LootScreen → next floor
-- **Floor scaling** — `EnemyDefs.make_combatant(def, pos, rng, floor_num)`: +20% HP per floor above 1; +1 armor every 2 floors
-- **Class glyph on hero** — entity node shows ⚔ for Brawler, 🗡 for Rogue, ✦ for Arcanist; class-colored hex body
-- **Enemy glyphs** — 👿 Imp, G Goblin, 💀 Skeleton, D Demon, ⬡ Golem
-- **`apply_environment_damage`** on BattleEngine — deals armor-ignoring damage for lava/env hazards
-- **109 headless tests** — all passing: RNG (5), Hex (13), Combat (27), Movement+Abilities (24), Run3 (40)
+- **Architecture fix**: `_calculate_damage` returns raw damage; `take_damage` is the single armor-application point.
+- **Enemy collision avoidance** — enemies can't stack on living combatants
+- **Lava heat damage** — Any entity starting their turn adjacent to lava takes heat damage (3 + 3*(adjacent_count-1)), bypassing armor
+- **Victory screen** (`VictoryScreen.tscn/.gd`) — "FLOOR N CLEARED!" with gold title, System quip, stats
+- **Floor scaling** — `EnemyDefs.make_combatant`: +20% HP per floor above 1; +1 armor every 2 floors
+- **Class glyph on hero** — ⚔ Brawler, 🗡 Rogue, ✦ Arcanist; class-colored hex body
+- **109 headless tests**
 
-### Next Priorities (Run 4)
-1. **Sounds** — Even a minimal audio pass: hit, kill, move, ability sounds (use Godot's AudioStreamGenerator or import simple beeps)
-2. **Class abilities tab on upgrade screen** — the Level-up screen currently only shows stat upgrades; add a "NEW ABILITY" option so hero can unlock fireball/backstab/etc. mid-run
-3. **Pushback mechanic** — the Brawler class should have a "Shield Bash" that pushes enemies toward lava; makes lava truly tactical
-4. **Multi-floor run feel** — currently each floor starts fresh; heroes should FEEL stronger on floor 5 vs floor 1 — the scaling helps enemies but hero stat upgrades should visibly compound
-5. **The System mid-battle commentary** — trigger quips on: hero surviving below 20% HP, first kill of run, using backstab successfully, hero standing adjacent to lava, enemies surrounding hero
-6. **HP regeneration between floors** — currently hero HP is frozen between floors unless they take healing loot; add small passive regen (5-10 HP) between floors as a quality-of-life change
-7. **Minimap / floor preview** — small indicator showing which floor you're on out of N (generate run length at run start)
+**Run 4 (Shield Bash, Commentary, Ability Unlock, HP Regen):**
+- **Shield Bash ability** — Brawler's new signature move:
+  - `shield_bash` in `Abilities.DATA`: 18 base damage, 2 charges, 2-turn cooldown, push_distance=2
+  - Added to Brawler starting kit (now has 4 abilities: basic_attack, power_strike, taunt, shield_bash)
+  - `BattleEngine.perform_push(attacker, target, distance, map=null)`: pushes target `distance` hexes away from attacker using cube-coordinate dot product to find correct direction; stops at impassable tiles or living combatants
+  - New `combatant_pushed` signal on BattleEngine
+  - BattleScene: after `perform_attack` with shield_bash, calls `perform_push`; animates enemy sliding with TRANS_BACK tween; bonus quip if pushed adjacent to lava
+- **Mid-battle The System commentary** — DCC tone now fires during combat:
+  - `low_hp` pool: fires once when hero HP drops below 20% (tracked with `_low_hp_warned` flag)
+  - `surrounded` pool: fires when 3+ enemies are adjacent; resets when hero escapes; tracked with `_surrounded_warned`
+  - `backstab_hit` pool: fires when hero uses backstab ability
+  - `first_kill` pool: fires on the very first enemy kill of the entire run (tracked via `GameState.total_kills`)
+  - `push_hit` pool: fires on each successful push; bonus "adjacent to lava" quip if target lands near lava
+  - `between_floors` pool: fires during floor transition regen
+- **Ability unlocking at level-up** — LevelUp screen now offers cross-class ability unlocks:
+  - Dynamically adds unlock entries for abilities the hero doesn't have yet to the upgrade pool
+  - Each unlock card shows ability name, description, and "[New ability added to your bar]"
+  - Applying unlock appends ability_id to `GameState.hero_abilities`; BattleScene picks it up on next floor
+  - Pool: power_strike, backstab, fireball, frost_nova, taunt, vanish, shield_bash
+- **HP regeneration between floors** — `GameState.heal_between_floors()`: ~8% of max HP (min 5); called in `Main._on_loot_chosen()` with `between_floors` System commentary
+- **Kill tracking** — `GameState.total_kills` persists across floors; used for first-kill commentary; reset on new run
+- **135 headless tests** — all passing: RNG (5), Hex (13), Combat (27), Movement+Abilities (24), Run3 (40), Run4 (26)
+
+### Next Priorities (Run 5)
+1. **Sounds** — Minimal audio pass: hit/kill/move/ability sounds using AudioStreamGenerator or simple procedural beeps; current audio falls back to dummy driver (no audio hardware in CI)
+2. **Enemy "push into lava" death** — when push lands an enemy ON a lava-adjacent tile, they take heat damage next turn; future: make lava _fully_ impassable and kill enemies at edge? Or add "lava push kill" instant mechanic?
+3. **Visual polish: push animation** — add a visual "whoosh" effect when enemy is pushed (brief flash/trail) to make Shield Bash feel more impactful
+4. **Minimap / floor progress indicator** — small top-right indicator: "Floor N of M" with a simple progress bar; generate run length at run start (e.g. 5-10 floors)
+5. **Enemy with push** — give the Golem a "Shove" ability that can push the hero toward lava — creates symmetric tactical back-and-forth
+6. **Loot screen improvements** — currently loot choices are generic; tie them to class identity (Rogue gets stealth items, Arcanist gets mana crystals, etc.)
+7. **Roguelike meta-goal** — generate a "boss floor" every 5 floors with a named, scaled enemy using a boss-specific ability set
+8. **Run 4 ability unlock UX improvement** — currently unlock cards mix with stat upgrade cards randomly; consider making a dedicated "CHOOSE ABILITY" tab in the LevelUp screen for clearer player choice
 
 ## File Map
 ```
 autoloads/
   GameRng.gd         — seeded RNG singleton
-  GameState.gd       — run-persistent hero state
-  SystemVoice.gd     — The System commentary pools + signal
+  GameState.gd       — run-persistent hero state (+total_kills, +heal_between_floors)
+  SystemVoice.gd     — The System commentary pools + signal (+8 new pools in Run 4)
 
 src/combat/
-  Combatant.gd       — pure fighter data class (+take_damage ignore_armor param)
-  BattleEngine.gd    — pure turn engine (+apply_environment_damage, +enemy collision fix, +armor fix)
-  Ability.gd         — charges/cooldown data object (now wired into BattleScene HUD)
-  StatusEffect.gd    — status dict factories: burning/frozen/vanished/fortified/poisoned
+  Combatant.gd       — pure fighter data class
+  BattleEngine.gd    — pure turn engine (+perform_push, +combatant_pushed signal)
+  Ability.gd         — charges/cooldown data object
+  StatusEffect.gd    — status dict factories
 
 src/map/
   HexGrid.gd         — static hex math utilities
   DungeonMap.gd      — procedural floor generator
 
 src/data/
-  Classes.gd         — class definitions (Brawler/Rogue/Arcanist)
-  Abilities.gd       — all ability definitions (+ignore_armor flag on backstab)
-  EnemyDefs.gd       — enemy definitions + Combatant factory (+floor_num scaling param)
+  Classes.gd         — class definitions (+shield_bash for Brawler)
+  Abilities.gd       — all ability definitions (+shield_bash with push_distance)
+  EnemyDefs.gd       — enemy definitions + Combatant factory
 
 scenes/
-  Main.tscn/.gd      — root, scene orchestration; now routes through VictoryScreen
+  Main.tscn/.gd      — root, scene orchestration (+floor regen in _on_loot_chosen)
   ClassSelect.tscn/.gd  — class picker front end
-  BattleScene.tscn/.gd  — hex battle visual driver (Run 3: charges HUD, lava heat, class glyphs)
-  VictoryScreen.tscn/.gd — NEW: post-battle floor clear screen (Run 3)
-  LevelUp.tscn/.gd   — upgrade screen; 3 of 6 upgrades per level
+  BattleScene.tscn/.gd  — hex battle visual driver (+push wiring, +commentary triggers)
+  VictoryScreen.tscn/.gd — post-battle floor clear screen
+  LevelUp.tscn/.gd   — upgrade screen (+dynamic ability unlock options in pool)
   LootScreen.tscn/.gd   — post-battle choose-one loot
 
 tests/
@@ -109,8 +132,9 @@ tests/
   test_rng.gd        — RNG reproducibility/bounds tests
   test_hex.gd        — HexGrid geometry tests
   test_combat.gd     — Combatant + BattleEngine tests
-  test_movement.gd   — movement, ability effects, AI variants, attack_bonus (Run 2)
-  test_run3.gd       — ability charges, backstab armor, collision, floor scaling, env damage (Run 3)
+  test_movement.gd   — movement, ability effects, AI variants, attack_bonus
+  test_run3.gd       — ability charges, backstab armor, collision, floor scaling, env damage
+  test_run4.gd       — NEW: push direction, push collision, push signal, regen math, unlock pool
 ```
 
 ## Running Tests
@@ -126,10 +150,17 @@ godot --path /path/to/descent
 
 ## Screenshot (headless CI)
 ```bash
+# Install deps: apt-get install xvfb openbox scrot
+rm -f /tmp/.X99-lock 2>/dev/null
 Xvfb :99 -screen 0 1280x720x24 &
+sleep 1
+DISPLAY=:99 openbox &
+sleep 2
 DISPLAY=:99 godot --path /path/to/descent &
-sleep 3
+sleep 15  # wait for full render
 DISPLAY=:99 scrot screenshot.png
+# Navigate: xdotool mousemove 440 410 click 1  (Brawler SELECT)
+#           xdotool mousemove 640 490 click 1  (DESCEND INTO HELL)
 ```
 
 ## DCC Tone Guidelines
