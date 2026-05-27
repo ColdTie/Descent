@@ -29,9 +29,14 @@ func _init(p_id: String, p_name: String, p_faction: Faction, p_hp: int, p_speed:
 func is_alive() -> bool:
 	return hp > 0
 
-func take_damage(amount: int) -> int:
-	## Returns actual damage dealt after armor
-	var mitigated: int = max(0, amount - armor)
+func take_damage(amount: int, ignore_armor: bool = false) -> int:
+	## Returns actual damage dealt.
+	## ignore_armor=true bypasses armor reduction (for backstab, env damage, etc.)
+	var mitigated: int
+	if ignore_armor:
+		mitigated = amount
+	else:
+		mitigated = max(0, amount - armor)
 	hp = max(0, hp - mitigated)
 	return mitigated
 

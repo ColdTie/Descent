@@ -86,7 +86,9 @@ func begin_turn() -> Combatant:
 func perform_attack(attacker: Combatant, target: Combatant, ability_id: String = "basic_attack") -> int:
 	## Returns damage dealt. Emits action_taken.
 	var dmg: int = _calculate_damage(attacker, target, ability_id)
-	var actual: int = target.take_damage(dmg)
+	var ability_data: Dictionary = Abilities.get_ability(ability_id)
+	var ignore_armor: bool = ability_data.get("ignore_armor", false)
+	var actual: int = target.take_damage(dmg, ignore_armor)
 	action_taken.emit(attacker, target, actual, ability_id)
 	if not target.is_alive():
 		_on_combatant_died(target)
@@ -99,15 +101,26 @@ func perform_aoe_attack(attacker: Combatant, targets: Array[Combatant], ability_
 		results.append(perform_attack(attacker, target, ability_id))
 	return results
 
+func apply_environment_damage(c: Combatant, dmg: int) -> int:
+	## Apply damage from environmental sources (lava heat, etc.).
+	## Bypasses armor — environment is indifferent to your plate mail.
+	## Returns actual damage dealt. Handles death if HP hits 0.
+	var actual: int = c.take_damage(dmg, true)  # ignore_armor = true
+	if not c.is_alive():
+		_on_combatant_died(c)
+	return actual
+
 func _calculate_damage(attacker: Combatant, target: Combatant, ability_id: String) -> int:
+	## Returns raw damage before armor reduction.
+	## Armor is applied by the caller via take_damage(dmg, ignore_armor).
 	var ability_data: Dictionary = Abilities.get_ability(ability_id)
 	var base: int = ability_data.get("base_damage", 10)
-	# Add attacker flat attack bonus (set from hero stats or enemy defs)
+	# Add attacker flat attack bonus
 	var atk_bonus: int = attacker.attack_bonus
 	# Variance: ±20%
 	var variance: float = rng.randf_range(0.8, 1.2)
 	var raw: int = int(float(base + atk_bonus) * variance)
-	# Check for vanished multiplier
+	# Check for vanished multiplier (consumed on first attack)
 	var vanish_mult: float = 1.0
 	var new_statuses: Array[Dictionary] = []
 	for eff: Dictionary in attacker.status_effects:
@@ -118,8 +131,8 @@ func _calculate_damage(attacker: Combatant, target: Combatant, ability_id: Strin
 	if vanish_mult != 1.0:
 		attacker.status_effects = new_statuses
 	raw = int(float(raw) * vanish_mult)
-	var final_dmg: int = max(1, raw - target.get_effective_armor())
-	return final_dmg
+	# Guarantee minimum 1 raw damage (armor may still reduce to 0)
+	return max(1, raw)
 
 func enemy_ai_action(enemy: Combatant, map: DungeonMap = null) -> void:
 	## Smart AI based on enemy type (sprite_key)
@@ -164,12 +177,20 @@ func enemy_ai_action(enemy: Combatant, map: DungeonMap = null) -> void:
 			perform_attack(enemy, target, ability_id)
 
 func _move_toward(mover: Combatant, goal: Vector2i, map: DungeonMap) -> void:
-	## Move one step toward goal, picking passable neighbor closest to goal
+	## Move one step toward goal, picking passable, unoccupied neighbor closest to goal.
 	var neighbors: Array[Vector2i] = HexGrid.neighbors(mover.position)
 	var best: Vector2i = mover.position
 	var best_dist: int = HexGrid.hex_distance(mover.position, goal)
 	for n: Vector2i in neighbors:
 		if not map.is_passable(n):
+			continue
+		# Collision avoidance: skip hexes occupied by other living combatants
+		var occupied: bool = false
+		for c: Combatant in combatants:
+			if c.is_alive() and c != mover and c.position == n:
+				occupied = true
+				break
+		if occupied:
 			continue
 		var d: int = HexGrid.hex_distance(n, goal)
 		if d < best_dist:
