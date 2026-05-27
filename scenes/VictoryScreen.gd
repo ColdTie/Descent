@@ -7,6 +7,7 @@ signal floor_cleared
 # Set these before adding to the scene tree (Main.gd calls prepare()).
 var xp_earned: int = 0
 var enemies_killed: int = 0
+var hp_regen: int = 0
 
 const QUIPS: Array[String] = [
 	"Floor cleared. The dungeon is mildly impressed. That's as good as it gets.",
@@ -21,6 +22,7 @@ func prepare(data: Dictionary) -> void:
 	## Called by Main before adding to scene tree.
 	xp_earned = data.get("xp", 0)
 	enemies_killed = data.get("kills", 0)
+	hp_regen = data.get("regen", 0)
 
 func _ready() -> void:
 	_build_ui()
@@ -97,6 +99,8 @@ func _build_ui() -> void:
 	_add_stat_card(stats_container, "◆ LEVEL", str(GameState.hero_level), Color(0.4, 0.6, 1.0))
 	_add_stat_card(stats_container, "❤ HP", "%d/%d" % [GameState.hero_hp, GameState.hero_max_hp],
 		Color(0.2, 0.9, 0.2) if float(GameState.hero_hp) / float(max(1, GameState.hero_max_hp)) > 0.5 else Color(1.0, 0.4, 0.1))
+	if hp_regen > 0:
+		_add_stat_card(stats_container, "💚 RECOVERED", "+%d HP" % hp_regen, Color(0.3, 0.9, 0.5))
 
 	# Spacer
 	var spacer := Control.new()

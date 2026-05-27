@@ -9,6 +9,7 @@ signal combatant_died(combatant: Combatant)
 signal battle_ended(hero_won: bool, xp_earned: int)
 signal status_ticked(combatant: Combatant, damage: int)
 signal hero_moved(combatant: Combatant, from_hex: Vector2i, to_hex: Vector2i)
+signal combatant_pushed(combatant: Combatant, from_hex: Vector2i, to_hex: Vector2i)
 
 var combatants: Array[Combatant] = []
 var turn_order: Array[Combatant] = []
@@ -246,3 +247,51 @@ func is_combatant_frozen(combatant: Combatant) -> bool:
 		if eff.get("id", "") == "frozen":
 			return true
 	return false
+
+func push_combatant(pusher: Combatant, target: Combatant, distance: int, map: DungeonMap) -> Vector2i:
+	## Push target away from pusher by up to distance hexes.
+	## Stops early if blocked by wall or another combatant.
+	## If target lands on lava, apply 15 env damage (armor-bypassing).
+	## Returns the final hex position.
+	if not target.is_alive():
+		return target.position
+	var dir: Vector2i = _closest_hex_direction(target.position - pusher.position)
+	var from_pos: Vector2i = target.position
+	var cur_pos: Vector2i = target.position
+	for _i: int in range(distance):
+		var next: Vector2i = cur_pos + dir
+		if map == null or not map.is_passable(next):
+			break
+		var blocked: bool = false
+		for c: Combatant in combatants:
+			if c.is_alive() and c != target and c.position == next:
+				blocked = true
+				break
+		if blocked:
+			break
+		cur_pos = next
+	target.position = cur_pos
+	combatant_pushed.emit(target, from_pos, cur_pos)
+	# Landing on a lava tile = 15 env damage (armor-bypassing, like the heat)
+	if map != null and map.get_tile_type(cur_pos) == "lava":
+		apply_environment_damage(target, 15)
+	return cur_pos
+
+func _closest_hex_direction(delta: Vector2i) -> Vector2i:
+	## Return the unit axial hex direction that best matches delta.
+	var hex_dirs: Array[Vector2i] = [
+		Vector2i(1, 0), Vector2i(1, -1), Vector2i(0, -1),
+		Vector2i(-1, 0), Vector2i(-1, 1), Vector2i(0, 1),
+	]
+	if delta == Vector2i.ZERO:
+		return hex_dirs[0]
+	var best: Vector2i = hex_dirs[0]
+	var best_dot: float = -999.0
+	var delta_f: Vector2 = Vector2(float(delta.x), float(delta.y)).normalized()
+	for d: Vector2i in hex_dirs:
+		var df: Vector2 = Vector2(float(d.x), float(d.y)).normalized()
+		var dot: float = delta_f.dot(df)
+		if dot > best_dot:
+			best_dot = dot
+			best = d
+	return best

@@ -11,6 +11,7 @@ var _current_scene: Node = null
 # Pending data from the last battle, used to pass to VictoryScreen
 var _pending_xp: int = 0
 var _pending_kills: int = 0
+var _pending_regen: int = 0
 
 func _ready() -> void:
 	GameState.run_started.connect(_on_run_started)
@@ -43,7 +44,7 @@ func _load_scene(path: String) -> void:
 	_current_scene = packed.instantiate()
 	# Pass pending data to scenes that accept it (e.g. VictoryScreen)
 	if _current_scene.has_method("prepare"):
-		_current_scene.call("prepare", {"xp": _pending_xp, "kills": _pending_kills})
+		_current_scene.call("prepare", {"xp": _pending_xp, "kills": _pending_kills, "regen": _pending_regen})
 	add_child(_current_scene)
 	# Connect signals
 	if _current_scene.has_signal("battle_complete"):
@@ -61,9 +62,13 @@ func _on_battle_complete(hero_won: bool, xp_earned: int, enemies_killed: int) ->
 		GameState.hero_hp = 0
 		_go_to_class_select()
 		return
+	# HP regen between floors: 10% of max HP, minimum 5
+	var regen: int = max(5, GameState.hero_max_hp / 10)
+	GameState.heal(regen)
 	# Store data for VictoryScreen
 	_pending_xp = xp_earned
 	_pending_kills = enemies_killed
+	_pending_regen = regen
 	_load_scene(VICTORY_SCENE)
 
 func _on_floor_cleared() -> void:

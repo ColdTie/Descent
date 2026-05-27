@@ -29,9 +29,21 @@ DESCENT is a turn-based tactical dungeon crawler in the spirit of **Dungeon Craw
 - Signal handlers with `await` become coroutines and return to caller at the first `await` — don't assume they block
 - **Architecture rule**: `BattleEngine._calculate_damage()` returns RAW damage (no armor). `Combatant.take_damage(amount, ignore_armor=false)` applies armor. Don't double-apply armor in both places.
 - `Combatant.take_damage(amount, ignore_armor)` — the `ignore_armor` parameter bypasses the `armor` field reduction (for backstab, env damage, etc.)
+- Dictionary keys with `Vector2i` work by value in GDScript 4. You can manually override generated map tiles: `map.tile_types[Vector2i(x,y)] = "floor"` / `map.passable[Vector2i(x,y)] = true`. This is the correct pattern for deterministic push-path tests.
+- Signal handlers with `await` are coroutines — control returns to the emitter at the first `await`. Safe to use for brief async commentary (e.g., backstab quip after a 0.15s delay) but don't assume they block the caller.
+- `_` prefix on function parameters is a GDScript convention for "unused" — remove the prefix when you need to reference the parameter in Run 4+ signal handlers (`_on_action_taken(attacker, ..., ability_id)`).
 
-## Current State (Run 3 — Charges, Scaling, Lava, Victory Screen)
+## Current State (Run 4 — Pushback, Mid-Battle Commentary, Ability Unlocks, HP Regen)
 ### Implemented ✅
+
+**Run 4 (Pushback + Commentary + Unlocks):**
+- Shield Bash (Brawler) + BattleEngine.push_combatant() with lava-landing damage
+- Whirlwind ability (AOE melee, unlockable)
+- Mid-battle System commentary: first_kill, low_hp, backstab_success, surrounded, pushback
+- Dynamic ability unlock cards on level-up screen
+- HP regen (10% max HP, min 5) between floors, shown on VictoryScreen
+- 146 headless tests passing
+
 **Run 1 (Bootstrap):**
 - `GameRng`, `GameState`, `SystemVoice` autoloads
 - `Combatant`, `BattleEngine`, `Ability`, `StatusEffect` pure combat classes
@@ -65,14 +77,29 @@ DESCENT is a turn-based tactical dungeon crawler in the spirit of **Dungeon Craw
 - **`apply_environment_damage`** on BattleEngine — deals armor-ignoring damage for lava/env hazards
 - **109 headless tests** — all passing: RNG (5), Hex (13), Combat (27), Movement+Abilities (24), Run3 (40)
 
-### Next Priorities (Run 4)
-1. **Sounds** — Even a minimal audio pass: hit, kill, move, ability sounds (use Godot's AudioStreamGenerator or import simple beeps)
-2. **Class abilities tab on upgrade screen** — the Level-up screen currently only shows stat upgrades; add a "NEW ABILITY" option so hero can unlock fireball/backstab/etc. mid-run
-3. **Pushback mechanic** — the Brawler class should have a "Shield Bash" that pushes enemies toward lava; makes lava truly tactical
-4. **Multi-floor run feel** — currently each floor starts fresh; heroes should FEEL stronger on floor 5 vs floor 1 — the scaling helps enemies but hero stat upgrades should visibly compound
-5. **The System mid-battle commentary** — trigger quips on: hero surviving below 20% HP, first kill of run, using backstab successfully, hero standing adjacent to lava, enemies surrounding hero
-6. **HP regeneration between floors** — currently hero HP is frozen between floors unless they take healing loot; add small passive regen (5-10 HP) between floors as a quality-of-life change
-7. **Minimap / floor preview** — small indicator showing which floor you're on out of N (generate run length at run start)
+**Run 4 (Pushback + Commentary + Ability Unlocks + HP Regen):**
+- **Shield Bash** — Brawler melee ability that deals 15 damage and hurls the enemy 2 hexes backward. If they land on lava, they take 15 extra env damage. Makes lava tiles tactically decisive. Brawler now starts with: basic_attack, power_strike, shield_bash, taunt.
+- **Whirlwind** — AOE melee ability (all_enemies, range 1, 16 damage). Available as an unlock from LevelUp.
+- **BattleEngine.push_combatant()** — new pure-logic pushback mechanic. Takes pusher, target, distance, map; walks target along the push direction, stops at walls/occupants, deals lava env damage on landing. `_closest_hex_direction()` helper converts arbitrary delta to unit hex direction.
+- **combatant_pushed signal** — BattleScene listens and animates the slide/bounce.
+- **Mid-battle System commentary** — five new categories, triggered live in BattleScene:
+  - `first_kill`: on the very first enemy death of a battle
+  - `low_hp`: once when hero falls below 20% HP
+  - `backstab_success`: after hero uses backstab (via `_on_action_taken`)
+  - `surrounded`: when 3+ enemies are adjacent to the hero (resets when cleared)
+  - `pushback`: whenever a push animation fires
+- **SystemVoice new categories**: first_kill, low_hp, backstab_success, surrounded, pushback, ability_unlock, floor_regen
+- **Ability unlocks on level-up** — LevelUp.gd now builds a DYNAMIC pool: stat upgrades + any unlockable ability the hero doesn't already have. Unlock cards are visually distinct (cyan name, "✦ NEW ABILITY ✦" tag, charges/cooldown metadata). Unlockable abilities: fireball, frost_nova, backstab, power_strike, taunt, vanish, shield_bash, whirlwind.
+- **HP regen between floors** — After clearing a floor, hero heals 10% of max HP (min 5). Regen is shown as a "💚 RECOVERED" stat card on VictoryScreen.
+- **146 headless tests** — all passing (5 suites + new test_run4.gd: 37 tests covering pushback, hex direction, ability data, unlock pool filtering, HP regen calculation, SystemVoice categories)
+
+### Next Priorities (Run 5)
+1. **Sounds** — Even a minimal audio pass: hit, kill, move, ability sounds (Godot AudioStreamGenerator beeps, or import OGG files)
+2. **Enemy variety and new enemy types** — add a "Witch" or "Necromancer" ranged enemy that casts status effects; a "Brute" that also does pushback; elevate combat from "rush the hero" to "manage positioning" for the player
+3. **Run length and floor preview** — generate a fixed run (e.g., 10 floors) at start, show "Floor N / 10" in battle HUD and VictoryScreen so players see progress toward a win condition
+4. **Boss floor** — at floor 5 and floor 10 (or configurable), spawn a single boss enemy with much higher HP, special multi-phase abilities, and a big XP/loot reward
+5. **Status effect improvements** — poison from enemies (Witch's curse), burning from lava adjacency applying the `burning` status, so status icons on HUD are actually used in gameplay
+6. **Class Select polish** — show each class's full ability list with actual ability icons/colors; add flavor text ("The Brawler favors a direct approach. The dungeon respects this."); animate selection
 
 ## File Map
 ```
@@ -111,6 +138,7 @@ tests/
   test_combat.gd     — Combatant + BattleEngine tests
   test_movement.gd   — movement, ability effects, AI variants, attack_bonus (Run 2)
   test_run3.gd       — ability charges, backstab armor, collision, floor scaling, env damage (Run 3)
+  test_run4.gd       — pushback mechanic, hex direction, shield_bash/whirlwind data, unlock pool, regen (Run 4)
 ```
 
 ## Running Tests
