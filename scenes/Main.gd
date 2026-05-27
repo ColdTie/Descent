@@ -43,7 +43,11 @@ func _load_scene(path: String) -> void:
 	_current_scene = packed.instantiate()
 	# Pass pending data to scenes that accept it (e.g. VictoryScreen)
 	if _current_scene.has_method("prepare"):
-		_current_scene.call("prepare", {"xp": _pending_xp, "kills": _pending_kills})
+		_current_scene.call("prepare", {
+			"xp": _pending_xp,
+			"kills": _pending_kills,
+			"was_boss_floor": GameState.is_boss_floor(),
+		})
 	add_child(_current_scene)
 	# Connect signals
 	if _current_scene.has_signal("battle_complete"):
@@ -64,6 +68,8 @@ func _on_battle_complete(hero_won: bool, xp_earned: int, enemies_killed: int) ->
 	# Store data for VictoryScreen
 	_pending_xp = xp_earned
 	_pending_kills = enemies_killed
+	if GameState.is_boss_floor():
+		SystemVoice.speak("boss_defeated")
 	_load_scene(VICTORY_SCENE)
 
 func _on_floor_cleared() -> void:
@@ -78,4 +84,7 @@ func _on_upgrade_chosen(_upgrade_id: String) -> void:
 	_load_scene(LOOT_SCENE)
 
 func _on_loot_chosen(_loot_id: String) -> void:
+	# Passive HP regen between floors — small mercy from The System
+	GameState.heal_between_floors()
+	SystemVoice.speak("between_floors")
 	GameState.descend()
