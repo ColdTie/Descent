@@ -9,6 +9,7 @@ signal combatant_died(combatant: Combatant)
 signal battle_ended(hero_won: bool, xp_earned: int)
 signal status_ticked(combatant: Combatant, damage: int)
 signal hero_moved(combatant: Combatant, from_hex: Vector2i, to_hex: Vector2i)
+signal combatant_pushed(combatant: Combatant, from_hex: Vector2i, to_hex: Vector2i)
 
 var combatants: Array[Combatant] = []
 var turn_order: Array[Combatant] = []
@@ -19,6 +20,10 @@ var hero_won: bool = false
 var total_xp: int = 0
 
 var rng: RandomNumberGenerator
+
+## Per-combatant ability cooldown tracker for enemy AI.
+## Structure: { combatant_id -> { ability_id -> turns_remaining } }
+var _enemy_ability_cooldowns: Dictionary = {}
 
 func _init(p_rng: RandomNumberGenerator = null) -> void:
 	if p_rng == null:
@@ -134,10 +139,34 @@ func _calculate_damage(attacker: Combatant, target: Combatant, ability_id: Strin
 	# Guarantee minimum 1 raw damage (armor may still reduce to 0)
 	return max(1, raw)
 
+func _enemy_ability_ready(enemy: Combatant, ability_id: String) -> bool:
+	## Returns true if the enemy's ability is not on cooldown.
+	var per_enemy: Dictionary = _enemy_ability_cooldowns.get(enemy.id, {})
+	return per_enemy.get(ability_id, 0) <= 0
+
+func _enemy_use_ability(enemy: Combatant, ability_id: String) -> void:
+	## Registers use of an ability and sets its cooldown for this enemy.
+	var cooldown: int = Abilities.get_ability(ability_id).get("cooldown_turns", 0)
+	if cooldown <= 0:
+		return
+	if not _enemy_ability_cooldowns.has(enemy.id):
+		_enemy_ability_cooldowns[enemy.id] = {}
+	_enemy_ability_cooldowns[enemy.id][ability_id] = cooldown
+
+func _tick_enemy_cooldowns(enemy: Combatant) -> void:
+	## Reduce all ability cooldowns for this enemy by 1 at the start of their turn.
+	if not _enemy_ability_cooldowns.has(enemy.id):
+		return
+	var per_enemy: Dictionary = _enemy_ability_cooldowns[enemy.id]
+	for ability_id: String in per_enemy.keys():
+		if per_enemy[ability_id] > 0:
+			per_enemy[ability_id] -= 1
+
 func enemy_ai_action(enemy: Combatant, map: DungeonMap = null) -> void:
 	## Smart AI based on enemy type (sprite_key)
 	if is_combatant_frozen(enemy):
 		return  # frozen enemies skip their turn
+	_tick_enemy_cooldowns(enemy)
 	var heroes: Array[Combatant] = combatants.filter(
 		func(c: Combatant) -> bool: return c.faction == Combatant.Faction.HERO and c.is_alive()
 	)
@@ -147,11 +176,40 @@ func enemy_ai_action(enemy: Combatant, map: DungeonMap = null) -> void:
 
 	match enemy.sprite_key:
 		"golem":
-			# Golems stay put, only use ranged ability if in range
-			var ranged_id: String = "enemy_fireball"
-			if enemy.abilities.has(ranged_id) and HexGrid.is_in_range(enemy.position, target.position, 3):
-				perform_attack(enemy, target, ranged_id)
-			# else do nothing (too far, wait)
+			# Golems: if adjacent, shove the hero (push them, ideally into lava).
+			# If ranged, use fire breath. Otherwise wait.
+			var dist: int = HexGrid.hex_distance(enemy.position, target.position)
+			if dist <= 1:
+				# Shove the hero — deals damage and pushes them 2 hexes
+				if enemy.abilities.has("enemy_shove"):
+					perform_attack(enemy, target, "enemy_shove")
+					if target.is_alive():
+						perform_push(enemy, target, 2, map)
+				else:
+					perform_attack(enemy, target, "enemy_claw")
+			else:
+				# Ranged fire breath if hero is within range 3
+				var ranged_id: String = "enemy_fireball"
+				if enemy.abilities.has(ranged_id) and HexGrid.is_in_range(enemy.position, target.position, 3):
+					if _enemy_ability_ready(enemy, ranged_id):
+						perform_attack(enemy, target, ranged_id)
+						_enemy_use_ability(enemy, ranged_id)
+				# else: too far and no ranged ability — wait
+		"boss":
+			# Boss AI: always move toward hero, use best available ability
+			var boss_dist: int = HexGrid.hex_distance(enemy.position, target.position)
+			if boss_dist > 1 and map != null:
+				_move_toward(enemy, target.position, map)
+			var current_dist: int = HexGrid.hex_distance(enemy.position, target.position)
+			# Pick highest-damage ready ability in range
+			var best_ability: String = _pick_boss_ability(enemy, current_dist)
+			if not best_ability.is_empty():
+				perform_attack(enemy, target, best_ability)
+				_enemy_use_ability(enemy, best_ability)
+				# Handle push abilities
+				var push_d: int = Abilities.get_ability(best_ability).get("push_distance", 0)
+				if push_d > 0 and target.is_alive():
+					perform_push(enemy, target, push_d, map)
 		"goblin":
 			# Goblins try to flank: move if not adjacent, then attack
 			var dist: int = HexGrid.hex_distance(enemy.position, target.position)
@@ -175,6 +233,24 @@ func enemy_ai_action(enemy: Combatant, map: DungeonMap = null) -> void:
 			if not enemy.abilities.is_empty():
 				ability_id = enemy.abilities[rng.randi_range(0, enemy.abilities.size() - 1)]
 			perform_attack(enemy, target, ability_id)
+
+func _pick_boss_ability(boss: Combatant, dist_to_target: int) -> String:
+	## Pick the best available (not on cooldown, in range) ability for boss AI.
+	## Prioritizes high-damage abilities. Returns empty string if nothing usable.
+	var best_id: String = ""
+	var best_dmg: int = -1
+	for ability_id: String in boss.abilities:
+		if not _enemy_ability_ready(boss, ability_id):
+			continue
+		var abl: Dictionary = Abilities.get_ability(ability_id)
+		var abl_range: int = abl.get("range", 1)
+		if dist_to_target > abl_range:
+			continue
+		var dmg: int = abl.get("base_damage", 0)
+		if dmg > best_dmg:
+			best_dmg = dmg
+			best_id = ability_id
+	return best_id
 
 func _move_toward(mover: Combatant, goal: Vector2i, map: DungeonMap) -> void:
 	## Move one step toward goal, picking passable, unoccupied neighbor closest to goal.
@@ -231,6 +307,47 @@ func _check_battle_end() -> bool:
 
 func _on_combatant_died(c: Combatant) -> void:
 	combatant_died.emit(c)
+
+func perform_push(attacker: Combatant, target: Combatant, distance: int, map: DungeonMap = null) -> void:
+	## Push target away from attacker by 'distance' hexes in the nearest hex direction.
+	## Stops early on impassable terrain (if map provided) or a living combatant.
+	## Uses cube-coordinate dot product to find the closest of the 6 hex directions.
+	var from_hex: Vector2i = target.position
+	var delta: Vector2i = target.position - attacker.position
+	if delta == Vector2i.ZERO:
+		return  # attacker and target at same hex — nothing to push
+
+	# Find hex direction closest to delta using cube-space dot product.
+	# Cube coords: (q, r, -q-r). Dot product finds best angular match.
+	var best_dir: Vector2i = HexGrid.DIRECTIONS[0]
+	var best_dot: int = -999
+	for d: Vector2i in HexGrid.DIRECTIONS:
+		var d_s: int = -d.x - d.y
+		var delta_s: int = -delta.x - delta.y
+		var dot: int = d.x * delta.x + d.y * delta.y + d_s * delta_s
+		if dot > best_dot:
+			best_dot = dot
+			best_dir = d
+
+	var current: Vector2i = target.position
+	for _i: int in range(distance):
+		var next: Vector2i = current + best_dir
+		# Stop if impassable (only checked when map is provided)
+		if map != null and not map.is_passable(next):
+			break
+		# Stop if another living combatant occupies that hex
+		var blocked: bool = false
+		for c: Combatant in combatants:
+			if c.is_alive() and c != target and c.position == next:
+				blocked = true
+				break
+		if blocked:
+			break
+		current = next
+
+	if current != target.position:
+		target.position = current
+		combatant_pushed.emit(target, from_hex, current)
 
 func move_combatant(combatant: Combatant, to_hex: Vector2i) -> bool:
 	## Move combatant to target hex. Returns true if successful.

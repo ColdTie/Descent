@@ -7,6 +7,7 @@ signal run_started
 
 var run_seed: int = 0
 var floor_num: int = 0
+var run_length: int = 10    # total floors in this run (boss at floor 5, 10)
 var hero_class: String = ""
 var hero_hp: int = 0
 var hero_max_hp: int = 0
@@ -15,8 +16,13 @@ var hero_level: int = 1
 var hero_gold: int = 0
 var hero_abilities: Array[String] = []
 var hero_base_stats: Dictionary = {}
+var total_kills: int = 0  # enemies killed this run (for first-kill commentary)
 
 const XP_PER_LEVEL: int = 100
+
+func is_boss_floor() -> bool:
+	## Returns true when the current floor is a boss floor (every 5th floor).
+	return BossDefs.is_boss_floor(floor_num)
 
 func start_run(class_id: String, seed_val: int = -1) -> void:
 	if seed_val < 0:
@@ -24,10 +30,12 @@ func start_run(class_id: String, seed_val: int = -1) -> void:
 	run_seed = seed_val
 	GameRng.reseed(seed_val)
 	floor_num = 0
+	run_length = 10
 	hero_class = class_id
 	hero_xp = 0
 	hero_level = 1
 	hero_gold = 0
+	total_kills = 0
 	var cls_data: Dictionary = Classes.get_class_data(class_id)
 	hero_max_hp = cls_data.get("hp", 100)
 	hero_hp = hero_max_hp
@@ -54,3 +62,8 @@ func take_damage(amount: int) -> void:
 
 func heal(amount: int) -> void:
 	hero_hp = min(hero_max_hp, hero_hp + amount)
+
+func heal_between_floors() -> void:
+	## Passive HP trickle between floors (~8% of max HP, minimum 5).
+	var regen: int = max(5, int(hero_max_hp * 0.08))
+	heal(regen)

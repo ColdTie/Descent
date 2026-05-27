@@ -33,8 +33,27 @@ func _ready() -> void:
 
 func _generate_choices() -> void:
 	var pool: Array[Dictionary] = UPGRADES.duplicate()
+
+	# Dynamically add ability unlock options for abilities the hero doesn't have.
+	# Covers all player abilities; class-flavored rarities emerge from the random draw.
+	var all_unlockable: Array[String] = [
+		"power_strike", "backstab", "fireball", "frost_nova",
+		"taunt", "vanish", "shield_bash"
+	]
+	for ability_id: String in all_unlockable:
+		if not GameState.hero_abilities.has(ability_id):
+			var abl_data: Dictionary = Abilities.get_ability(ability_id)
+			pool.append({
+				"id": "unlock_" + ability_id,
+				"name": "UNLOCK: " + abl_data.get("display_name", ability_id),
+				"desc": abl_data.get("description", "A new ability.") + "\n[New ability added to your bar]",
+				"ability_id": ability_id,
+			})
+
 	GameRng.shuffle(pool)
-	var choices: Array[Dictionary] = pool.slice(0, min(3, pool.size()))
+	var choices: Array[Dictionary] = []
+	for i: int in range(min(3, pool.size())):
+		choices.append(pool[i])
 	for item: Dictionary in choices:
 		_cards_container.add_child(_make_card(item))
 
@@ -79,6 +98,15 @@ func _on_upgrade_selected(upgrade_id: String, item: Dictionary, panel: PanelCont
 	_continue_button.visible = true
 
 func _apply_upgrade(item: Dictionary) -> void:
+	# Handle ability unlock options dynamically
+	if item["id"].begins_with("unlock_"):
+		var abl_id: String = item.get("ability_id", "")
+		if abl_id != "" and not GameState.hero_abilities.has(abl_id):
+			var abl_name: String = Abilities.get_ability(abl_id).get("display_name", abl_id)
+			GameState.hero_abilities.append(abl_id)
+			SystemVoice.speak_direct("Ability unlocked: %s. Don't waste it." % abl_name)
+		return
+
 	match item["id"]:
 		"atk_up":
 			GameState.hero_base_stats["attack"] = GameState.hero_base_stats.get("attack", 0) + 8

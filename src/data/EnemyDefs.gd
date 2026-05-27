@@ -53,7 +53,7 @@ const ENEMIES: Array[Dictionary] = [
 		"hp": 90,
 		"armor": 8,
 		"speed": 5,
-		"abilities": ["enemy_fireball"],
+		"abilities": ["enemy_fireball", "enemy_shove"],
 		"xp_reward": 60,
 		"sprite_key": "golem",
 		"min_floor": 4,

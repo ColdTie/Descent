@@ -1,12 +1,14 @@
 extends Control
 ## Victory screen shown after clearing a floor.
 ## Displays floor stats, System quip, then lets player descend deeper.
+## Run 5: Boss-defeated variant, floor progress bar.
 
 signal floor_cleared
 
 # Set these before adding to the scene tree (Main.gd calls prepare()).
 var xp_earned: int = 0
 var enemies_killed: int = 0
+var was_boss_floor: bool = false
 
 const QUIPS: Array[String] = [
 	"Floor cleared. The dungeon is mildly impressed. That's as good as it gets.",
@@ -17,10 +19,19 @@ const QUIPS: Array[String] = [
 	"Floor complete. Something worse waits below.",
 ]
 
+const BOSS_QUIPS: Array[String] = [
+	"Boss defeated. The dungeon registers this as a critical system error.",
+	"Named entity eliminated. The System is... recalculating.",
+	"Boss dead. You weren't supposed to be able to do that.",
+	"Champion slain. The dungeon files a formal complaint with HR.",
+	"Boss floor cleared. The dungeon's middle management has been decimated.",
+]
+
 func prepare(data: Dictionary) -> void:
 	## Called by Main before adding to scene tree.
 	xp_earned = data.get("xp", 0)
 	enemies_killed = data.get("kills", 0)
+	was_boss_floor = data.get("was_boss_floor", false)
 
 func _ready() -> void:
 	_build_ui()
@@ -48,20 +59,52 @@ func _build_ui() -> void:
 	center.add_theme_constant_override("separation", 20)
 	add_child(center)
 
-	# Floor number
-	var floor_lbl := Label.new()
-	floor_lbl.text = "FLOOR %d" % GameState.floor_num
-	floor_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	floor_lbl.add_theme_font_size_override("font_size", 24)
-	floor_lbl.add_theme_color_override("font_color", Color(0.6, 0.5, 0.3))
-	center.add_child(floor_lbl)
+	# Floor progress bar row
+	var progress_row := HBoxContainer.new()
+	progress_row.alignment = BoxContainer.ALIGNMENT_CENTER
+	progress_row.add_theme_constant_override("separation", 8)
+	center.add_child(progress_row)
 
-	# "CLEARED!" in gold
+	var prog_prefix := Label.new()
+	prog_prefix.text = "FLOOR %d / %d" % [GameState.floor_num, GameState.run_length]
+	prog_prefix.add_theme_font_size_override("font_size", 16)
+	if was_boss_floor:
+		prog_prefix.add_theme_color_override("font_color", Color(0.95, 0.5, 0.1))
+	else:
+		prog_prefix.add_theme_color_override("font_color", Color(0.6, 0.5, 0.3))
+	progress_row.add_child(prog_prefix)
+
+	# Progress bar track
+	var bar_bg := ColorRect.new()
+	bar_bg.custom_minimum_size = Vector2(320.0, 14.0)
+	bar_bg.color = Color(0.15, 0.12, 0.08)
+	progress_row.add_child(bar_bg)
+
+	var bar_fill := ColorRect.new()
+	var fill_ratio: float = float(GameState.floor_num) / float(max(1, GameState.run_length))
+	bar_fill.size = Vector2(320.0 * fill_ratio, 14.0)
+	bar_fill.color = Color(0.95, 0.55, 0.1) if was_boss_floor else Color(0.3, 0.7, 0.95)
+	bar_bg.add_child(bar_fill)
+
+	# Boss marker dots at every 5th floor
+	for bfl: int in range(5, GameState.run_length + 1, 5):
+		var marker_x: float = 320.0 * float(bfl) / float(max(1, GameState.run_length))
+		var marker := ColorRect.new()
+		marker.size = Vector2(3.0, 14.0)
+		marker.position = Vector2(marker_x - 1.5, 0.0)
+		marker.color = Color(0.9, 0.2, 0.1, 0.8)
+		bar_bg.add_child(marker)
+
+	# "CLEARED!" or "BOSS DEFEATED!" title
 	var title := Label.new()
-	title.text = "CLEARED!"
+	if was_boss_floor:
+		title.text = "BOSS DEFEATED!"
+		title.add_theme_color_override("font_color", Color(0.95, 0.4, 0.05))
+	else:
+		title.text = "CLEARED!"
+		title.add_theme_color_override("font_color", Color(0.95, 0.78, 0.1))
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	title.add_theme_font_size_override("font_size", 88)
-	title.add_theme_color_override("font_color", Color(0.95, 0.78, 0.1))
+	title.add_theme_font_size_override("font_size", was_boss_floor ? 72 : 88)
 	title.modulate.a = 0.0
 	center.add_child(title)
 	# Fade in animation
@@ -76,9 +119,10 @@ func _build_ui() -> void:
 	# System quip
 	var rng := RandomNumberGenerator.new()
 	rng.seed = GameState.run_seed + GameState.floor_num * 1337
-	var quip_idx: int = rng.randi_range(0, QUIPS.size() - 1)
+	var quip_pool: Array[String] = BOSS_QUIPS if was_boss_floor else QUIPS
+	var quip_idx: int = rng.randi_range(0, quip_pool.size() - 1)
 	var quip_lbl := Label.new()
-	quip_lbl.text = QUIPS[quip_idx]
+	quip_lbl.text = quip_pool[quip_idx]
 	quip_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	quip_lbl.add_theme_font_size_override("font_size", 18)
 	quip_lbl.add_theme_color_override("font_color", Color(0.8, 0.8, 0.65))
