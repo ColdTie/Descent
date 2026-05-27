@@ -138,9 +138,10 @@ func enemy_ai_action(enemy: Combatant, map: DungeonMap = null) -> void:
 	## Smart AI based on enemy type (sprite_key)
 	if is_combatant_frozen(enemy):
 		return  # frozen enemies skip their turn
-	var heroes: Array[Combatant] = combatants.filter(
-		func(c: Combatant) -> bool: return c.faction == Combatant.Faction.HERO and c.is_alive()
-	)
+	var heroes: Array[Combatant] = []
+	for c: Combatant in combatants:
+		if c.faction == Combatant.Faction.HERO and c.is_alive():
+			heroes.append(c)
 	if heroes.is_empty():
 		return
 	var target: Combatant = heroes[0]
@@ -204,7 +205,11 @@ func end_turn() -> void:
 	_check_battle_end()
 
 func _remove_dead_from_order() -> void:
-	turn_order = turn_order.filter(func(c: Combatant) -> bool: return c.is_alive())
+	var living: Array[Combatant] = []
+	for c: Combatant in turn_order:
+		if c.is_alive():
+			living.append(c)
+	turn_order = living
 
 func _check_battle_end() -> bool:
 	var living_heroes: int = combatants.filter(

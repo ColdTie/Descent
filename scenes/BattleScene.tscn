@@ -8,6 +8,7 @@ script = ExtResource("1_bs")
 [node name="Background" type="ColorRect" parent="."]
 position = Vector2(0, 0)
 size = Vector2(1280, 720)
+mouse_filter = 2
 color = Color(0.04, 0.03, 0.06, 1)
 
 [node name="HexLayer" type="Node2D" parent="."]

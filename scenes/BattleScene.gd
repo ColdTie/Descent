@@ -108,7 +108,10 @@ func _build_encounter() -> void:
 		var e: Combatant = EnemyDefs.make_combatant(def, _map.spawn_points[i], _battle_rng, GameState.floor_num)
 		_enemies.append(e)
 
-	_all_combatants = [_hero] + _enemies
+	_all_combatants.clear()
+	_all_combatants.append(_hero)
+	for e: Combatant in _enemies:
+		_all_combatants.append(e)
 	_engine = BattleEngine.new(_battle_rng)
 	_engine.battle_ended.connect(_on_battle_ended)
 	_engine.action_taken.connect(_on_action_taken)
@@ -418,7 +421,9 @@ func _unhandled_input(event: InputEvent) -> void:
 		return
 
 	# Convert viewport mouse position into _hex_layer local space
-	var local_pos: Vector2 = _hex_layer.to_local(mb.position)
+	# Use get_global_mouse_position() for reliable coordinate conversion
+	var global_mouse: Vector2 = get_global_mouse_position()
+	var local_pos: Vector2 = _hex_layer.to_local(global_mouse)
 	var hex: Vector2i = HexGrid.pixel_to_hex(local_pos, HEX_SIZE)
 
 	# Only act on hexes that exist in the map
@@ -734,6 +739,8 @@ func _on_hero_moved(_combatant: Combatant, _from_hex: Vector2i, to_hex: Vector2i
 func _on_battle_ended(hero_won: bool, xp_earned: int) -> void:
 	_player_turn = false
 	_clear_highlights()
+	# Persist hero's current HP to GameState so it carries between floors
+	GameState.hero_hp = _hero.hp
 	if hero_won:
 		_turn_indicator.text = "VICTORY!"
 		_turn_indicator.add_theme_color_override("font_color", Color(1.0, 0.85, 0.1))
