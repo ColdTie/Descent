@@ -193,14 +193,7 @@ func _draw_hex_grid() -> void:
 			poly.add_child(lava_lbl)
 			_start_lava_pulse(poly)
 
-		# Click input via Area2D
-		var area := Area2D.new()
-		area.position = world_pos
-		var col := CollisionPolygon2D.new()
-		col.polygon = _make_hex_pts(HEX_SIZE - 2.0)
-		area.add_child(col)
-		area.input_event.connect(_on_hex_input.bind(hex))
-		_hex_layer.add_child(area)
+		# (Click handling is done globally via _unhandled_input — no per-hex Area2D needed)
 
 func _start_lava_pulse(poly: Polygon2D) -> void:
 	## Pulse lava tiles between bright and dim orange
@@ -413,7 +406,9 @@ func _apply_lava_heat(c: Combatant) -> void:
 
 ## ─── Hex Input ────────────────────────────────────────────────────────────────
 
-func _on_hex_input(_viewport: Viewport, event: InputEvent, _shape_idx: int, hex: Vector2i) -> void:
+func _unhandled_input(event: InputEvent) -> void:
+	## Single global click handler — converts screen→hex via pixel_to_hex.
+	## More reliable than per-hex Area2D (works in web exports, no physics overhead).
 	if not _player_turn or _engine.battle_over:
 		return
 	if not (event is InputEventMouseButton):
@@ -422,6 +417,17 @@ func _on_hex_input(_viewport: Viewport, event: InputEvent, _shape_idx: int, hex:
 	if not (mb.pressed and mb.button_index == MOUSE_BUTTON_LEFT):
 		return
 
+	# Convert viewport mouse position into _hex_layer local space
+	var local_pos: Vector2 = _hex_layer.to_local(mb.position)
+	var hex: Vector2i = HexGrid.pixel_to_hex(local_pos, HEX_SIZE)
+
+	# Only act on hexes that exist in the map
+	if not _map.tile_types.has(hex):
+		return
+
+	_handle_hex_click(hex)
+
+func _handle_hex_click(hex: Vector2i) -> void:
 	var abl: Dictionary = Abilities.get_ability(_selected_ability)
 	var abl_target: String = abl.get("target", "single_enemy")
 	var abl_range: int = abl.get("range", 1)
@@ -439,20 +445,17 @@ func _on_hex_input(_viewport: Viewport, event: InputEvent, _shape_idx: int, hex:
 			_show_system_banner("Out of range!", 1.2)
 			return
 		if abl_target == "all_enemies":
-			# AOE centered on target hex
 			_do_hero_aoe_ability(hex)
 		else:
 			_do_hero_attack(target)
 		return
 
-	# Clicking an empty hex — check movement or AOE targeting
+	# Clicking an empty hex — ranged AOE targeting or movement
 	if abl_target == "all_enemies" and abl_range > 1:
-		# Ranged AOE (fireball): clicking empty hex in range fires it there
 		if HexGrid.is_in_range(_hero.position, hex, abl_range):
 			_do_hero_aoe_ability(hex)
 			return
 
-	# Attempt movement
 	if _is_valid_move_hex(hex):
 		_do_hero_move(hex)
 
