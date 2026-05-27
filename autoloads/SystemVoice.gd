@@ -53,6 +53,51 @@ const LINES: Dictionary = {
 		"Choose your doomed archetype.",
 		"Pick wisely. Or don't. You'll probably die anyway.",
 	],
+	"low_hp": [
+		"Below 20% HP. The System estimates a 94% probability of failure.",
+		"Critical HP. Your body is filing a formal complaint.",
+		"You are technically still alive. Technically.",
+		"Low HP detected. Perhaps consider a less confrontational approach.",
+		"You're running on spite and luck. The System is curious which runs out first.",
+	],
+	"surrounded": [
+		"Three enemies. One of you. The System finds this mathematically interesting.",
+		"Surrounded. Your tactical positioning is... creative.",
+		"Encircled. The dungeon suggests staying away from corners.",
+		"They've closed in. The System is mildly impressed you're still breathing.",
+		"Multiple hostiles adjacent. This is precisely what happens without a plan.",
+	],
+	"near_lava": [
+		"You are adjacent to lava. The System marks this as 'ill-advised'.",
+		"Lava proximity detected. The smell is not tactical.",
+		"You are one misstep from a slow, volcanic death. Thought you should know.",
+		"Standing by lava. The dungeon appreciates your commitment to danger.",
+	],
+	"backstab_hit": [
+		"Backstab. Effective. The dungeon disapproves of your methods. The System approves.",
+		"They never saw it coming. Literally — that's how backstab works.",
+		"Strike from shadow. Maximum damage. Minimum sportsmanship.",
+		"Armor? Circumvented. Dignity? Also circumvented.",
+	],
+	"first_kill": [
+		"First kill of the run. The dungeon has been warned.",
+		"Blood drawn. The System updates your threat assessment upward.",
+		"First blood. The dungeon's residents are reconsidering their career choices.",
+		"Initial elimination confirmed. Off to a body-positive start.",
+	],
+	"push_hit": [
+		"Sent flying. Newton's laws, applied violently.",
+		"Pushed back. The enemy reevaluates their positioning.",
+		"Flung. The shield has spoken.",
+		"Impact registered. They are now somewhere else. Somewhere worse.",
+		"Airborne. Briefly. The lava nearby has opinions about this.",
+	],
+	"between_floors": [
+		"Brief respite. Your wounds close, slightly. The dungeon is not moved.",
+		"Between floors, the dungeon reluctantly allows 8% healing. Don't get used to it.",
+		"Small mercy. Small. The System insists this changes nothing.",
+		"Partial recovery. The dungeon sighs and patches your worst wounds.",
+	],
 }
 
 var _last_indices: Dictionary = {}

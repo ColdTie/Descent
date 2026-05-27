@@ -78,4 +78,7 @@ func _on_upgrade_chosen(_upgrade_id: String) -> void:
 	_load_scene(LOOT_SCENE)
 
 func _on_loot_chosen(_loot_id: String) -> void:
+	# Passive HP regen between floors — small mercy from The System
+	GameState.heal_between_floors()
+	SystemVoice.speak("between_floors")
 	GameState.descend()
