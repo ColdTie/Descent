@@ -5,10 +5,10 @@ const DATA: Dictionary = {
 	"brawler": {
 		"id": "brawler",
 		"display_name": "Brawler",
-		"description": "A melee tank. High HP, heavy hits, no subtlety whatsoever.",
+		"description": "A melee tank. High HP, heavy hits, and a shield that doubles as a catapult.",
 		"hp": 150,
 		"stats": {"attack": 15, "defense": 5, "speed": 8},
-		"abilities": ["basic_attack", "power_strike", "taunt"],
+		"abilities": ["basic_attack", "power_strike", "shield_bash", "taunt"],
 		"icon_color": Color(0.8, 0.2, 0.2),
 	},
 	"rogue": {

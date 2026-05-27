@@ -39,6 +39,12 @@ var _player_turn: bool = false
 var _battle_rng: RandomNumberGenerator
 var _enemies_killed: int = 0
 
+# Mid-battle commentary state
+var _first_kill_done: bool = false
+var _low_hp_warned: bool = false
+var _surrounded_warned: bool = false
+var _lava_warned: bool = false
+
 @onready var _hex_layer: Node2D = $HexLayer
 @onready var _entity_layer: Node2D = $EntityLayer
 @onready var _floor_label: Label = $UILayer/FloorLabel
@@ -115,6 +121,7 @@ func _build_encounter() -> void:
 	_engine.combatant_died.connect(_on_combatant_died)
 	_engine.status_ticked.connect(_on_status_ticked)
 	_engine.hero_moved.connect(_on_hero_moved)
+	_engine.combatant_pushed.connect(_on_combatant_pushed)
 	_engine.setup(_all_combatants)
 
 ## ─── Cave Atmosphere ──────────────────────────────────────────────────────────
@@ -368,6 +375,10 @@ func _next_turn() -> void:
 		if _engine.battle_over:
 			return
 
+		# Mid-battle commentary checks
+		_check_low_hp_warning()
+		_check_surrounded_warning()
+
 		_player_turn = true
 		_turn_indicator.text = "YOUR TURN — Click to move or attack"
 		_turn_indicator.add_theme_color_override("font_color", Color(0.35, 1.0, 0.35))
@@ -409,7 +420,11 @@ func _apply_lava_heat(c: Combatant) -> void:
 	_update_hp_bar(c)
 	if c.faction == Combatant.Faction.HERO:
 		_update_hero_hp_label()
-		_show_system_banner("Lava heat! -%d HP. The floor is trying to kill you. Literally." % actual, 2.0)
+		if not _lava_warned:
+			_lava_warned = true
+			_show_system_banner("Lava heat! -%d HP. Standing near lava: a classic, avoidable mistake." % actual, 2.5)
+		else:
+			_show_system_banner("Lava heat: -%d HP. Still adjacent to lava. Persistently suicidal." % actual, 2.0)
 
 ## ─── Hex Input ────────────────────────────────────────────────────────────────
 
@@ -494,7 +509,13 @@ func _do_hero_attack(target: Combatant) -> void:
 	_player_turn = false
 	_clear_highlights()
 	_engine.perform_attack(_hero, target, _selected_ability)
-	SystemVoice.speak("hit")
+
+	# Handle pushback (shield_bash and any future pushback abilities)
+	var abl_data: Dictionary = Abilities.get_ability(_selected_ability)
+	var pushback_dist: int = abl_data.get("pushback_distance", 0)
+	if pushback_dist > 0 and target.is_alive():
+		_engine.push_combatant(_hero, target, pushback_dist, _map)
+
 	# Consume the charge
 	if abl_obj != null:
 		abl_obj.use()
@@ -530,6 +551,19 @@ func _do_hero_aoe_ability(center_hex: Vector2i) -> void:
 			_flash_hex_area(_hero.position, 1, FROST_CLR)
 		else:
 			SystemVoice.speak_direct("Frost Nova fires into empty space. The dungeon sighs.")
+	elif _selected_ability == "whirlwind":
+		aoe_radius = 1
+		# Hit all adjacent enemies from the hero position
+		var targets: Array[Combatant] = []
+		for e: Combatant in _enemies:
+			if e.is_alive() and HexGrid.is_in_range(_hero.position, e.position, 1):
+				targets.append(e)
+		if not targets.is_empty():
+			_engine.perform_aoe_attack(_hero, targets, "whirlwind")
+			SystemVoice.speak_direct("Whirlwind! %d enemies hit. Spin to win." % targets.size())
+		else:
+			SystemVoice.speak_direct("Whirlwind executed flawlessly. On no one. The dungeon is unimpressed.")
+		_flash_hex_area(_hero.position, 1, AOE_CLR)
 	else:
 		# Damage AOE (fireball etc.)
 		var disk_hexes: Array[Vector2i] = HexGrid.disk(center_hex, aoe_radius)
@@ -697,15 +731,23 @@ func _clear_highlights() -> void:
 
 ## ─── Engine Signal Handlers ───────────────────────────────────────────────────
 
-func _on_action_taken(_attacker: Combatant, target: Combatant, damage: int, _ability_id: String) -> void:
+func _on_action_taken(attacker: Combatant, target: Combatant, damage: int, ability_id: String) -> void:
 	_show_damage_number(target, damage)
 	_update_hp_bar(target)
 	_update_status_label(target)
+	# Mid-battle commentary: backstab
+	if ability_id == "backstab" and attacker.faction == Combatant.Faction.HERO:
+		await get_tree().create_timer(0.15).timeout
+		SystemVoice.speak("backstab_success")
 
 func _on_combatant_died(c: Combatant) -> void:
 	if c.faction == Combatant.Faction.ENEMY:
-		SystemVoice.speak("kill")
 		_enemies_killed += 1
+		if not _first_kill_done:
+			_first_kill_done = true
+			SystemVoice.speak("first_kill")
+		else:
+			SystemVoice.speak("kill")
 	else:
 		# Hero died — start death overlay after a moment
 		await get_tree().create_timer(0.5).timeout
@@ -713,6 +755,20 @@ func _on_combatant_died(c: Combatant) -> void:
 	var node: Node2D = _entity_nodes.get(c.id)
 	if node != null:
 		node.modulate = DEAD_MODULATE
+
+func _on_combatant_pushed(c: Combatant, _from_hex: Vector2i, to_hex: Vector2i) -> void:
+	## Animate pushed entity sliding to new position with a bounce feel
+	var node: Node2D = _entity_nodes.get(c.id)
+	if node != null:
+		var tw: Tween = create_tween()
+		tw.set_ease(Tween.EASE_OUT)
+		tw.set_trans(Tween.TRANS_QUART)
+		tw.tween_property(node, "position", HexGrid.hex_to_pixel(to_hex, HEX_SIZE), 0.35)
+	SystemVoice.speak("pushback")
+	# Sync HP bar if lava landing dealt env damage
+	_update_hp_bar(c)
+	if c.faction == Combatant.Faction.HERO:
+		_update_hero_hp_label()
 
 func _on_status_ticked(c: Combatant, damage: int) -> void:
 	if damage > 0:
@@ -746,6 +802,30 @@ func _on_battle_ended(hero_won: bool, xp_earned: int) -> void:
 
 func _on_system_line(text: String, _dur: float) -> void:
 	_show_system_banner(text, 2.8)
+
+## ─── Mid-Battle Commentary ────────────────────────────────────────────────────
+
+func _check_low_hp_warning() -> void:
+	## Warn once per battle when hero drops below 20% HP
+	if _low_hp_warned:
+		return
+	var ratio: float = float(_hero.hp) / float(max(1, _hero.max_hp))
+	if ratio < 0.20:
+		_low_hp_warned = true
+		SystemVoice.speak("low_hp")
+
+func _check_surrounded_warning() -> void:
+	## Warn once per surrounded event when 3+ enemies are adjacent
+	var adj_enemies: int = 0
+	for e: Combatant in _enemies:
+		if e.is_alive() and HexGrid.hex_distance(_hero.position, e.position) == 1:
+			adj_enemies += 1
+	if adj_enemies >= 3:
+		if not _surrounded_warned:
+			_surrounded_warned = true
+			SystemVoice.speak("surrounded")
+	else:
+		_surrounded_warned = false  # reset when no longer surrounded
 
 ## ─── Death Overlay ────────────────────────────────────────────────────────────
 

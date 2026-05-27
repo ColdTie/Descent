@@ -53,6 +53,46 @@ const LINES: Dictionary = {
 		"Choose your doomed archetype.",
 		"Pick wisely. Or don't. You'll probably die anyway.",
 	],
+	"first_kill": [
+		"First blood. The dungeon smells it. You have its full attention now.",
+		"One down. Kill rate: technically positive. The System is marginally impressed.",
+		"First kill secured. Try not to celebrate. There are more. Many more.",
+		"Eliminated. The dungeon files a complaint. You are the defendant.",
+	],
+	"low_hp": [
+		"Below 20% HP. The System would advise fleeing, but there is nowhere to flee to.",
+		"Critical HP. Your odds of survival are no longer amusing. They're tragic.",
+		"You are almost dead. The dungeon is taking notes for future reference.",
+		"Low HP detected. Hero efficiency: critically declining. This is fine.",
+	],
+	"backstab_success": [
+		"Backstab. The enemy didn't see it coming. Neither did their armor.",
+		"Struck from the shadows. Efficient. Dishonorable. Effective.",
+		"Armor? Irrelevant. The blade found the gap. The System approves.",
+		"Clean kill-strike. The dungeon considers this unsporting. The System does not.",
+	],
+	"surrounded": [
+		"Three enemies adjacent. This is the dungeon's idea of a hug.",
+		"You've been surrounded. The System observes this with clinical detachment.",
+		"Flanked on multiple sides. The dungeon savors this moment. Try not to die.",
+		"Encircled. Impressive in a self-destructive sort of way.",
+	],
+	"pushback": [
+		"Shield Bash connects. The enemy briefly achieves flight.",
+		"Sent flying. The dungeon floor catches them. With lava.",
+		"The enemy's position has been forcibly renegotiated.",
+		"Launched. Physics handles the rest. The System is entertained.",
+	],
+	"ability_unlock": [
+		"New ability acquired. The dungeon recalculates your threat level. Upward.",
+		"Skill unlocked. You're slightly less likely to die. Statistically.",
+		"New technique learned. The System is cautiously optimistic. As always.",
+	],
+	"floor_regen": [
+		"Floor cleared. You catch your breath. The dungeon finds this irritating.",
+		"Brief respite. The System allows it. Grudgingly.",
+		"Recovery phase initiated. The dungeon disapproves. The System notes your stubbornness.",
+	],
 }
 
 var _last_indices: Dictionary = {}

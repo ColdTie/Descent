@@ -1,6 +1,7 @@
 extends Control
 ## Level-up upgrade screen. Shown when hero gains a level.
 ## Presents 3 upgrade choices; hero picks one then continues.
+## Run 4: dynamic ability unlock options added to the pool.
 
 signal upgrade_chosen(upgrade_id: String)
 
@@ -12,14 +13,20 @@ signal upgrade_chosen(upgrade_id: String)
 
 var _chosen: String = ""
 
-# Upgrade pool: each entry has id, name, desc, and an apply() callable-compatible dict
-const UPGRADES: Array[Dictionary] = [
-	{"id": "atk_up", "name": "Savage Strike", "desc": "+8 Attack. Your strikes land harder. The dungeon is unimpressed."},
-	{"id": "spd_up", "name": "Quick Reflexes", "desc": "+4 Speed. Act before they do. Simple math."},
-	{"id": "hp_up", "name": "Iron Constitution", "desc": "+30 Max HP and heal 30. Your body becomes slightly less breakable."},
-	{"id": "def_up", "name": "Thick Skin", "desc": "+4 Armor. You've learned to absorb punishment. Professionally."},
-	{"id": "xp_bonus", "name": "Combat Instincts", "desc": "Next floor grants +50% XP. The System upgrades your XP farm."},
-	{"id": "heal_big", "name": "Second Wind", "desc": "Restore 50 HP now. The dungeon sighs and patches you up."},
+# Stat upgrade pool
+const STAT_UPGRADES: Array[Dictionary] = [
+	{"id": "atk_up",    "type": "stat", "name": "Savage Strike",     "desc": "+8 Attack. Your strikes land harder. The dungeon is unimpressed."},
+	{"id": "spd_up",    "type": "stat", "name": "Quick Reflexes",    "desc": "+4 Speed. Act before they do. Simple math."},
+	{"id": "hp_up",     "type": "stat", "name": "Iron Constitution", "desc": "+30 Max HP and heal 30. Your body becomes slightly less breakable."},
+	{"id": "def_up",    "type": "stat", "name": "Thick Skin",        "desc": "+4 Armor. You've learned to absorb punishment. Professionally."},
+	{"id": "xp_bonus",  "type": "stat", "name": "Combat Instincts",  "desc": "Next floor grants +50% XP. The System upgrades your XP farm."},
+	{"id": "heal_big",  "type": "stat", "name": "Second Wind",       "desc": "Restore 50 HP now. The dungeon sighs and patches you up."},
+]
+
+# Abilities that can be unlocked via level-up
+const UNLOCKABLE_ABILITIES: Array[String] = [
+	"fireball", "frost_nova", "backstab", "power_strike",
+	"taunt", "vanish", "shield_bash", "whirlwind",
 ]
 
 func _ready() -> void:
@@ -32,23 +39,51 @@ func _ready() -> void:
 	_generate_choices()
 
 func _generate_choices() -> void:
-	var pool: Array[Dictionary] = UPGRADES.duplicate()
+	var pool: Array[Dictionary] = []
+	# Always include the stat upgrades
+	for u: Dictionary in STAT_UPGRADES:
+		pool.append(u)
+	# Add ability unlocks for abilities the hero doesn't have yet
+	for ability_id: String in UNLOCKABLE_ABILITIES:
+		if not GameState.hero_abilities.has(ability_id):
+			var abl_data: Dictionary = Abilities.get_ability(ability_id)
+			pool.append({
+				"id": "unlock_" + ability_id,
+				"type": "ability_unlock",
+				"ability_id": ability_id,
+				"name": abl_data.get("display_name", ability_id),
+				"desc": abl_data.get("description", ""),
+			})
 	GameRng.shuffle(pool)
 	var choices: Array[Dictionary] = pool.slice(0, min(3, pool.size()))
 	for item: Dictionary in choices:
 		_cards_container.add_child(_make_card(item))
 
 func _make_card(item: Dictionary) -> PanelContainer:
+	var is_ability: bool = item.get("type", "stat") == "ability_unlock"
 	var panel := PanelContainer.new()
-	panel.custom_minimum_size = Vector2(240.0, 200.0)
+	panel.custom_minimum_size = Vector2(240.0, 220.0)
 	var vbox := VBoxContainer.new()
+	vbox.add_theme_constant_override("separation", 6)
 	panel.add_child(vbox)
+
+	# "NEW ABILITY" tag for unlocks
+	if is_ability:
+		var tag := Label.new()
+		tag.text = "✦ NEW ABILITY ✦"
+		tag.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		tag.add_theme_font_size_override("font_size", 11)
+		tag.add_theme_color_override("font_color", Color(0.5, 1.0, 0.6))
+		vbox.add_child(tag)
 
 	var name_lbl := Label.new()
 	name_lbl.text = item["name"]
 	name_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	name_lbl.add_theme_font_size_override("font_size", 20)
-	name_lbl.add_theme_color_override("font_color", Color(0.9, 0.7, 0.1))
+	if is_ability:
+		name_lbl.add_theme_color_override("font_color", Color(0.35, 0.85, 1.0))
+	else:
+		name_lbl.add_theme_color_override("font_color", Color(0.9, 0.7, 0.1))
 	vbox.add_child(name_lbl)
 
 	var sep := HSeparator.new()
@@ -63,8 +98,28 @@ func _make_card(item: Dictionary) -> PanelContainer:
 	desc_lbl.custom_minimum_size = Vector2(220.0, 0.0)
 	vbox.add_child(desc_lbl)
 
+	# Ability cooldown / charges info for ability unlocks
+	if is_ability:
+		var ability_id: String = item.get("ability_id", "")
+		var abl_data: Dictionary = Abilities.get_ability(ability_id)
+		var charges: int = abl_data.get("max_charges", 1)
+		var cooldown: int = abl_data.get("cooldown_turns", 0)
+		var meta_text: String = ""
+		if charges == -1:
+			meta_text = "Charges: ∞"
+		else:
+			meta_text = "Charges: %d" % charges
+		if cooldown > 0:
+			meta_text += "  ·  Cooldown: %d turns" % cooldown
+		var meta_lbl := Label.new()
+		meta_lbl.text = meta_text
+		meta_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		meta_lbl.add_theme_font_size_override("font_size", 10)
+		meta_lbl.add_theme_color_override("font_color", Color(0.55, 0.55, 0.7))
+		vbox.add_child(meta_lbl)
+
 	var btn := Button.new()
-	btn.text = "TAKE IT"
+	btn.text = "UNLOCK" if is_ability else "TAKE IT"
 	btn.pressed.connect(_on_upgrade_selected.bind(item["id"], item, panel))
 	vbox.add_child(btn)
 
@@ -79,6 +134,14 @@ func _on_upgrade_selected(upgrade_id: String, item: Dictionary, panel: PanelCont
 	_continue_button.visible = true
 
 func _apply_upgrade(item: Dictionary) -> void:
+	# Ability unlock
+	if item.get("type", "stat") == "ability_unlock":
+		var ability_id: String = item.get("ability_id", "")
+		if not ability_id.is_empty() and not GameState.hero_abilities.has(ability_id):
+			GameState.hero_abilities.append(ability_id)
+			SystemVoice.speak("ability_unlock")
+		return
+	# Stat upgrades
 	match item["id"]:
 		"atk_up":
 			GameState.hero_base_stats["attack"] = GameState.hero_base_stats.get("attack", 0) + 8

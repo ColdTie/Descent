@@ -137,6 +137,33 @@ const DATA: Dictionary = {
 		"xp_cost": 0,
 		"icon_key": "fire",
 	},
+	"shield_bash": {
+		"id": "shield_bash",
+		"display_name": "Shield Bash",
+		"description": "Slam your shield into an adjacent enemy — deals damage and hurls them 2 hexes backward. Into lava if you planned ahead.",
+		"type": "attack",
+		"target": "single_enemy",
+		"base_damage": 15,
+		"max_charges": 1,
+		"cooldown_turns": 3,
+		"range": 1,
+		"xp_cost": 60,
+		"icon_key": "shield_bash",
+		"pushback_distance": 2,
+	},
+	"whirlwind": {
+		"id": "whirlwind",
+		"display_name": "Whirlwind",
+		"description": "Spin in a deadly arc, hitting all adjacent enemies for moderate damage. Tactically messy. Personally satisfying.",
+		"type": "attack",
+		"target": "all_enemies",
+		"base_damage": 16,
+		"max_charges": 1,
+		"cooldown_turns": 3,
+		"range": 1,
+		"xp_cost": 60,
+		"icon_key": "whirl",
+	},
 }
 
 static func get_ability(id: String) -> Dictionary:
