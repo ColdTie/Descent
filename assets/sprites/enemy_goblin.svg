@@ -1,0 +1,52 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <!-- Shadow -->
+  <ellipse cx="32" cy="62" rx="13" ry="3" fill="#000" opacity="0.3"/>
+  <!-- Left ear - large pointed -->
+  <path d="M18,25 Q8,18 10,30 Q12,36 20,33 Z" fill="#2A7020"/>
+  <path d="M18,25 Q10,20 12,30" stroke="#3A9028" stroke-width="0.8" fill="none"/>
+  <ellipse cx="14" cy="26" rx="2" ry="3.5" fill="#3A9028" opacity="0.5"/>
+  <!-- Right ear -->
+  <path d="M46,25 Q56,18 54,30 Q52,36 44,33 Z" fill="#2A7020"/>
+  <path d="M46,25 Q54,20 52,30" stroke="#3A9028" stroke-width="0.8" fill="none"/>
+  <ellipse cx="50" cy="26" rx="2" ry="3.5" fill="#3A9028" opacity="0.5"/>
+  <!-- Head - big bulging forehead -->
+  <ellipse cx="32" cy="23" rx="13" ry="14" fill="#3A8030"/>
+  <!-- Forehead lump -->
+  <ellipse cx="32" cy="14" rx="10" ry="7" fill="#3A8030"/>
+  <!-- Brow ridge -->
+  <rect x="22" y="16" width="9" height="2.5" rx="1" fill="#2A6020"/>
+  <rect x="33" y="16" width="9" height="2.5" rx="1" fill="#2A6020"/>
+  <!-- Eyes - red beady -->
+  <circle cx="27" cy="22" r="3.5" fill="#DD1818"/>
+  <circle cx="37" cy="22" r="3.5" fill="#DD1818"/>
+  <circle cx="27" cy="22" r="2" fill="#0A0808"/>
+  <circle cx="37" cy="22" r="2" fill="#0A0808"/>
+  <circle cx="26.5" cy="21.5" r="0.8" fill="#FF5050" opacity="0.7"/>
+  <circle cx="36.5" cy="21.5" r="0.8" fill="#FF5050" opacity="0.7"/>
+  <!-- Flat nose -->
+  <ellipse cx="32" cy="27" rx="4" ry="2.5" fill="#2A6818"/>
+  <circle cx="30" cy="27" r="1.2" fill="#1A5010"/>
+  <circle cx="34" cy="27" r="1.2" fill="#1A5010"/>
+  <!-- Grin with tusk -->
+  <path d="M24,31 Q32,37 40,31" stroke="#1A4A10" stroke-width="2" fill="none"/>
+  <rect x="29.5" y="31" width="3" height="5" rx="0.8" fill="#D8D0A0"/>
+  <!-- Scraggly hair -->
+  <rect x="21" y="10" width="2.5" height="7" rx="1" fill="#1A3010" transform="rotate(-12,21,10)"/>
+  <rect x="30" y="8" width="2" height="7" rx="1" fill="#1A3010"/>
+  <rect x="38" y="10" width="2.5" height="7" rx="1" fill="#1A3010" transform="rotate(12,38,10)"/>
+  <!-- Ragged tunic -->
+  <path d="M20,38 Q15,53 17,64 L47,64 Q49,53 44,38 Z" fill="#4A3818"/>
+  <!-- Rags detail lines -->
+  <path d="M26,40 L24,64" stroke="#5A4828" stroke-width="1" fill="none"/>
+  <path d="M38,40 L40,64" stroke="#5A4828" stroke-width="1" fill="none"/>
+  <!-- Patches -->
+  <rect x="25" y="43" width="8" height="6" rx="1" fill="#5A4828"/>
+  <rect x="31" y="50" width="6" height="5" rx="1" fill="#3A2810"/>
+  <!-- Arms -->
+  <rect x="10" y="38" width="10" height="14" rx="5" fill="#338028"/>
+  <rect x="44" y="38" width="10" height="14" rx="5" fill="#338028"/>
+  <!-- Left claws -->
+  <path d="M10,52 L7,58 M13,53 L11,59 M16,53 L15,59" stroke="#2A6018" stroke-width="1.5" stroke-linecap="round"/>
+  <!-- Right claws -->
+  <path d="M54,52 L57,58 M51,53 L53,59 M48,53 L49,59" stroke="#2A6018" stroke-width="1.5" stroke-linecap="round"/>
+</svg>

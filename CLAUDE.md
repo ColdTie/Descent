@@ -65,7 +65,17 @@ DESCENT is a turn-based tactical dungeon crawler in the spirit of **Dungeon Craw
 - **`apply_environment_damage`** on BattleEngine — deals armor-ignoring damage for lava/env hazards
 - **109 headless tests** — all passing: RNG (5), Hex (13), Combat (27), Movement+Abilities (24), Run3 (40)
 
-### Next Priorities (Run 4)
+**Run 4 (Sprites + Visual Upgrade):**
+- **SVG sprites** for all 3 hero classes and 5 enemy types in `assets/sprites/`
+  - Heroes: `hero_brawler.svg`, `hero_rogue.svg`, `hero_arcanist.svg`
+  - Enemies: `enemy_imp.svg`, `enemy_goblin.svg`, `enemy_skeleton.svg`, `enemy_demon.svg`, `enemy_golem.svg`
+- **`BattleScene._get_sprite_path(c)`** — maps combatant to sprite path; hero uses `GameState.hero_class`, enemy uses `c.sprite_key`
+- **`Sprite2D` in entity nodes** — replaces old body-polygon + glyph-label pair; scale 0.58 @ position y=-6
+- **`TextureRect` portraits** in `ClassSelect` class cards — replaces flat color swatch
+- **Fallback**: both systems degrade gracefully to glyph/swatch when assets haven't been imported by the editor yet
+- **Import note**: Open project in Godot editor once after pulling — editor auto-imports all SVGs into `.godot/imported/`
+
+### Next Priorities (Run 5) (was Run 4)
 1. **Sounds** — Even a minimal audio pass: hit, kill, move, ability sounds (use Godot's AudioStreamGenerator or import simple beeps)
 2. **Class abilities tab on upgrade screen** — the Level-up screen currently only shows stat upgrades; add a "NEW ABILITY" option so hero can unlock fireball/backstab/etc. mid-run
 3. **Pushback mechanic** — the Brawler class should have a "Shield Bash" that pushes enemies toward lava; makes lava truly tactical

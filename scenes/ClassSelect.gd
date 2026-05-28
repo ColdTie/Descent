@@ -32,11 +32,23 @@ func _make_class_card(class_id: String) -> PanelContainer:
 	var vbox := VBoxContainer.new()
 	panel.add_child(vbox)
 
-	# Color swatch as class icon
-	var swatch := ColorRect.new()
-	swatch.custom_minimum_size = Vector2(CARD_WIDTH - 20.0, 60.0)
-	swatch.color = cls.get("icon_color", Color.GRAY)
-	vbox.add_child(swatch)
+	# Hero portrait sprite or color swatch fallback
+	var portrait_path: String = "res://assets/sprites/hero_%s.svg" % class_id
+	var portrait_tex: Texture2D = null
+	if ResourceLoader.exists(portrait_path):
+		portrait_tex = load(portrait_path) as Texture2D
+	if portrait_tex != null:
+		var portrait := TextureRect.new()
+		portrait.custom_minimum_size = Vector2(CARD_WIDTH - 20.0, 80.0)
+		portrait.texture = portrait_tex
+		portrait.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		portrait.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		vbox.add_child(portrait)
+	else:
+		var swatch := ColorRect.new()
+		swatch.custom_minimum_size = Vector2(CARD_WIDTH - 20.0, 60.0)
+		swatch.color = cls.get("icon_color", Color.GRAY)
+		vbox.add_child(swatch)
 
 	# Class name
 	var name_label := Label.new()

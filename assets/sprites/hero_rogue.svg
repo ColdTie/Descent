@@ -1,0 +1,46 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <!-- Shadow -->
+  <ellipse cx="32" cy="61" rx="14" ry="3" fill="#000" opacity="0.25"/>
+  <!-- Cloak body -->
+  <path d="M16,38 Q12,52 15,64 L49,64 Q52,52 48,38 Q40,42 32,41 Q24,42 16,38Z" fill="#1E1038"/>
+  <!-- Cloak highlight center fold -->
+  <path d="M32,41 Q24,42 16,38 L18,54 Q25,52 32,53 Q39,52 46,54 L48,38 Q40,42 32,41Z" fill="#2A1850"/>
+  <!-- Hood outer -->
+  <ellipse cx="32" cy="22" rx="15" ry="14" fill="#150C28"/>
+  <!-- Hood -->
+  <ellipse cx="32" cy="21" rx="13" ry="12" fill="#1E1038"/>
+  <!-- Hood shadow interior -->
+  <ellipse cx="32" cy="23" rx="10" ry="10" fill="#150C28"/>
+  <!-- Face -->
+  <ellipse cx="32" cy="25" rx="8" ry="9" fill="#B07850"/>
+  <!-- Upper shadow on brow -->
+  <ellipse cx="32" cy="19" rx="9" ry="6" fill="#150C28" opacity="0.75"/>
+  <!-- Eyes - gleaming amber from shadow -->
+  <circle cx="28" cy="24" r="2.2" fill="#E8A020"/>
+  <circle cx="36" cy="24" r="2.2" fill="#E8A020"/>
+  <circle cx="28" cy="24" r="1.1" fill="#0A0A0A"/>
+  <circle cx="36" cy="24" r="1.1" fill="#0A0A0A"/>
+  <circle cx="27.5" cy="23.5" r="0.6" fill="#FFE880" opacity="0.9"/>
+  <circle cx="35.5" cy="23.5" r="0.6" fill="#FFE880" opacity="0.9"/>
+  <!-- Scarf -->
+  <path d="M22,32 Q32,35 42,32" stroke="#2A1A50" stroke-width="2.5" fill="none"/>
+  <!-- Left dagger blade -->
+  <rect x="9" y="30" width="3" height="20" rx="1.5" fill="#D0D0E8"/>
+  <!-- Left dagger fuller -->
+  <rect x="10.5" y="32" width="1" height="16" rx="0.5" fill="#EAEAF8" opacity="0.6"/>
+  <!-- Left crossguard -->
+  <rect x="7" y="29" width="7" height="2.5" rx="1" fill="#8A7030"/>
+  <!-- Left handle -->
+  <rect x="9" y="25" width="3" height="5" rx="1" fill="#6A5028"/>
+  <!-- Right dagger blade -->
+  <rect x="52" y="30" width="3" height="20" rx="1.5" fill="#D0D0E8"/>
+  <!-- Right dagger fuller -->
+  <rect x="53.5" y="32" width="1" height="16" rx="0.5" fill="#EAEAF8" opacity="0.6"/>
+  <!-- Right crossguard -->
+  <rect x="50" y="29" width="7" height="2.5" rx="1" fill="#8A7030"/>
+  <!-- Right handle -->
+  <rect x="52" y="25" width="3" height="5" rx="1" fill="#6A5028"/>
+  <!-- Subtle green poison on blades -->
+  <rect x="9" y="44" width="3" height="5" rx="1" fill="#40A020" opacity="0.4"/>
+  <rect x="52" y="44" width="3" height="5" rx="1" fill="#40A020" opacity="0.4"/>
+</svg>

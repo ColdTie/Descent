@@ -1,0 +1,55 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <!-- Lava ambient glow -->
+  <circle cx="32" cy="36" r="32" fill="#FF4000" opacity="0.1"/>
+  <circle cx="32" cy="36" r="24" fill="#FF6000" opacity="0.07"/>
+  <!-- Shadow -->
+  <ellipse cx="32" cy="62" rx="19" ry="4.5" fill="#000" opacity="0.38"/>
+  <!-- Body rock - massive -->
+  <rect x="13" y="30" width="38" height="30" rx="7" fill="#4A3C2C"/>
+  <!-- Body rock facets -->
+  <path d="M13,30 L8,26 L16,28 Z" fill="#3A2C1C"/>
+  <path d="M51,30 L56,26 L48,28 Z" fill="#3A2C1C"/>
+  <!-- Rock chips bottom -->
+  <rect x="16" y="55" width="10" height="5" rx="2" fill="#3A2C1C"/>
+  <rect x="38" y="55" width="10" height="5" rx="2" fill="#3A2C1C"/>
+  <!-- Head rock block -->
+  <rect x="17" y="9" width="30" height="25" rx="6" fill="#5A4C3C"/>
+  <!-- Head rock top chips -->
+  <path d="M20,9 L17,5 L24,9 Z" fill="#3A2C1C"/>
+  <path d="M44,9 L47,5 L40,9 Z" fill="#3A2C1C"/>
+  <!-- Eye lava pools -->
+  <ellipse cx="26" cy="20" rx="6" ry="5" fill="#AA1800"/>
+  <ellipse cx="38" cy="20" rx="6" ry="5" fill="#AA1800"/>
+  <ellipse cx="26" cy="20" rx="4" ry="3.5" fill="#FF4000"/>
+  <ellipse cx="38" cy="20" rx="4" ry="3.5" fill="#FF4000"/>
+  <ellipse cx="26" cy="20" rx="2" ry="2" fill="#FFCC00"/>
+  <ellipse cx="38" cy="20" rx="2" ry="2" fill="#FFCC00"/>
+  <!-- Head lava cracks -->
+  <path d="M22,11 Q26,18 24,27" stroke="#FF5000" stroke-width="2" fill="none" opacity="0.95"/>
+  <path d="M42,11 Q38,18 40,27" stroke="#FF4000" stroke-width="2" fill="none" opacity="0.95"/>
+  <!-- Mouth slit glowing -->
+  <rect x="23" y="28" width="18" height="3" rx="1" fill="#880E00"/>
+  <rect x="25" y="29" width="14" height="1" rx="0.5" fill="#FF4000" opacity="0.7"/>
+  <!-- Body lava cracks -->
+  <path d="M20,32 Q24,40 22,50 Q20,56 22,59" stroke="#FF5000" stroke-width="2" fill="none" opacity="0.9"/>
+  <path d="M32,30 Q36,40 33,50 Q30,56 34,59" stroke="#FF6000" stroke-width="2.5" fill="none" opacity="0.9"/>
+  <path d="M44,32 Q40,42 42,52 Q44,56 42,59" stroke="#FF4000" stroke-width="2" fill="none" opacity="0.9"/>
+  <!-- Cross crack -->
+  <path d="M22,44 Q32,46 42,44" stroke="#FF5000" stroke-width="1.5" fill="none" opacity="0.7"/>
+  <!-- Lava glow spots -->
+  <circle cx="26" cy="42" r="2.5" fill="#FF4000" opacity="0.75"/>
+  <circle cx="38" cy="46" r="2.2" fill="#FF6000" opacity="0.65"/>
+  <circle cx="32" cy="52" r="2" fill="#FF5000" opacity="0.7"/>
+  <!-- Arms - rock slabs -->
+  <rect x="2" y="30" width="14" height="24" rx="5" fill="#4A3C2C"/>
+  <rect x="48" y="30" width="14" height="24" rx="5" fill="#4A3C2C"/>
+  <!-- Arm cracks -->
+  <path d="M4,34 Q6,42 4,52" stroke="#FF4000" stroke-width="1.2" fill="none" opacity="0.75"/>
+  <path d="M60,34 Q58,42 60,52" stroke="#FF4000" stroke-width="1.2" fill="none" opacity="0.75"/>
+  <!-- Rock fists -->
+  <rect x="1" y="53" width="16" height="11" rx="4" fill="#3A2C1C"/>
+  <rect x="47" y="53" width="16" height="11" rx="4" fill="#3A2C1C"/>
+  <!-- Fist cracks -->
+  <path d="M4,56 L8,62" stroke="#FF5000" stroke-width="1.5" fill="none" opacity="0.7"/>
+  <path d="M56,56 L60,62" stroke="#FF5000" stroke-width="1.5" fill="none" opacity="0.7"/>
+</svg>

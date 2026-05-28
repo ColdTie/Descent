@@ -220,25 +220,32 @@ func _spawn_entity_node(c: Combatant) -> void:
 	var root := Node2D.new()
 	root.position = HexGrid.hex_to_pixel(c.position, HEX_SIZE)
 
-	# Body hex — class-colored for hero, enemy color for foes
-	var body := Polygon2D.new()
-	body.polygon = _make_hex_pts(HEX_SIZE * 0.42)
-	if c.faction == Combatant.Faction.HERO:
-		body.color = _hero_class_color()
+	# Sprite — or fallback to colored hex + glyph if assets not yet imported
+	var sprite_path: String = _get_sprite_path(c)
+	var sprite_tex: Texture2D = null
+	if ResourceLoader.exists(sprite_path):
+		sprite_tex = load(sprite_path) as Texture2D
+	if sprite_tex != null:
+		var sprite := Sprite2D.new()
+		sprite.texture = sprite_tex
+		sprite.scale = Vector2(0.58, 0.58)
+		sprite.position = Vector2(0.0, -6.0)
+		root.add_child(sprite)
 	else:
-		body.color = ENEMY_COLOR
-	root.add_child(body)
-
-	# Class silhouette symbol or enemy type icon
-	var lbl := Label.new()
-	lbl.text = _entity_glyph(c)
-	lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	lbl.add_theme_font_size_override("font_size", 15)
-	lbl.add_theme_color_override("font_color", Color.WHITE)
-	lbl.size = Vector2(24.0, 24.0)
-	lbl.position = Vector2(-12.0, -12.0)
-	root.add_child(lbl)
+		# Fallback: colored hex + glyph (used before Godot imports the assets)
+		var body := Polygon2D.new()
+		body.polygon = _make_hex_pts(HEX_SIZE * 0.42)
+		body.color = _hero_class_color() if c.faction == Combatant.Faction.HERO else ENEMY_COLOR
+		root.add_child(body)
+		var lbl := Label.new()
+		lbl.text = _entity_glyph(c)
+		lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		lbl.add_theme_font_size_override("font_size", 15)
+		lbl.add_theme_color_override("font_color", Color.WHITE)
+		lbl.size = Vector2(24.0, 24.0)
+		lbl.position = Vector2(-12.0, -12.0)
+		root.add_child(lbl)
 
 	# HP bar background
 	var hp_bg := ColorRect.new()
@@ -269,6 +276,11 @@ func _spawn_entity_node(c: Combatant) -> void:
 func _hero_class_color() -> Color:
 	var cls_data: Dictionary = Classes.get_class_data(GameState.hero_class)
 	return cls_data.get("icon_color", HERO_COLOR)
+
+func _get_sprite_path(c: Combatant) -> String:
+	if c.faction == Combatant.Faction.HERO:
+		return "res://assets/sprites/hero_%s.svg" % GameState.hero_class
+	return "res://assets/sprites/enemy_%s.svg" % c.sprite_key
 
 func _entity_glyph(c: Combatant) -> String:
 	if c.faction == Combatant.Faction.HERO:

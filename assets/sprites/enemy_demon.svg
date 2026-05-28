@@ -1,0 +1,54 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <!-- Hell aura -->
+  <circle cx="32" cy="36" r="30" fill="#400000" opacity="0.18"/>
+  <!-- Shadow -->
+  <ellipse cx="32" cy="62" rx="17" ry="4" fill="#000" opacity="0.35"/>
+  <!-- Horns - large curved -->
+  <path d="M21,17 Q8,4 14,16" stroke="#1A0808" stroke-width="6" fill="none" stroke-linecap="round"/>
+  <path d="M43,17 Q56,4 50,16" stroke="#1A0808" stroke-width="6" fill="none" stroke-linecap="round"/>
+  <!-- Horn sheen -->
+  <path d="M22,17 Q11,6 17,16" stroke="#3A1010" stroke-width="2" fill="none" stroke-linecap="round"/>
+  <path d="M42,17 Q53,6 47,16" stroke="#3A1010" stroke-width="2" fill="none" stroke-linecap="round"/>
+  <!-- Head - broad brutal -->
+  <rect x="17" y="14" width="30" height="24" rx="7" fill="#7A1818"/>
+  <!-- Brow ridge -->
+  <rect x="17" y="14" width="30" height="9" rx="7" fill="#8A2020"/>
+  <!-- Eyes - fiery -->
+  <ellipse cx="26" cy="23" rx="5" ry="4" fill="#FF5000"/>
+  <ellipse cx="38" cy="23" rx="5" ry="4" fill="#FF5000"/>
+  <ellipse cx="26" cy="23" rx="3" ry="2.5" fill="#FF1800"/>
+  <ellipse cx="38" cy="23" rx="3" ry="2.5" fill="#FF1800"/>
+  <ellipse cx="26" cy="23" rx="1.5" ry="1.5" fill="#FFAA00"/>
+  <ellipse cx="38" cy="23" rx="1.5" ry="1.5" fill="#FFAA00"/>
+  <!-- Flat nose -->
+  <rect x="29" y="28" width="6" height="5" rx="2" fill="#6A1010"/>
+  <circle cx="30.5" cy="31" r="1" fill="#580808"/>
+  <circle cx="33.5" cy="31" r="1" fill="#580808"/>
+  <!-- Snarl -->
+  <path d="M20,33 Q32,39 44,33" stroke="#3A0808" stroke-width="2.5" fill="none"/>
+  <!-- Fangs -->
+  <rect x="23" y="33" width="3.5" height="5" rx="1" fill="#D8D8C0"/>
+  <rect x="28.5" y="34" width="4" height="4" rx="1" fill="#D8D8C0"/>
+  <rect x="33.5" y="34" width="4" height="4" rx="1" fill="#D8D8C0"/>
+  <rect x="39.5" y="33" width="3.5" height="5" rx="1" fill="#D8D8C0"/>
+  <!-- Neck -->
+  <rect x="24" y="36" width="16" height="5" rx="3" fill="#7A1818"/>
+  <!-- Massive torso -->
+  <rect x="10" y="38" width="44" height="20" rx="6" fill="#6A1414"/>
+  <rect x="10" y="38" width="44" height="8" rx="6" fill="#7A1A1A"/>
+  <!-- Battle scars -->
+  <path d="M22,42 L26,50" stroke="#4A0808" stroke-width="1.5" fill="none" opacity="0.7"/>
+  <path d="M38,42 L42,50" stroke="#4A0808" stroke-width="1.5" fill="none" opacity="0.7"/>
+  <path d="M30,40 L32,55" stroke="#4A0808" stroke-width="1" fill="none" opacity="0.4"/>
+  <!-- Left arm massive -->
+  <rect x="2" y="36" width="13" height="20" rx="6" fill="#7A1414"/>
+  <!-- Right arm -->
+  <rect x="49" y="36" width="13" height="20" rx="6" fill="#7A1414"/>
+  <!-- Left claws -->
+  <path d="M2,56 L0,63 M5,57 L4,63 M8,57 L8,63 M11,57 L12,63" stroke="#580808" stroke-width="2" stroke-linecap="round"/>
+  <!-- Right claws -->
+  <path d="M62,56 L64,63 M59,57 L60,63 M56,57 L56,63 M53,57 L52,63" stroke="#580808" stroke-width="2" stroke-linecap="round"/>
+  <!-- Thick legs -->
+  <rect x="16" y="57" width="13" height="7" rx="3" fill="#5A1010"/>
+  <rect x="35" y="57" width="13" height="7" rx="3" fill="#5A1010"/>
+</svg>
