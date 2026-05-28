@@ -38,6 +38,8 @@ var _selected_ability: String = "basic_attack"
 var _player_turn: bool = false
 var _battle_rng: RandomNumberGenerator
 var _enemies_killed: int = 0
+var _boss: Combatant = null
+var _boss_hp_fill: ColorRect = null
 
 @onready var _hex_layer: Node2D = $HexLayer
 @onready var _entity_layer: Node2D = $EntityLayer
@@ -49,7 +51,7 @@ var _enemies_killed: int = 0
 @onready var _hero_hp_label: Label = $UILayer/HeroHPLabel
 
 func _ready() -> void:
-	_floor_label.text = "Floor %d" % GameState.floor_num
+	_floor_label.text = "Floor %d / %d" % [GameState.floor_num, GameState.TOTAL_FLOORS]
 	SystemVoice.line_spoken.connect(_on_system_line)
 	_build_encounter()
 	_draw_cave_background()
@@ -57,6 +59,7 @@ func _ready() -> void:
 	_draw_stalagmites()
 	_draw_entities()
 	_build_ability_bar()
+	_build_boss_hp_bar()
 	_update_hero_hp_label()
 	SystemVoice.speak("floor_enter", [GameState.floor_num])
 	await get_tree().create_timer(0.4).timeout
@@ -101,8 +104,15 @@ func _build_encounter() -> void:
 		_hero_ability_objs[ability_id] = abl_obj
 
 	_enemies.clear()
+	# Spawn boss at dedicated boss spawn point
+	var boss: Combatant = EnemyDefs.make_boss(GameState.floor_num, _map.boss_spawn, _battle_rng)
+	_enemies.append(boss)
+
 	var pool: Array[Dictionary] = EnemyDefs.get_enemies_for_floor(GameState.floor_num)
 	for i: int in range(_map.spawn_points.size()):
+		# Skip the boss_spawn if a regular enemy would land on it
+		if _map.spawn_points[i] == _map.boss_spawn:
+			continue
 		var def: Dictionary = pool[_battle_rng.randi_range(0, pool.size() - 1)]
 		# Pass floor_num for scaling
 		var e: Combatant = EnemyDefs.make_combatant(def, _map.spawn_points[i], _battle_rng, GameState.floor_num)
@@ -225,24 +235,32 @@ func _spawn_entity_node(c: Combatant) -> void:
 	var sprite_tex: Texture2D = null
 	if ResourceLoader.exists(sprite_path):
 		sprite_tex = load(sprite_path) as Texture2D
+	var is_boss: bool = c.sprite_key == "boss"
 	if sprite_tex != null:
 		var sprite := Sprite2D.new()
 		sprite.texture = sprite_tex
-		sprite.scale = Vector2(0.58, 0.58)
+		var sprite_scale: float = 0.85 if is_boss else 0.58
+		sprite.scale = Vector2(sprite_scale, sprite_scale)
 		sprite.position = Vector2(0.0, -6.0)
 		root.add_child(sprite)
 	else:
 		# Fallback: colored hex + glyph (used before Godot imports the assets)
 		var body := Polygon2D.new()
-		body.polygon = _make_hex_pts(HEX_SIZE * 0.42)
-		body.color = _hero_class_color() if c.faction == Combatant.Faction.HERO else ENEMY_COLOR
+		var body_size: float = HEX_SIZE * (0.55 if is_boss else 0.42)
+		body.polygon = _make_hex_pts(body_size)
+		if is_boss:
+			body.color = Color(0.5, 0.0, 0.7)
+		elif c.faction == Combatant.Faction.HERO:
+			body.color = _hero_class_color()
+		else:
+			body.color = ENEMY_COLOR
 		root.add_child(body)
 		var lbl := Label.new()
 		lbl.text = _entity_glyph(c)
 		lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-		lbl.add_theme_font_size_override("font_size", 15)
-		lbl.add_theme_color_override("font_color", Color.WHITE)
+		lbl.add_theme_font_size_override("font_size", 15 if not is_boss else 20)
+		lbl.add_theme_color_override("font_color", Color(1.0, 0.85, 0.0) if is_boss else Color.WHITE)
 		lbl.size = Vector2(24.0, 24.0)
 		lbl.position = Vector2(-12.0, -12.0)
 		root.add_child(lbl)
@@ -279,8 +297,8 @@ func _hero_class_color() -> Color:
 
 func _get_sprite_path(c: Combatant) -> String:
 	if c.faction == Combatant.Faction.HERO:
-		return "res://assets/sprites/hero_%s.svg" % GameState.hero_class
-	return "res://assets/sprites/enemy_%s.svg" % c.sprite_key
+		return "res://assets/sprites/hero_%s.png" % GameState.hero_class
+	return "res://assets/sprites/enemy_%s.png" % c.sprite_key
 
 func _entity_glyph(c: Combatant) -> String:
 	if c.faction == Combatant.Faction.HERO:
@@ -296,7 +314,53 @@ func _entity_glyph(c: Combatant) -> String:
 		"skeleton":return "💀"
 		"demon":   return "D"
 		"golem":   return "⬡"
+		"boss":    return "♛"
 	return c.display_name.left(1).to_upper()
+
+## ─── Boss HP Bar ──────────────────────────────────────────────────────────────
+
+func _build_boss_hp_bar() -> void:
+	## Find the boss combatant and build a top-center HP bar for it.
+	for e: Combatant in _enemies:
+		if e.sprite_key == "boss":
+			_boss = e
+			break
+	if _boss == null:
+		return
+
+	var ui: CanvasLayer = $UILayer
+	var bar_w: float = 400.0
+
+	# Label
+	var name_lbl := Label.new()
+	name_lbl.text = "⚠ %s ⚠" % _boss.display_name
+	name_lbl.position = Vector2(640.0 - bar_w / 2.0, 70.0)
+	name_lbl.custom_minimum_size = Vector2(bar_w, 0.0)
+	name_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	name_lbl.add_theme_font_size_override("font_size", 13)
+	name_lbl.add_theme_color_override("font_color", Color(0.9, 0.3, 0.9))
+	ui.add_child(name_lbl)
+
+	# Background
+	var bg := ColorRect.new()
+	bg.position = Vector2(640.0 - bar_w / 2.0, 88.0)
+	bg.size = Vector2(bar_w, 12.0)
+	bg.color = Color(0.2, 0.0, 0.2)
+	ui.add_child(bg)
+
+	# Fill
+	_boss_hp_fill = ColorRect.new()
+	_boss_hp_fill.position = Vector2(640.0 - bar_w / 2.0, 88.0)
+	_boss_hp_fill.size = Vector2(bar_w, 12.0)
+	_boss_hp_fill.color = Color(0.7, 0.1, 0.8)
+	ui.add_child(_boss_hp_fill)
+
+func _update_boss_hp_bar() -> void:
+	if _boss == null or _boss_hp_fill == null:
+		return
+	var ratio: float = float(_boss.hp) / float(max(1, _boss.max_hp))
+	_boss_hp_fill.size.x = 400.0 * clampf(ratio, 0.0, 1.0)
+	_boss_hp_fill.color = Color(0.7 - ratio * 0.3, 0.1 + ratio * 0.1, 0.8 - ratio * 0.4)
 
 ## ─── Ability Bar ──────────────────────────────────────────────────────────────
 
@@ -713,6 +777,7 @@ func _on_action_taken(_attacker: Combatant, target: Combatant, damage: int, _abi
 	_show_damage_number(target, damage)
 	_update_hp_bar(target)
 	_update_status_label(target)
+	_update_boss_hp_bar()
 
 func _on_combatant_died(c: Combatant) -> void:
 	if c.faction == Combatant.Faction.ENEMY:
@@ -730,6 +795,8 @@ func _on_status_ticked(c: Combatant, damage: int) -> void:
 	if damage > 0:
 		_show_damage_number(c, damage, Color(1.0, 0.5, 0.0))
 	_update_status_label(c)
+	if c.faction == Combatant.Faction.HERO:
+		_sync_hero_alpha()
 
 func _on_hero_moved(_combatant: Combatant, _from_hex: Vector2i, to_hex: Vector2i) -> void:
 	## Animate hero node to new position
@@ -850,6 +917,8 @@ func _update_all_hp_bars() -> void:
 	for c: Combatant in _all_combatants:
 		_update_hp_bar(c)
 		_update_status_label(c)
+	_update_boss_hp_bar()
+	_sync_hero_alpha()
 
 func _update_hp_bar(c: Combatant) -> void:
 	var node: Node2D = _entity_nodes.get(c.id)
@@ -884,6 +953,21 @@ func _update_hero_hp_label() -> void:
 	var ratio: float = float(_hero.hp) / float(max(1, _hero.max_hp))
 	_hero_hp_label.add_theme_color_override("font_color",
 		Color(1.0 - ratio * 0.7, 0.2 + ratio * 0.7, 0.1))
+
+func _sync_hero_alpha() -> void:
+	## Restore hero's alpha to 1.0 when vanish has expired.
+	var hnode: Node2D = _entity_nodes.get(_hero.id)
+	if hnode == null:
+		return
+	var is_vanished: bool = false
+	for eff: Dictionary in _hero.status_effects:
+		if eff.get("id", "") == "vanished":
+			is_vanished = true
+			break
+	var target_alpha: float = 0.3 if is_vanished else 1.0
+	if abs(hnode.modulate.a - target_alpha) > 0.05:
+		var tw: Tween = create_tween()
+		tw.tween_property(hnode, "modulate:a", target_alpha, 0.25)
 
 func _show_damage_number(c: Combatant, damage: int, color: Color = Color(1.0, 0.25, 0.1)) -> void:
 	var node: Node2D = _entity_nodes.get(c.id)

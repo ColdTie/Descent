@@ -17,6 +17,7 @@ var hero_abilities: Array[String] = []
 var hero_base_stats: Dictionary = {}
 
 const XP_PER_LEVEL: int = 100
+const TOTAL_FLOORS: int = 18
 
 func start_run(class_id: String, seed_val: int = -1) -> void:
 	if seed_val < 0:
@@ -54,3 +55,9 @@ func take_damage(amount: int) -> void:
 
 func heal(amount: int) -> void:
 	hero_hp = min(hero_max_hp, hero_hp + amount)
+
+func regen_between_floors() -> int:
+	var regen: int = max(5, hero_max_hp / 10)
+	var old_hp: int = hero_hp
+	hero_hp = min(hero_max_hp, hero_hp + regen)
+	return hero_hp - old_hp

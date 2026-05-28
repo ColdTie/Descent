@@ -70,6 +70,20 @@ DESCENT is a turn-based tactical dungeon crawler in the spirit of **Dungeon Craw
 - **`apply_environment_damage`** on BattleEngine — deals armor-ignoring damage for lava/env hazards
 - **109 headless tests** — all passing: RNG (5), Hex (13), Combat (27), Movement+Abilities (24), Run3 (40)
 
+**Run 5 (Sprites + Boss + 18 Floors + Vanish Fix):**
+- **PNG sprites** — all 9 characters (hero_brawler, hero_rogue, hero_arcanist + 5 enemy types + enemy_boss) generated via `tools/gen_sprites.py`; PNG works headlessly without editor import
+- **Boss system** — `EnemyDefs.BOSSES[]` + `get_boss_for_floor()` + `make_boss()`; 3 tier bosses: Dungeon Lord (1-6), The Warden (7-12), Abyss Keeper (13-18); spawns at `DungeonMap.boss_spawn` (southern hex ring)
+- **18 floors** — `GameState.TOTAL_FLOORS = 18`; win condition in `Main._on_loot_chosen()` routes to WinScreen when floor_num >= TOTAL_FLOORS
+- **WinScreen** — "YOU WIN" screen with reluctant-System quips, run stats, "Play Again" button
+- **Floor progress label** — "Floor X / 18" in HUD
+- **Boss HP bar** — top-center purple HP bar showing boss health during battle
+- **Vanish fixed (3 bugs):**
+  1. `StatusEffect.vanished()` duration: 1 → 3 (hero can actually attack while invisible)
+  2. `BattleEngine.enemy_ai_action()` now checks for vanished hero — enemies idle if all heroes vanished
+  3. `BattleScene._sync_hero_alpha()` — restores hero alpha to 1.0 when vanish expires
+- **HP regen between floors** — `GameState.regen_between_floors()` heals 10% max HP between floors
+- **deploy.yml** — added `godot --headless --import` step before export so PNG assets are imported
+
 **Run 4 (Sprites + Visual Upgrade):**
 - **SVG sprites** for all 3 hero classes and 5 enemy types in `assets/sprites/`
   - Heroes: `hero_brawler.svg`, `hero_rogue.svg`, `hero_arcanist.svg`

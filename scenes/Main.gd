@@ -6,6 +6,7 @@ const BATTLE_SCENE := "res://scenes/BattleScene.tscn"
 const VICTORY_SCENE := "res://scenes/VictoryScreen.tscn"
 const LOOT_SCENE := "res://scenes/LootScreen.tscn"
 const LEVEL_UP_SCENE := "res://scenes/LevelUp.tscn"
+const WIN_SCENE := "res://scenes/WinScreen.tscn"
 
 var _current_scene: Node = null
 # Pending data from the last battle, used to pass to VictoryScreen
@@ -54,6 +55,8 @@ func _load_scene(path: String) -> void:
 		_current_scene.loot_chosen.connect(_on_loot_chosen)
 	if _current_scene.has_signal("upgrade_chosen"):
 		_current_scene.upgrade_chosen.connect(_on_upgrade_chosen)
+	if _current_scene.has_signal("play_again"):
+		_current_scene.play_again.connect(_go_to_class_select)
 
 func _on_battle_complete(hero_won: bool, xp_earned: int, enemies_killed: int) -> void:
 	if not hero_won:
@@ -78,4 +81,10 @@ func _on_upgrade_chosen(_upgrade_id: String) -> void:
 	_load_scene(LOOT_SCENE)
 
 func _on_loot_chosen(_loot_id: String) -> void:
+	# Check win condition before descending
+	if GameState.floor_num >= GameState.TOTAL_FLOORS:
+		_load_scene(WIN_SCENE)
+		return
+	# Small HP regen between floors
+	GameState.regen_between_floors()
 	GameState.descend()

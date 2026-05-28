@@ -35,6 +35,10 @@ jobs:
           mv templates/web* ~/.local/share/godot/export_templates/4.4.1.stable/
           rm -rf templates templates.tpz
 
+      - name: Import project assets
+        run: |
+          godot --headless --import || true
+
       - name: Export project to Web
         run: |
           mkdir -p build/web

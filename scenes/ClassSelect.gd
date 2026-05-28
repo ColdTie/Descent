@@ -33,7 +33,7 @@ func _make_class_card(class_id: String) -> PanelContainer:
 	panel.add_child(vbox)
 
 	# Hero portrait sprite or color swatch fallback
-	var portrait_path: String = "res://assets/sprites/hero_%s.svg" % class_id
+	var portrait_path: String = "res://assets/sprites/hero_%s.png" % class_id
 	var portrait_tex: Texture2D = null
 	if ResourceLoader.exists(portrait_path):
 		portrait_tex = load(portrait_path) as Texture2D

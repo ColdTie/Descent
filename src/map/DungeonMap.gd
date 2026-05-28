@@ -9,6 +9,7 @@ var tile_types: Dictionary = {} # Vector2i -> String ("floor","lava","wall")
 var spawn_points: Array[Vector2i] = []
 var hero_start: Vector2i = Vector2i.ZERO
 var exit_pos: Vector2i = Vector2i.ZERO
+var boss_spawn: Vector2i = Vector2i.ZERO
 
 func generate(p_floor: int, rng: RandomNumberGenerator) -> void:
 	floor_num = p_floor
@@ -51,6 +52,18 @@ func generate(p_floor: int, rng: RandomNumberGenerator) -> void:
 	exit_pos = Vector2i(0, -(radius - 1))
 	if tile_types.get(exit_pos, "lava") == "lava":
 		exit_pos = Vector2i(radius - 1, 0)
+
+	# Boss spawn at the southern ring position (opposite the exit)
+	var boss_candidates: Array[Vector2i] = [
+		Vector2i(0, radius - 1),
+		Vector2i(-(radius - 1), radius - 1),
+		Vector2i(radius - 1, 0),
+	]
+	boss_spawn = boss_candidates[0]
+	for candidate: Vector2i in boss_candidates:
+		if tile_types.get(candidate, "lava") == "floor":
+			boss_spawn = candidate
+			break
 
 ## Fisher-Yates shuffle for typed Array[Vector2i] using a seeded rng
 func _shuffle_vec2i(arr: Array[Vector2i], rng: RandomNumberGenerator) -> void:

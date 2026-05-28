@@ -143,7 +143,17 @@ func enemy_ai_action(enemy: Combatant, map: DungeonMap = null) -> void:
 	)
 	if heroes.is_empty():
 		return
-	var target: Combatant = heroes[0]
+	# Vanished heroes are invisible — enemies skip their turn rather than targeting them
+	var visible_heroes: Array[Combatant] = heroes.filter(
+		func(c: Combatant) -> bool:
+			for eff: Dictionary in c.status_effects:
+				if eff.get("id", "") == "vanished":
+					return false
+			return true
+	)
+	if visible_heroes.is_empty():
+		return  # all heroes vanished — enemy idles
+	var target: Combatant = visible_heroes[0]
 
 	match enemy.sprite_key:
 		"golem":
