@@ -31,7 +31,10 @@ func start_run(class_id: String, seed_val: int = -1) -> void:
 	var cls_data: Dictionary = Classes.get_class_data(class_id)
 	hero_max_hp = cls_data.get("hp", 100)
 	hero_hp = hero_max_hp
-	hero_abilities = cls_data.get("abilities", []).duplicate()
+	var raw_abilities: Array = cls_data.get("abilities", [])
+	hero_abilities.clear()
+	for a: String in raw_abilities:
+		hero_abilities.append(a)
 	hero_base_stats = cls_data.get("stats", {}).duplicate()
 	run_started.emit()
 

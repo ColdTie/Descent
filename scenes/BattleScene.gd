@@ -1,23 +1,25 @@
 extends Node2D
 ## Visual driver for one battle encounter on the hex grid.
-## Run 3: ability charges/cooldowns in HUD, lava heat damage, floor scaling, enemy collision fix.
+## Run 4: Shield Bash push, new abilities, mid-battle commentary, HP regen.
 
 signal battle_complete(hero_won: bool, xp_earned: int, enemies_killed: int)
 
 const HEX_SIZE: float = 38.0
-const HERO_COLOR     := Color(0.25, 0.55, 1.0)
-const ENEMY_COLOR    := Color(0.9, 0.2, 0.15)
-const LAVA_COLOR     := Color(0.82, 0.32, 0.04)
-const FLOOR_COLOR    := Color(0.16, 0.13, 0.19)
-const FLOOR_DARK     := Color(0.10, 0.08, 0.13)
-const SELECTED_CLR   := Color(1.0, 0.9, 0.2)
-const DEAD_MODULATE  := Color(0.35, 0.35, 0.35, 0.4)
-const MOVE_CLR       := Color(0.15, 0.85, 0.35, 0.45)
-const ATTACK_CLR     := Color(0.9, 0.15, 0.05, 0.55)
-const AOE_CLR        := Color(0.9, 0.45, 0.05, 0.35)
-const SELF_CLR       := Color(0.6, 0.3, 0.9, 0.5)
-const FROST_CLR      := Color(0.25, 0.65, 1.0, 0.5)
-const LAVA_HEAT_CLR  := Color(1.0, 0.45, 0.0, 0.9)
+const HERO_COLOR      := Color(0.25, 0.55, 1.0)
+const ENEMY_COLOR     := Color(0.9, 0.2, 0.15)
+const LAVA_COLOR      := Color(0.82, 0.32, 0.04)
+const FLOOR_COLOR     := Color(0.16, 0.13, 0.19)
+const FLOOR_DARK      := Color(0.10, 0.08, 0.13)
+const SELECTED_CLR    := Color(1.0, 0.9, 0.2)
+const DEAD_MODULATE   := Color(0.35, 0.35, 0.35, 0.4)
+const MOVE_CLR        := Color(0.15, 0.85, 0.35, 0.45)
+const ATTACK_CLR      := Color(0.9, 0.15, 0.05, 0.55)
+const AOE_CLR         := Color(0.9, 0.45, 0.05, 0.35)
+const SELF_CLR        := Color(0.6, 0.3, 0.9, 0.5)
+const FROST_CLR       := Color(0.25, 0.65, 1.0, 0.5)
+const LAVA_HEAT_CLR   := Color(1.0, 0.45, 0.0, 0.9)
+const PUSH_CLR        := Color(1.0, 0.6, 0.0, 0.7)
+const LIGHTNING_CLR   := Color(0.55, 0.75, 1.0, 0.85)
 
 var _engine: BattleEngine
 var _map: DungeonMap
@@ -38,6 +40,10 @@ var _selected_ability: String = "basic_attack"
 var _player_turn: bool = false
 var _battle_rng: RandomNumberGenerator
 var _enemies_killed: int = 0
+
+# Mid-battle commentary state
+var _low_hp_warned: bool = false
+var _first_kill_done: bool = false
 
 @onready var _hex_layer: Node2D = $HexLayer
 @onready var _entity_layer: Node2D = $EntityLayer
@@ -108,13 +114,17 @@ func _build_encounter() -> void:
 		var e: Combatant = EnemyDefs.make_combatant(def, _map.spawn_points[i], _battle_rng, GameState.floor_num)
 		_enemies.append(e)
 
-	_all_combatants = [_hero] + _enemies
+	_all_combatants.clear()
+	_all_combatants.append(_hero)
+	for e: Combatant in _enemies:
+		_all_combatants.append(e)
 	_engine = BattleEngine.new(_battle_rng)
 	_engine.battle_ended.connect(_on_battle_ended)
 	_engine.action_taken.connect(_on_action_taken)
 	_engine.combatant_died.connect(_on_combatant_died)
 	_engine.status_ticked.connect(_on_status_ticked)
 	_engine.hero_moved.connect(_on_hero_moved)
+	_engine.combatant_pushed.connect(_on_combatant_pushed)
 	_engine.setup(_all_combatants)
 
 ## ─── Cave Atmosphere ──────────────────────────────────────────────────────────
@@ -373,6 +383,7 @@ func _next_turn() -> void:
 		_turn_indicator.add_theme_color_override("font_color", Color(0.35, 1.0, 0.35))
 		_update_highlights()
 		_update_hero_hp_label()
+		_check_surrounded_commentary()
 	else:
 		# Apply lava heat to enemies too — makes lava tactically meaningful
 		_apply_lava_heat(active)
@@ -485,7 +496,6 @@ func _do_hero_move(hex: Vector2i) -> void:
 	_next_turn()
 
 func _do_hero_attack(target: Combatant) -> void:
-	# Check cooldown/charges before attacking
 	var abl_obj: Ability = _hero_ability_objs.get(_selected_ability)
 	if abl_obj != null and not abl_obj.can_use():
 		_show_system_banner("Ability on cooldown! The System suggests a different strategy.", 1.8)
@@ -493,9 +503,36 @@ func _do_hero_attack(target: Combatant) -> void:
 
 	_player_turn = false
 	_clear_highlights()
-	_engine.perform_attack(_hero, target, _selected_ability)
-	SystemVoice.speak("hit")
-	# Consume the charge
+
+	match _selected_ability:
+		"shield_bash":
+			var result: Dictionary = _engine.perform_push_attack(_hero, target, "shield_bash", _map)
+			if result["lava_bounce"]:
+				SystemVoice.speak("shield_bash_lava")
+				_show_damage_number(target, result["lava_damage"], LAVA_HEAT_CLR)
+			else:
+				SystemVoice.speak_direct("Shield Bash! Pushed %d damage. Watch the terrain." % result["damage"])
+			_sync_entity_positions()
+		"chain_lightning":
+			_do_chain_lightning(target)
+		"poison_blade":
+			_engine.perform_attack(_hero, target, "poison_blade")
+			var abl_data: Dictionary = Abilities.get_ability("poison_blade")
+			if target.is_alive():
+				target.apply_status(StatusEffect.poisoned(
+					abl_data.get("poison_duration", 5),
+					abl_data.get("poison_dpt", 3)
+				))
+				SystemVoice.speak_direct("Poison Blade — blade coated, wound applied. It'll keep ticking.")
+			else:
+				SystemVoice.speak("kill")
+		_:
+			_engine.perform_attack(_hero, target, _selected_ability)
+			if _selected_ability == "backstab":
+				SystemVoice.speak("backstab_hit")
+			else:
+				SystemVoice.speak("hit")
+
 	if abl_obj != null:
 		abl_obj.use()
 	_update_all_hp_bars()
@@ -504,6 +541,38 @@ func _do_hero_attack(target: Combatant) -> void:
 	_engine.end_turn()
 	await get_tree().create_timer(0.2).timeout
 	_next_turn()
+
+func _do_chain_lightning(first_target: Combatant) -> void:
+	## Lightning arcs from the first target to up to chain_jumps nearby enemies.
+	var abl: Dictionary = Abilities.get_ability("chain_lightning")
+	var max_jumps: int = abl.get("chain_jumps", 3)
+	var chain_range: int = abl.get("chain_range", 2)
+	var already_hit: Array[String] = []
+	var prev: Combatant = first_target
+	var hit_count: int = 0
+
+	for _i: int in range(max_jumps):
+		if not prev.is_alive():
+			break
+		_engine.perform_attack(_hero, prev, "chain_lightning")
+		already_hit.append(prev.id)
+		hit_count += 1
+		_flash_hex_area(prev.position, 0, LIGHTNING_CLR)
+		# Find the nearest unhit enemy within chain_range of the last hit
+		var next_t: Combatant = null
+		var best_d: int = 99
+		for e: Combatant in _enemies:
+			if e.is_alive() and not already_hit.has(e.id):
+				var d: int = HexGrid.hex_distance(prev.position, e.position)
+				if d <= chain_range and d < best_d:
+					best_d = d
+					next_t = e
+		if next_t == null:
+			break
+		prev = next_t
+
+	SystemVoice.speak("chain_lightning")
+	_show_system_banner("Chain Lightning arced through %d target%s." % [hit_count, "s" if hit_count != 1 else ""], 2.2)
 
 func _do_hero_aoe_ability(center_hex: Vector2i) -> void:
 	## Handles fireball (damage AOE) and frost_nova (freeze AOE)
@@ -576,11 +645,16 @@ func _do_hero_self_ability() -> void:
 		"vanish":
 			_hero.apply_status(StatusEffect.vanished(3.0))
 			SystemVoice.speak_direct("Vanished. Await your moment. Make it count.")
-			# Visual: briefly dim hero node
 			var hnode: Node2D = _entity_nodes.get(_hero.id)
 			if hnode != null:
 				var tw: Tween = create_tween()
 				tw.tween_property(hnode, "modulate:a", 0.3, 0.3)
+		"war_cry":
+			var healed: int = _hero.heal(25)
+			_hero.apply_status(StatusEffect.rallied(3, 8))
+			SystemVoice.speak("war_cry")
+			_flash_hex_area(_hero.position, 1, SELF_CLR)
+			_show_damage_number(_hero, healed, Color(0.2, 1.0, 0.3))
 		_:
 			SystemVoice.speak_direct("Nothing happens. The System is confused too.")
 
@@ -697,22 +771,46 @@ func _clear_highlights() -> void:
 
 ## ─── Engine Signal Handlers ───────────────────────────────────────────────────
 
-func _on_action_taken(_attacker: Combatant, target: Combatant, damage: int, _ability_id: String) -> void:
+func _on_action_taken(attacker: Combatant, target: Combatant, damage: int, ability_id: String) -> void:
 	_show_damage_number(target, damage)
 	_update_hp_bar(target)
 	_update_status_label(target)
+	# Mid-battle: hero hit the player? Update HP display + low-HP warning
+	if attacker.faction == Combatant.Faction.HERO:
+		_update_hero_hp_label()
+	else:
+		# Enemy hit the hero
+		if target.faction == Combatant.Faction.HERO:
+			_update_hero_hp_label()
+	# Suppress unused-var warning — ability_id used in BattleScene context
+	var _ignore: String = ability_id
 
 func _on_combatant_died(c: Combatant) -> void:
 	if c.faction == Combatant.Faction.ENEMY:
-		SystemVoice.speak("kill")
 		_enemies_killed += 1
+		if not _first_kill_done:
+			_first_kill_done = true
+			SystemVoice.speak("first_kill")
+		else:
+			SystemVoice.speak("kill")
 	else:
-		# Hero died — start death overlay after a moment
 		await get_tree().create_timer(0.5).timeout
 		_show_death_overlay()
 	var node: Node2D = _entity_nodes.get(c.id)
 	if node != null:
 		node.modulate = DEAD_MODULATE
+
+func _on_combatant_pushed(c: Combatant, from_hex: Vector2i, to_hex: Vector2i) -> void:
+	## Animate pushed combatant sliding to new position
+	var node: Node2D = _entity_nodes.get(c.id)
+	if node == null:
+		return
+	# Ignore unused params — they're exposed for debugging
+	var _f: Vector2i = from_hex
+	var tw: Tween = create_tween()
+	tw.set_ease(Tween.EASE_OUT)
+	tw.set_trans(Tween.TRANS_QUAD)
+	tw.tween_property(node, "position", HexGrid.hex_to_pixel(to_hex, HEX_SIZE), 0.28)
 
 func _on_status_ticked(c: Combatant, damage: int) -> void:
 	if damage > 0:
@@ -865,6 +963,7 @@ func _update_status_label(c: Combatant) -> void:
 			"poisoned": icons.append("☠")
 			"fortified":icons.append("🛡")
 			"vanished": icons.append("👁")
+			"rallied":  icons.append("⚡")
 	status_lbl.text = " ".join(icons)
 
 func _update_hero_hp_label() -> void:
@@ -872,6 +971,21 @@ func _update_hero_hp_label() -> void:
 	var ratio: float = float(_hero.hp) / float(max(1, _hero.max_hp))
 	_hero_hp_label.add_theme_color_override("font_color",
 		Color(1.0 - ratio * 0.7, 0.2 + ratio * 0.7, 0.1))
+	# Low-HP warning: trigger once per battle when hero drops below 20%
+	if ratio < 0.20 and not _low_hp_warned and _hero.is_alive():
+		_low_hp_warned = true
+		SystemVoice.speak("low_hp")
+
+func _check_surrounded_commentary() -> void:
+	## Emit surrounded quip once per battle when ≥3 enemies are adjacent to the hero.
+	if _first_kill_done:
+		return  # don't re-trigger if they've been killing already
+	var adjacent_enemies: int = 0
+	for e: Combatant in _enemies:
+		if e.is_alive() and HexGrid.hex_distance(_hero.position, e.position) == 1:
+			adjacent_enemies += 1
+	if adjacent_enemies >= 3:
+		SystemVoice.speak("surrounded")
 
 func _show_damage_number(c: Combatant, damage: int, color: Color = Color(1.0, 0.25, 0.1)) -> void:
 	var node: Node2D = _entity_nodes.get(c.id)

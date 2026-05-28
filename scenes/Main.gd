@@ -68,6 +68,8 @@ func _on_battle_complete(hero_won: bool, xp_earned: int, enemies_killed: int) ->
 
 func _on_floor_cleared() -> void:
 	## Called when player clicks "Descend Deeper" on the Victory Screen.
+	# Passive regen between floors — small reward for surviving
+	GameState.heal(8)
 	var leveled_up: bool = GameState.gain_xp(_pending_xp)
 	if leveled_up:
 		_load_scene(LEVEL_UP_SCENE)

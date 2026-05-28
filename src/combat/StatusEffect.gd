@@ -15,3 +15,7 @@ static func fortified(duration: int = 2, armor_bonus: int = 3) -> Dictionary:
 
 static func poisoned(duration: int = 4, dpt: int = 3) -> Dictionary:
 	return {"id": "poisoned", "name": "Poisoned", "duration": duration, "damage_per_turn": dpt, "armor_mod": 0}
+
+static func rallied(duration: int = 3, attack_mod: int = 8) -> Dictionary:
+	## War Cry buff: boosts outgoing damage via attack_mod field for N turns.
+	return {"id": "rallied", "name": "Rallied", "duration": duration, "damage_per_turn": 0, "armor_mod": 0, "attack_mod": attack_mod}
