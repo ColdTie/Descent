@@ -9,6 +9,7 @@ signal combatant_died(combatant: Combatant)
 signal battle_ended(hero_won: bool, xp_earned: int)
 signal status_ticked(combatant: Combatant, damage: int)
 signal hero_moved(combatant: Combatant, from_hex: Vector2i, to_hex: Vector2i)
+signal combatant_pushed(combatant: Combatant, from_hex: Vector2i, to_hex: Vector2i, slammed: bool)
 
 var combatants: Array[Combatant] = []
 var turn_order: Array[Combatant] = []
@@ -246,3 +247,20 @@ func is_combatant_frozen(combatant: Combatant) -> bool:
 		if eff.get("id", "") == "frozen":
 			return true
 	return false
+
+func apply_push(attacker: Combatant, target: Combatant, map: DungeonMap) -> bool:
+	## Push target one hex away from attacker. Returns true if push was blocked (slam).
+	## Slam = target would land on impassable tile or occupied hex.
+	var dir: Vector2i = target.position - attacker.position
+	var push_to: Vector2i = target.position + dir
+	var from_hex: Vector2i = target.position
+	var occupied: bool = false
+	for c: Combatant in combatants:
+		if c.is_alive() and c != target and c.position == push_to:
+			occupied = true
+			break
+	var blocked: bool = not map.is_passable(push_to) or occupied
+	if not blocked:
+		target.position = push_to
+	combatant_pushed.emit(target, from_hex, push_to, blocked)
+	return blocked
