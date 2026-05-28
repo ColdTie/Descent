@@ -9,6 +9,7 @@ signal combatant_died(combatant: Combatant)
 signal battle_ended(hero_won: bool, xp_earned: int)
 signal status_ticked(combatant: Combatant, damage: int)
 signal hero_moved(combatant: Combatant, from_hex: Vector2i, to_hex: Vector2i)
+signal combatant_pushed(pushed: Combatant, from_hex: Vector2i, to_hex: Vector2i, lava_damage: int)
 
 var combatants: Array[Combatant] = []
 var turn_order: Array[Combatant] = []
@@ -109,6 +110,33 @@ func apply_environment_damage(c: Combatant, dmg: int) -> int:
 	if not c.is_alive():
 		_on_combatant_died(c)
 	return actual
+
+func push_combatant(pushed: Combatant, direction: Vector2i, steps: int, map: DungeonMap = null) -> int:
+	## Knock `pushed` in `direction` for up to `steps` hex steps.
+	## Stops on impassable tiles or occupied hexes.
+	## Returns total lava damage dealt (armor-ignoring) during push.
+	var total_lava_dmg: int = 0
+	var from_hex: Vector2i = pushed.position
+	for _i: int in range(steps):
+		var next: Vector2i = pushed.position + direction
+		if map != null and not map.is_passable(next):
+			break
+		var blocked: bool = false
+		for c: Combatant in combatants:
+			if c.is_alive() and c != pushed and c.position == next:
+				blocked = true
+				break
+		if blocked:
+			break
+		pushed.position = next
+		# Lava tile: deal bonus damage from being flung into magma
+		if map != null and map.get_tile_type(pushed.position) == "lava":
+			var lava_dmg: int = 20
+			total_lava_dmg += apply_environment_damage(pushed, lava_dmg)
+			if not pushed.is_alive():
+				break
+	combatant_pushed.emit(pushed, from_hex, pushed.position, total_lava_dmg)
+	return total_lava_dmg
 
 func _calculate_damage(attacker: Combatant, target: Combatant, ability_id: String) -> int:
 	## Returns raw damage before armor reduction.

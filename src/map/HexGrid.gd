@@ -58,6 +58,20 @@ static func ring(center: Vector2i, radius: int) -> Array[Vector2i]:
 			h = h + DIRECTIONS[i]
 	return results
 
+## Return the DIRECTIONS entry most aligned with the vector from `from` to `to`.
+## Used to compute knockback direction for shield bash.
+static func push_direction(from: Vector2i, to: Vector2i) -> Vector2i:
+	var dx: float = float(to.x - from.x)
+	var dy: float = float(to.y - from.y)
+	var best_dir: Vector2i = DIRECTIONS[0]
+	var best_dot: float = -1e30
+	for d: Vector2i in DIRECTIONS:
+		var dot: float = dx * float(d.x) + dy * float(d.y)
+		if dot > best_dot:
+			best_dot = dot
+			best_dir = d
+	return best_dir
+
 ## Generate filled disk of hexes
 static func disk(center: Vector2i, radius: int) -> Array[Vector2i]:
 	var results: Array[Vector2i] = []
