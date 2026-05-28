@@ -1,5 +1,10 @@
 # DESCENT — Developer Guide
 
+## ⚠️ WORKFLOW RULE — ALWAYS PUSH AFTER COMMITTING
+After every `git commit`, immediately run `git push -u origin main`.
+Never end a task with uncommitted or unpushed changes. Verify with `git status` and
+`git log --oneline -3` that the remote is up to date before reporting the task complete.
+
 ## Vision
 DESCENT is a turn-based tactical dungeon crawler in the spirit of **Dungeon Crawler Carl**.
 - Carl is a lone hero descending floor by floor through a hostile dungeon
