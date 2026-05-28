@@ -53,6 +53,41 @@ const LINES: Dictionary = {
 		"Choose your doomed archetype.",
 		"Pick wisely. Or don't. You'll probably die anyway.",
 	],
+	"low_hp": [
+		"Critical HP. This is statistically where runs end. Surprise us.",
+		"You're running on fumes. Impressive, in a morbid way.",
+		"Dangerously low HP. The dungeon is watching. Expectantly.",
+		"Your survival odds have entered single digits. Noted.",
+	],
+	"first_blood": [
+		"First kill. The dungeon acknowledges your existence. Grudgingly.",
+		"One down. The rest noticed. They're not pleased.",
+		"Blood drawn. The run has begun in earnest.",
+		"First kill logged. Several hundred to go. Good luck.",
+	],
+	"backstab_land": [
+		"Backstab landed. Armor optional. Surprise mandatory.",
+		"Struck from the shadows. The target was offended, briefly.",
+		"Backstab successful. Very unsporting. Effective.",
+		"Armor ignored. Target's dignity also ignored.",
+	],
+	"surrounded": [
+		"Surrounded. This is either your finest moment or your last.",
+		"Three enemies adjacent. The math is not in your favor.",
+		"They have you cornered. Prove them wrong. Or don't.",
+		"Surrounded. The dungeon appreciates the theatrics.",
+	],
+	"shield_bash_lava": [
+		"Enemy launched into lava. That's what it's there for.",
+		"Knockback into magma. Environmental storytelling at its finest.",
+		"Into the lava. Physics cooperating for once.",
+		"Sent them into the lava. The System is briefly impressed.",
+	],
+	"floor_regen": [
+		"Between floors you catch your breath. The dungeon finds this annoying.",
+		"Minor wounds closing. The floor below won't be as forgiving.",
+		"HP regenerated. The dungeon calls this cheating. It isn't.",
+	],
 }
 
 var _last_indices: Dictionary = {}

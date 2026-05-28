@@ -8,7 +8,8 @@ const DATA: Dictionary = {
 		"description": "A melee tank. High HP, heavy hits, no subtlety whatsoever.",
 		"hp": 150,
 		"stats": {"attack": 15, "defense": 5, "speed": 8},
-		"abilities": ["basic_attack", "power_strike", "taunt"],
+		"abilities": ["basic_attack", "shield_bash", "taunt"],
+		"unlockable_abilities": ["power_strike", "frost_nova"],
 		"icon_color": Color(0.8, 0.2, 0.2),
 	},
 	"rogue": {
@@ -18,6 +19,7 @@ const DATA: Dictionary = {
 		"hp": 100,
 		"stats": {"attack": 20, "defense": 2, "speed": 15},
 		"abilities": ["basic_attack", "backstab", "vanish"],
+		"unlockable_abilities": ["power_strike", "fireball"],
 		"icon_color": Color(0.2, 0.8, 0.4),
 	},
 	"arcanist": {
@@ -27,6 +29,7 @@ const DATA: Dictionary = {
 		"hp": 80,
 		"stats": {"attack": 25, "defense": 0, "speed": 10},
 		"abilities": ["basic_attack", "fireball", "frost_nova"],
+		"unlockable_abilities": ["vanish", "backstab"],
 		"icon_color": Color(0.3, 0.4, 1.0),
 	},
 }

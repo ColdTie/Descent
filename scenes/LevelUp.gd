@@ -31,8 +31,29 @@ func _ready() -> void:
 	SystemVoice.line_spoken.connect(func(text: String, _d: float) -> void: _system_label.text = text)
 	_generate_choices()
 
+func _get_ability_unlock_items() -> Array[Dictionary]:
+	## Build unlock cards for abilities the hero's class can unlock but doesn't have yet.
+	var cls_data: Dictionary = Classes.get_class_data(GameState.hero_class)
+	var unlockable: Array = cls_data.get("unlockable_abilities", [])
+	var items: Array[Dictionary] = []
+	for ability_id: String in unlockable:
+		if not GameState.hero_abilities.has(ability_id):
+			var abl: Dictionary = Abilities.get_ability(ability_id)
+			items.append({
+				"id": "unlock_" + ability_id,
+				"name": "UNLOCK: " + abl.get("display_name", ability_id),
+				"desc": abl.get("description", "A new ability."),
+				"is_unlock": true,
+				"ability_id": ability_id,
+			})
+	return items
+
 func _generate_choices() -> void:
 	var pool: Array[Dictionary] = UPGRADES.duplicate()
+	# Append any available ability unlocks — they'll compete with stat upgrades
+	var unlock_items: Array[Dictionary] = _get_ability_unlock_items()
+	for item: Dictionary in unlock_items:
+		pool.append(item)
 	GameRng.shuffle(pool)
 	var choices: Array[Dictionary] = pool.slice(0, min(3, pool.size()))
 	for item: Dictionary in choices:
@@ -48,7 +69,10 @@ func _make_card(item: Dictionary) -> PanelContainer:
 	name_lbl.text = item["name"]
 	name_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	name_lbl.add_theme_font_size_override("font_size", 20)
-	name_lbl.add_theme_color_override("font_color", Color(0.9, 0.7, 0.1))
+	# Ability unlock cards glow purple; stat upgrades glow gold
+	var is_unlock: bool = item.get("is_unlock", false)
+	name_lbl.add_theme_color_override("font_color",
+		Color(0.75, 0.3, 1.0) if is_unlock else Color(0.9, 0.7, 0.1))
 	vbox.add_child(name_lbl)
 
 	var sep := HSeparator.new()
@@ -79,6 +103,14 @@ func _on_upgrade_selected(upgrade_id: String, item: Dictionary, panel: PanelCont
 	_continue_button.visible = true
 
 func _apply_upgrade(item: Dictionary) -> void:
+	# Ability unlock cards
+	if item.get("is_unlock", false):
+		var ability_id: String = item.get("ability_id", "")
+		if not ability_id.is_empty() and not GameState.hero_abilities.has(ability_id):
+			GameState.hero_abilities.append(ability_id)
+			var abl: Dictionary = Abilities.get_ability(ability_id)
+			SystemVoice.speak_direct("New ability: %s. The dungeon's patience is tested." % abl.get("display_name", ability_id))
+		return
 	match item["id"]:
 		"atk_up":
 			GameState.hero_base_stats["attack"] = GameState.hero_base_stats.get("attack", 0) + 8

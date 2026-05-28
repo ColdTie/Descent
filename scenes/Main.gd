@@ -68,6 +68,10 @@ func _on_battle_complete(hero_won: bool, xp_earned: int, enemies_killed: int) ->
 
 func _on_floor_cleared() -> void:
 	## Called when player clicks "Descend Deeper" on the Victory Screen.
+	## Small HP regen between floors — 10% max HP, minimum 5.
+	var regen: int = max(5, int(float(GameState.hero_max_hp) * 0.1))
+	GameState.heal(regen)
+	SystemVoice.speak("floor_regen")
 	var leveled_up: bool = GameState.gain_xp(_pending_xp)
 	if leveled_up:
 		_load_scene(LEVEL_UP_SCENE)

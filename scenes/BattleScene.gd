@@ -39,6 +39,10 @@ var _player_turn: bool = false
 var _battle_rng: RandomNumberGenerator
 var _enemies_killed: int = 0
 
+# Run 4: mid-battle commentary tracking
+var _low_hp_quip_fired: bool = false
+var _surrounded_quip_turn: int = -10
+
 @onready var _hex_layer: Node2D = $HexLayer
 @onready var _entity_layer: Node2D = $EntityLayer
 @onready var _floor_label: Label = $UILayer/FloorLabel
@@ -115,6 +119,7 @@ func _build_encounter() -> void:
 	_engine.combatant_died.connect(_on_combatant_died)
 	_engine.status_ticked.connect(_on_status_ticked)
 	_engine.hero_moved.connect(_on_hero_moved)
+	_engine.combatant_pushed.connect(_on_combatant_pushed)
 	_engine.setup(_all_combatants)
 
 ## ─── Cave Atmosphere ──────────────────────────────────────────────────────────
@@ -368,6 +373,16 @@ func _next_turn() -> void:
 		if _engine.battle_over:
 			return
 
+		# Mid-battle: check if hero is surrounded (3+ adjacent living enemies)
+		var adj_enemies: int = 0
+		for nb: Vector2i in HexGrid.neighbors(active.position):
+			for e: Combatant in _enemies:
+				if e.is_alive() and e.position == nb:
+					adj_enemies += 1
+		if adj_enemies >= 3 and _engine.turn_number - _surrounded_quip_turn >= 5:
+			_surrounded_quip_turn = _engine.turn_number
+			SystemVoice.speak("surrounded")
+
 		_player_turn = true
 		_turn_indicator.text = "YOUR TURN — Click to move or attack"
 		_turn_indicator.add_theme_color_override("font_color", Color(0.35, 1.0, 0.35))
@@ -410,6 +425,11 @@ func _apply_lava_heat(c: Combatant) -> void:
 	if c.faction == Combatant.Faction.HERO:
 		_update_hero_hp_label()
 		_show_system_banner("Lava heat! -%d HP. The floor is trying to kill you. Literally." % actual, 2.0)
+		if not _low_hp_quip_fired:
+			var ratio: float = float(c.hp) / float(max(1, c.max_hp))
+			if ratio < 0.2:
+				_low_hp_quip_fired = true
+				SystemVoice.speak("low_hp")
 
 ## ─── Hex Input ────────────────────────────────────────────────────────────────
 
@@ -494,7 +514,23 @@ func _do_hero_attack(target: Combatant) -> void:
 	_player_turn = false
 	_clear_highlights()
 	_engine.perform_attack(_hero, target, _selected_ability)
-	SystemVoice.speak("hit")
+
+	# Mid-battle commentary: backstab
+	if _selected_ability == "backstab" and target.is_alive():
+		SystemVoice.speak("backstab_land")
+	else:
+		SystemVoice.speak("hit")
+
+	# Run 4: Shield Bash pushback
+	var abl_data: Dictionary = Abilities.get_ability(_selected_ability)
+	var pushback: int = abl_data.get("pushback", 0)
+	if pushback > 0 and target.is_alive():
+		var push_dir: Vector2i = HexGrid.push_direction(_hero.position, target.position)
+		_engine.push_combatant(target, push_dir, pushback, _map)
+		await get_tree().create_timer(0.18).timeout
+		_sync_entity_positions()
+		_update_all_hp_bars()
+
 	# Consume the charge
 	if abl_obj != null:
 		abl_obj.use()
@@ -701,10 +737,27 @@ func _on_action_taken(_attacker: Combatant, target: Combatant, damage: int, _abi
 	_show_damage_number(target, damage)
 	_update_hp_bar(target)
 	_update_status_label(target)
+	# Low HP quip — fire once when hero drops below 20%
+	if target.faction == Combatant.Faction.HERO and not _low_hp_quip_fired:
+		var ratio: float = float(target.hp) / float(max(1, target.max_hp))
+		if ratio < 0.2:
+			_low_hp_quip_fired = true
+			SystemVoice.speak("low_hp")
+
+func _on_combatant_pushed(pushed: Combatant, _from: Vector2i, _to: Vector2i, lava_dmg: int) -> void:
+	_sync_entity_positions()
+	_update_hp_bar(pushed)
+	if lava_dmg > 0:
+		_show_damage_number(pushed, lava_dmg, LAVA_HEAT_CLR)
+		SystemVoice.speak("shield_bash_lava")
 
 func _on_combatant_died(c: Combatant) -> void:
 	if c.faction == Combatant.Faction.ENEMY:
-		SystemVoice.speak("kill")
+		GameState.run_total_kills += 1
+		if GameState.run_total_kills == 1:
+			SystemVoice.speak("first_blood")
+		else:
+			SystemVoice.speak("kill")
 		_enemies_killed += 1
 	else:
 		# Hero died — start death overlay after a moment

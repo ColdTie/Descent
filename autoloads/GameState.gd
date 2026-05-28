@@ -15,6 +15,7 @@ var hero_level: int = 1
 var hero_gold: int = 0
 var hero_abilities: Array[String] = []
 var hero_base_stats: Dictionary = {}
+var run_total_kills: int = 0
 
 const XP_PER_LEVEL: int = 100
 
@@ -28,6 +29,7 @@ func start_run(class_id: String, seed_val: int = -1) -> void:
 	hero_xp = 0
 	hero_level = 1
 	hero_gold = 0
+	run_total_kills = 0
 	var cls_data: Dictionary = Classes.get_class_data(class_id)
 	hero_max_hp = cls_data.get("hp", 100)
 	hero_hp = hero_max_hp
