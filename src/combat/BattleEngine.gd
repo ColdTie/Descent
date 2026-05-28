@@ -9,6 +9,7 @@ signal combatant_died(combatant: Combatant)
 signal battle_ended(hero_won: bool, xp_earned: int)
 signal status_ticked(combatant: Combatant, damage: int)
 signal hero_moved(combatant: Combatant, from_hex: Vector2i, to_hex: Vector2i)
+signal combatant_pushed(combatant: Combatant, from_hex: Vector2i, to_hex: Vector2i, blocked: bool)
 
 var combatants: Array[Combatant] = []
 var turn_order: Array[Combatant] = []
@@ -240,6 +241,31 @@ func move_combatant(combatant: Combatant, to_hex: Vector2i) -> bool:
 	if combatant.faction == Combatant.Faction.HERO:
 		hero_moved.emit(combatant, from_hex, to_hex)
 	return true
+
+func push_combatant(attacker: Combatant, target: Combatant, map: DungeonMap) -> Dictionary:
+	## Push target one hex directly away from attacker.
+	## Returns {"pushed": bool, "from": Vector2i, "to": Vector2i, "blocked": bool, "lava": bool}.
+	## Lava tiles allow the push (enemy lands in fire) but off-map hexes block it.
+	var dir: Vector2i = target.position - attacker.position
+	var push_to: Vector2i = target.position + dir
+	var from_hex: Vector2i = target.position
+	# Must be within the dungeon (tile_types dict), regardless of passability
+	var in_dungeon: bool = map.tile_types.has(push_to)
+	var is_lava: bool = map.get_tile_type(push_to) == "lava"
+	var blocked: bool = not in_dungeon
+	if not blocked:
+		# Check for other living combatants at push destination
+		for c: Combatant in combatants:
+			if c.is_alive() and c != target and c.position == push_to:
+				blocked = true
+				break
+	if not blocked:
+		target.position = push_to
+		combatant_pushed.emit(target, from_hex, push_to, false)
+		return {"pushed": true, "from": from_hex, "to": push_to, "blocked": false, "lava": is_lava}
+	else:
+		combatant_pushed.emit(target, from_hex, from_hex, true)
+		return {"pushed": false, "from": from_hex, "to": from_hex, "blocked": true, "lava": false}
 
 func is_combatant_frozen(combatant: Combatant) -> bool:
 	for eff: Dictionary in combatant.status_effects:

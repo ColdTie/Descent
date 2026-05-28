@@ -18,7 +18,7 @@ DESCENT is a turn-based tactical dungeon crawler in the spirit of **Dungeon Craw
 3. **Autoloads**: `GameRng`, `GameState`, `SystemVoice` — always available
 4. **Signals over direct calls** for cross-system communication
 
-## Godot 4.4.1 API Gotchas (learned in Runs 1–3)
+## Godot 4.4.1 API Gotchas (learned in Runs 1–4)
 - `RandomNumberGenerator` has NO `.shuffle()` method — use Fisher-Yates manually or `Array.shuffle()` (global seed, not deterministic)
 - `Array[T].filter(callable)` returns an untyped `Array`, not `Array[T]`
 - `Classes.get_class()` conflicts with `Object.get_class()` — renamed to `get_class_data()`
@@ -29,8 +29,11 @@ DESCENT is a turn-based tactical dungeon crawler in the spirit of **Dungeon Craw
 - Signal handlers with `await` become coroutines and return to caller at the first `await` — don't assume they block
 - **Architecture rule**: `BattleEngine._calculate_damage()` returns RAW damage (no armor). `Combatant.take_damage(amount, ignore_armor=false)` applies armor. Don't double-apply armor in both places.
 - `Combatant.take_damage(amount, ignore_armor)` — the `ignore_armor` parameter bypasses the `armor` field reduction (for backstab, env damage, etc.)
+- `[a] + typed_array` creates an **untyped** Array, NOT `Array[T]` — always build typed arrays by declaring `var arr: Array[T] = []` then appending
+- `Dictionary.get(key, default_array)` always returns untyped `Array`, never `Array[T]` — must iterate and append when assigning to a typed variable
+- `DungeonMap.is_passable()` returns false for lava tiles — for push-into-lava mechanic, check `tile_types.has(hex)` (in dungeon area?) instead of passability
 
-## Current State (Run 3 — Charges, Scaling, Lava, Victory Screen)
+## Current State (Run 4 — Push Mechanic, Reactive Commentary, Ability Unlocks, HP Regen)
 ### Implemented ✅
 **Run 1 (Bootstrap):**
 - `GameRng`, `GameState`, `SystemVoice` autoloads
@@ -65,14 +68,40 @@ DESCENT is a turn-based tactical dungeon crawler in the spirit of **Dungeon Craw
 - **`apply_environment_damage`** on BattleEngine — deals armor-ignoring damage for lava/env hazards
 - **109 headless tests** — all passing: RNG (5), Hex (13), Combat (27), Movement+Abilities (24), Run3 (40)
 
-### Next Priorities (Run 4)
-1. **Sounds** — Even a minimal audio pass: hit, kill, move, ability sounds (use Godot's AudioStreamGenerator or import simple beeps)
-2. **Class abilities tab on upgrade screen** — the Level-up screen currently only shows stat upgrades; add a "NEW ABILITY" option so hero can unlock fireball/backstab/etc. mid-run
-3. **Pushback mechanic** — the Brawler class should have a "Shield Bash" that pushes enemies toward lava; makes lava truly tactical
-4. **Multi-floor run feel** — currently each floor starts fresh; heroes should FEEL stronger on floor 5 vs floor 1 — the scaling helps enemies but hero stat upgrades should visibly compound
-5. **The System mid-battle commentary** — trigger quips on: hero surviving below 20% HP, first kill of run, using backstab successfully, hero standing adjacent to lava, enemies surrounding hero
-6. **HP regeneration between floors** — currently hero HP is frozen between floors unless they take healing loot; add small passive regen (5-10 HP) between floors as a quality-of-life change
-7. **Minimap / floor preview** — small indicator showing which floor you're on out of N (generate run length at run start)
+**Run 4 (Push Mechanic + Reactive Commentary + Ability Unlocks + HP Regen):**
+- **Shield Bash ability** — New Brawler ability (`shield_bash`): 18 dmg, 1 charge, 3-turn CD, pushes target 1 hex away
+  - Push into lava = 30 env damage immediately (armor-ignored) + "push_into_lava" commentary
+  - Push blocked by walls/off-map or another entity = "push_blocked" commentary
+  - `BattleEngine.push_combatant(attacker, target, map)` → pure logic, returns push result dict
+  - `combatant_pushed` signal on BattleEngine for visual animation
+  - Highlights show enemy + push destination (lava-colored if lava) when Shield Bash selected
+- **Poison Strike ability** — New unlockable ability: 12 dmg + applies poisoned (5 dmg/turn, 3 turns), 2 charges, 3-turn CD
+- **Reactive System commentary** — Mid-battle quips triggered by:
+  - Hero HP < 20% for first time (`low_hp` pool, announced once)
+  - 3+ adjacent enemies at turn start (`surrounded` pool)
+  - Standing next to lava for first time (`lava_adjacent` pool)
+  - Backstab hit (`backstab_hit` pool)
+  - First enemy kill of the run (`first_kill` pool, all subsequent → `kill` pool)
+  - Push into lava / push blocked (`push_into_lava` / `push_blocked` pools)
+- **Ability unlocking at Level-Up** — LevelUp screen now combines stat upgrades with ability unlock options
+  - Each class has `unlockable_abilities`: Brawler → [fireball, frost_nova, poison_strike]; Rogue → [power_strike, poison_strike, frost_nova]; Arcanist → [backstab, taunt, poison_strike]
+  - Only abilities the hero doesn't already own are offered
+  - Unlock cards shown in cyan (vs gold for stat upgrades), "UNLOCK IT" button
+  - Appends ability to `GameState.hero_abilities`; BattleScene rebuilds objects each floor
+- **HP regen between floors** — `GameState.descend()` heals `max(1, hero_max_hp / 10)` HP passively
+- **Bug fix**: `GameState.start_run()` typed array assignment (untyped Array → Array[String]) — now iterates to append
+- **Bug fix**: `BattleScene._build_encounter()` `_all_combatants` typed array — now appends individually
+- **156 headless tests** — all passing: RNG (5), Hex (13), Combat (27), Movement+Abilities (24), Run3 (40), Run4 (47)
+
+### Next Priorities (Run 5)
+1. **Sounds** — Even a minimal audio pass: hit, kill, move, ability sounds (AudioStreamGenerator or procedural beeps)
+2. **Minimap / floor indicator** — top-left shows "Floor N / 10" run length; generate run_length at start of run
+3. **Poison strike visual** — show ☠ poison icon on poisoned enemies in HUD + periodic damage floaters
+4. **Enemy variety on later floors** — floor 5+ should spawn Skeletons and Demons (stronger types); currently imps/goblins dominate
+5. **LootScreen upgrades** — currently loot is stat-based; add "ability tome" loot that unlocks an ability immediately
+6. **Healing items** — "Blessed Bandage" / "Demon Blood Flask" as loot options; more HP recovery choices
+7. **Combo kill** — the Rogue vanish+backstab combo should get special commentary; currently it's just "backstab_hit"
+8. **Golem sentry AI** — golems with ranged fire should also not stack; currently broken (they sit at spawn but enemy_fireball fires from range 3)
 
 ## File Map
 ```

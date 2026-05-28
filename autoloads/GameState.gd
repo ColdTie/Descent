@@ -31,12 +31,17 @@ func start_run(class_id: String, seed_val: int = -1) -> void:
 	var cls_data: Dictionary = Classes.get_class_data(class_id)
 	hero_max_hp = cls_data.get("hp", 100)
 	hero_hp = hero_max_hp
-	hero_abilities = cls_data.get("abilities", []).duplicate()
+	hero_abilities = []
+	for abl: String in cls_data.get("abilities", []):
+		hero_abilities.append(abl)
 	hero_base_stats = cls_data.get("stats", {}).duplicate()
 	run_started.emit()
 
 func descend() -> void:
 	floor_num += 1
+	# Passive regen between floors: recover 10% max HP
+	var regen: int = max(1, hero_max_hp / 10)
+	heal(regen)
 	floor_changed.emit(floor_num)
 
 func gain_xp(amount: int) -> bool:

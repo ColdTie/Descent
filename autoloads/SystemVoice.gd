@@ -53,6 +53,55 @@ const LINES: Dictionary = {
 		"Choose your doomed archetype.",
 		"Pick wisely. Or don't. You'll probably die anyway.",
 	],
+	"low_hp": [
+		"Below 20%% HP. The System is hesitantly impressed you're still breathing.",
+		"That's not a lot of blood left, Hero. Conserve it.",
+		"Critical HP. This is where runs typically end. Statistically speaking.",
+		"You appear to be mostly dead. Carry on.",
+	],
+	"surrounded": [
+		"You are surrounded. The dungeon appreciates the dramatic irony.",
+		"Multiple hostiles adjacent. The System suggests panic.",
+		"They've formed a circle. How neighborly.",
+		"Cornered. Out of options. Just like the tutorial warned.",
+	],
+	"backstab_hit": [
+		"Backstab connected. Armor circumvented. The System approves, reluctantly.",
+		"Clean kill from the shadows. Professionally done.",
+		"Armor ignored. Target perforated. The rogue way.",
+		"Hit them where they weren't looking. Cowardly. Effective.",
+	],
+	"first_kill": [
+		"First blood of the run. The dungeon has noted your presence.",
+		"One down. The remaining enemies have been informed.",
+		"A kill. The run begins in earnest.",
+		"That creature is no longer a problem. Others remain.",
+	],
+	"push_into_lava": [
+		"Into the lava. That's what it's there for.",
+		"Environmental hazard weaponized. The System is impressed.",
+		"You pushed them in. They did not enjoy this.",
+		"The lava closes over them. Efficient. Brutal. Correct.",
+	],
+	"push_blocked": [
+		"Push blocked. They hit a wall. Still counts as a bad day for them.",
+		"Nowhere to fly. The dungeon walls had opinions.",
+		"Blocked. They stay upright. Unfortunate.",
+	],
+	"lava_adjacent": [
+		"You're standing next to lava. On purpose, presumably.",
+		"The heat is tactical. Or suicidal. Hard to say.",
+		"Lava adjacent. The System recommends not staying there.",
+	],
+	"unlock_ability": [
+		"New ability acquired. The dungeon updates its threat assessment.",
+		"You've learned something. Probably too late, but still.",
+		"Ability unlocked. Your odds of survival increase marginally.",
+	],
+	"floor_regen": [
+		"Between floors, your wounds close. Slightly. Don't get used to it.",
+		"Passive regeneration applied. The System acknowledges your persistence.",
+	],
 }
 
 var _last_indices: Dictionary = {}
