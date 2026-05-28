@@ -18,6 +18,7 @@ const AOE_CLR        := Color(0.9, 0.45, 0.05, 0.35)
 const SELF_CLR       := Color(0.6, 0.3, 0.9, 0.5)
 const FROST_CLR      := Color(0.25, 0.65, 1.0, 0.5)
 const LAVA_HEAT_CLR  := Color(1.0, 0.45, 0.0, 0.9)
+const PUSH_CLR       := Color(1.0, 0.6, 0.05, 0.65)
 
 var _engine: BattleEngine
 var _map: DungeonMap
@@ -38,6 +39,11 @@ var _selected_ability: String = "basic_attack"
 var _player_turn: bool = false
 var _battle_rng: RandomNumberGenerator
 var _enemies_killed: int = 0
+
+# Reactive commentary flags — reset each battle
+var _first_kill_done: bool = false
+var _low_hp_warned: bool = false
+var _lava_warned: bool = false
 
 @onready var _hex_layer: Node2D = $HexLayer
 @onready var _entity_layer: Node2D = $EntityLayer
@@ -108,13 +114,17 @@ func _build_encounter() -> void:
 		var e: Combatant = EnemyDefs.make_combatant(def, _map.spawn_points[i], _battle_rng, GameState.floor_num)
 		_enemies.append(e)
 
-	_all_combatants = [_hero] + _enemies
+	_all_combatants = []
+	_all_combatants.append(_hero)
+	for e: Combatant in _enemies:
+		_all_combatants.append(e)
 	_engine = BattleEngine.new(_battle_rng)
 	_engine.battle_ended.connect(_on_battle_ended)
 	_engine.action_taken.connect(_on_action_taken)
 	_engine.combatant_died.connect(_on_combatant_died)
 	_engine.status_ticked.connect(_on_status_ticked)
 	_engine.hero_moved.connect(_on_hero_moved)
+	_engine.combatant_pushed.connect(_on_combatant_pushed)
 	_engine.setup(_all_combatants)
 
 ## ─── Cave Atmosphere ──────────────────────────────────────────────────────────
@@ -368,6 +378,27 @@ func _next_turn() -> void:
 		if _engine.battle_over:
 			return
 
+		# Reactive commentary: low HP (once per battle)
+		if not _low_hp_warned and float(active.hp) / float(max(1, active.max_hp)) < 0.2:
+			_low_hp_warned = true
+			SystemVoice.speak("low_hp")
+
+		# Reactive commentary: surrounded by 3+ enemies
+		var adj_enemy_count: int = 0
+		for e: Combatant in _enemies:
+			if e.is_alive() and HexGrid.hex_distance(active.position, e.position) == 1:
+				adj_enemy_count += 1
+		if adj_enemy_count >= 3:
+			SystemVoice.speak("surrounded")
+
+		# Reactive commentary: standing next to lava (once per battle)
+		if not _lava_warned:
+			for n: Vector2i in HexGrid.neighbors(active.position):
+				if _map.get_tile_type(n) == "lava":
+					_lava_warned = true
+					SystemVoice.speak("lava_adjacent")
+					break
+
 		_player_turn = true
 		_turn_indicator.text = "YOUR TURN — Click to move or attack"
 		_turn_indicator.add_theme_color_override("font_color", Color(0.35, 1.0, 0.35))
@@ -493,8 +524,39 @@ func _do_hero_attack(target: Combatant) -> void:
 
 	_player_turn = false
 	_clear_highlights()
+	var abl: Dictionary = Abilities.get_ability(_selected_ability)
 	_engine.perform_attack(_hero, target, _selected_ability)
-	SystemVoice.speak("hit")
+
+	# Reactive commentary by ability type
+	if _selected_ability == "backstab":
+		SystemVoice.speak("backstab_hit")
+	else:
+		SystemVoice.speak("hit")
+
+	# Poison strike: apply poisoned status to surviving target
+	if abl.get("applies_poisoned", false) and target.is_alive():
+		var dpt: int = abl.get("poison_dps", 5)
+		var dur: int = abl.get("poison_duration", 3)
+		target.apply_status(StatusEffect.poisoned(dur, dpt))
+		_show_system_banner("Poisoned! %d dmg/turn for %d turns." % [dpt, dur], 2.0)
+
+	# Shield Bash: push the enemy one hex away (may land in lava!)
+	if abl.get("push", false) and target.is_alive():
+		var push_result: Dictionary = _engine.push_combatant(_hero, target, _map)
+		if not push_result.get("blocked", true):
+			var to_hex: Vector2i = push_result.get("to", target.position)
+			if push_result.get("lava", false):
+				# Enemy flew into lava — big damage
+				var lava_dmg: int = 30
+				var actual: int = _engine.apply_environment_damage(target, lava_dmg)
+				_show_damage_number(target, actual, LAVA_HEAT_CLR)
+				_update_hp_bar(target)
+				SystemVoice.speak("push_into_lava")
+			else:
+				SystemVoice.speak_direct("Shield Bash connects. Enemy repositioned against their will.")
+		else:
+			SystemVoice.speak("push_blocked")
+
 	# Consume the charge
 	if abl_obj != null:
 		abl_obj.use()
@@ -656,9 +718,17 @@ func _update_highlights() -> void:
 
 	match abl_target:
 		"single_enemy":
+			var is_push: bool = abl.get("push", false)
 			for e: Combatant in _enemies:
 				if e.is_alive() and HexGrid.is_in_range(_hero.position, e.position, abl_range):
-					_highlight_hex(e.position, ATTACK_CLR)
+					_highlight_hex(e.position, PUSH_CLR if is_push else ATTACK_CLR)
+					# For push abilities: also show potential push destination
+					if is_push:
+						var push_dir: Vector2i = e.position - _hero.position
+						var push_dest: Vector2i = e.position + push_dir
+						if _map.tile_types.has(push_dest):
+							var dest_color: Color = LAVA_HEAT_CLR if _map.get_tile_type(push_dest) == "lava" else PUSH_CLR
+							_highlight_hex(push_dest, dest_color)
 		"all_enemies":
 			if abl_range <= 1:
 				# Frost nova — show adjacent enemies
@@ -704,7 +774,11 @@ func _on_action_taken(_attacker: Combatant, target: Combatant, damage: int, _abi
 
 func _on_combatant_died(c: Combatant) -> void:
 	if c.faction == Combatant.Faction.ENEMY:
-		SystemVoice.speak("kill")
+		if not _first_kill_done:
+			_first_kill_done = true
+			SystemVoice.speak("first_kill")
+		else:
+			SystemVoice.speak("kill")
 		_enemies_killed += 1
 	else:
 		# Hero died — start death overlay after a moment
@@ -727,6 +801,19 @@ func _on_hero_moved(_combatant: Combatant, _from_hex: Vector2i, to_hex: Vector2i
 		tw.set_ease(Tween.EASE_OUT)
 		tw.set_trans(Tween.TRANS_QUART)
 		tw.tween_property(node, "position", HexGrid.hex_to_pixel(to_hex, HEX_SIZE), 0.22)
+
+func _on_combatant_pushed(c: Combatant, from_hex: Vector2i, to_hex: Vector2i, blocked: bool) -> void:
+	## Animate a push — either into a new hex or a blocked slam-in-place flash.
+	if blocked:
+		_flash_hex_area(from_hex, 0, Color(1.0, 0.5, 0.0, 0.75))
+		return
+	var node: Node2D = _entity_nodes.get(c.id)
+	if node != null:
+		var tw: Tween = create_tween()
+		tw.set_ease(Tween.EASE_OUT)
+		tw.set_trans(Tween.TRANS_BACK)
+		tw.tween_property(node, "position", HexGrid.hex_to_pixel(to_hex, HEX_SIZE), 0.22)
+	_flash_hex_area(to_hex, 0, Color(1.0, 0.75, 0.1, 0.8))
 
 func _on_battle_ended(hero_won: bool, xp_earned: int) -> void:
 	_player_turn = false

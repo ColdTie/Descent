@@ -16,6 +16,7 @@ func _run_all() -> void:
 	_run_suite("Combat", TestCombat.new())
 	_run_suite("Movement+Abilities", TestMovement.new())
 	_run_suite("Run3 (Charges+Scaling+Collision)", TestRun3.new())
+	_run_suite("Run4 (Push+Poison+Unlocks+Regen)", TestRun4.new())
 
 func _run_suite(name: String, suite: Object) -> void:
 	print("\n--- %s ---" % name)
@@ -50,6 +51,14 @@ class BaseTest:
 			_failures += 1
 			print("  FAIL: %s" % msg)
 	
+	func assert_false(val: bool, msg: String = "") -> void:
+		if not val:
+			_passes += 1
+			print("  PASS: %s" % msg)
+		else:
+			_failures += 1
+			print("  FAIL: %s (expected false, got true)" % msg)
+
 	func assert_gt(a: Variant, b: Variant, msg: String = "") -> void:
 		if a > b:
 			_passes += 1
