@@ -9,6 +9,7 @@ signal combatant_died(combatant: Combatant)
 signal battle_ended(hero_won: bool, xp_earned: int)
 signal status_ticked(combatant: Combatant, damage: int)
 signal hero_moved(combatant: Combatant, from_hex: Vector2i, to_hex: Vector2i)
+signal combatant_pushed(combatant: Combatant, from_hex: Vector2i, to_hex: Vector2i)
 
 var combatants: Array[Combatant] = []
 var turn_order: Array[Combatant] = []
@@ -110,13 +111,60 @@ func apply_environment_damage(c: Combatant, dmg: int) -> int:
 		_on_combatant_died(c)
 	return actual
 
+func perform_push_attack(attacker: Combatant, target: Combatant, ability_id: String, map: DungeonMap = null) -> Dictionary:
+	## Melee attack that then shoves the target away from the attacker.
+	## Returns {damage: int, pushed_to: Vector2i, lava_bounce: bool, lava_damage: int}.
+	var dmg: int = perform_attack(attacker, target, ability_id)
+	if not target.is_alive():
+		return {"damage": dmg, "pushed_to": target.position, "lava_bounce": false, "lava_damage": 0}
+
+	var abl: Dictionary = Abilities.get_ability(ability_id)
+	var push_dist: int = abl.get("pushback", 1)
+	var push_dir: Vector2i = HexGrid.get_push_direction(attacker.position, target.position)
+	if push_dir == Vector2i.ZERO:
+		return {"damage": dmg, "pushed_to": target.position, "lava_bounce": false, "lava_damage": 0}
+
+	var from_pos: Vector2i = target.position
+	var to_pos: Vector2i = target.position
+	var lava_bounce: bool = false
+
+	for _i: int in range(push_dist):
+		var next: Vector2i = to_pos + push_dir
+		if map == null or not map.tile_types.has(next):
+			break  # off-map
+		var tile_type: String = map.tile_types[next]
+		# Check for other combatants blocking the path
+		var blocked: bool = false
+		for c: Combatant in combatants:
+			if c.is_alive() and c != target and c.position == next:
+				blocked = true
+				break
+		if blocked:
+			break
+		if tile_type == "lava":
+			lava_bounce = true
+			break  # smash into lava wall — stop here, deal fire damage below
+		to_pos = next
+
+	if to_pos != from_pos:
+		target.position = to_pos
+		combatant_pushed.emit(target, from_pos, to_pos)
+
+	var lava_damage: int = 0
+	if lava_bounce:
+		lava_damage = apply_environment_damage(target, 22)
+
+	return {"damage": dmg, "pushed_to": to_pos, "lava_bounce": lava_bounce, "lava_damage": lava_damage}
+
 func _calculate_damage(attacker: Combatant, target: Combatant, ability_id: String) -> int:
 	## Returns raw damage before armor reduction.
 	## Armor is applied by the caller via take_damage(dmg, ignore_armor).
 	var ability_data: Dictionary = Abilities.get_ability(ability_id)
 	var base: int = ability_data.get("base_damage", 10)
-	# Add attacker flat attack bonus
+	# Flat attack bonus from stats + status effects (rallied, etc.)
 	var atk_bonus: int = attacker.attack_bonus
+	for eff: Dictionary in attacker.status_effects:
+		atk_bonus += eff.get("attack_mod", 0)
 	# Variance: ±20%
 	var variance: float = rng.randf_range(0.8, 1.2)
 	var raw: int = int(float(base + atk_bonus) * variance)

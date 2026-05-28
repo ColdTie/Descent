@@ -58,6 +58,28 @@ static func ring(center: Vector2i, radius: int) -> Array[Vector2i]:
 			h = h + DIRECTIONS[i]
 	return results
 
+## Return the canonical hex direction that best matches the vector from_hex → to_hex.
+## If from_hex == to_hex, returns Vector2i.ZERO.
+static func get_push_direction(from_hex: Vector2i, to_hex: Vector2i) -> Vector2i:
+	var diff: Vector2i = to_hex - from_hex
+	if diff == Vector2i.ZERO:
+		return Vector2i.ZERO
+	# If diff is already a unit direction (adjacent hexes), return it directly.
+	for d: Vector2i in DIRECTIONS:
+		if d == diff:
+			return d
+	# Otherwise project onto the six directions via dot product.
+	var diff_f: Vector2 = Vector2(float(diff.x), float(diff.y))
+	var best_dir: Vector2i = DIRECTIONS[0]
+	var best_dot: float = -999.0
+	for d: Vector2i in DIRECTIONS:
+		var df: Vector2 = Vector2(float(d.x), float(d.y))
+		var dot: float = diff_f.dot(df) / (df.length() * diff_f.length())
+		if dot > best_dot:
+			best_dot = dot
+			best_dir = d
+	return best_dir
+
 ## Generate filled disk of hexes
 static func disk(center: Vector2i, radius: int) -> Array[Vector2i]:
 	var results: Array[Vector2i] = []

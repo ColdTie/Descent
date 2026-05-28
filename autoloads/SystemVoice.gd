@@ -53,6 +53,46 @@ const LINES: Dictionary = {
 		"Choose your doomed archetype.",
 		"Pick wisely. Or don't. You'll probably die anyway.",
 	],
+	"low_hp": [
+		"Critical HP detected. The System recommends NOT dying.",
+		"Below 20% HP. The dungeon can smell the desperation.",
+		"You're at death's door. Don't knock.",
+		"HP critical. The System's investment in you is nearly lost.",
+	],
+	"first_kill": [
+		"First blood. There will be more. Probably.",
+		"The kill counter opens. Statistically, you need to keep going.",
+		"One down. The dungeon shrugs and dispatches reinforcements.",
+		"Eliminated. Decent start. Don't get comfortable.",
+	],
+	"backstab_hit": [
+		"Backstab — through the armor and into something soft.",
+		"Struck from a blind angle. The armor meant nothing. As intended.",
+		"Clean hit. The target didn't see it coming. Clearly.",
+		"Ignore armor: activated. The System approves.",
+	],
+	"surrounded": [
+		"You are encircled. Tactically, this is suboptimal.",
+		"Multiple hostiles in melee range. The System suggests panic.",
+		"Three or more enemies adjacent. Good luck with that.",
+		"Surrounded. If you had a plan, now would be the time.",
+	],
+	"shield_bash_lava": [
+		"Shield Bash into lava. The System rates this 9/10.",
+		"Slam and burn. Efficient use of the environment.",
+		"Sent flying into lava. The burns are complimentary.",
+		"The lava does what the shield started. Beautiful.",
+	],
+	"war_cry": [
+		"War Cry! The dungeon echoes with something resembling confidence.",
+		"Battle fury engaged. Attack bonus applied. Make it count.",
+		"Rallied. The System is cautiously optimistic.",
+	],
+	"chain_lightning": [
+		"Lightning arcs. Electricity is an equal-opportunity weapon.",
+		"Chain Lightning. The dungeon pays its electric bill in screams.",
+		"Arcing through the horde. Physics cooperates, for once.",
+	],
 }
 
 var _last_indices: Dictionary = {}
