@@ -235,13 +235,14 @@ func _spawn_entity_node(c: Combatant) -> void:
 	var sprite_tex: Texture2D = null
 	if ResourceLoader.exists(sprite_path):
 		sprite_tex = load(sprite_path) as Texture2D
-	var is_boss: bool = c.sprite_key == "boss"
+	var is_boss: bool = c.sprite_key.begins_with("boss")
 	if sprite_tex != null:
 		var sprite := Sprite2D.new()
 		sprite.texture = sprite_tex
-		var sprite_scale: float = 0.85 if is_boss else 0.58
+		# Sprites are 80×80 px — scale to fit nicely on the hex grid
+		var sprite_scale: float = 0.90 if is_boss else 0.62
 		sprite.scale = Vector2(sprite_scale, sprite_scale)
-		sprite.position = Vector2(0.0, -6.0)
+		sprite.position = Vector2(0.0, -8.0)
 		root.add_child(sprite)
 	else:
 		# Fallback: colored hex + glyph (used before Godot imports the assets)
@@ -314,7 +315,10 @@ func _entity_glyph(c: Combatant) -> String:
 		"skeleton":return "💀"
 		"demon":   return "D"
 		"golem":   return "⬡"
-		"boss":    return "♛"
+		"boss_dungeon_lord":  return "♛"
+		"boss_warden":        return "⛓"
+		"boss_abyss_keeper":  return "☠"
+	if c.sprite_key.begins_with("boss"): return "♛"
 	return c.display_name.left(1).to_upper()
 
 ## ─── Boss HP Bar ──────────────────────────────────────────────────────────────
@@ -322,7 +326,7 @@ func _entity_glyph(c: Combatant) -> String:
 func _build_boss_hp_bar() -> void:
 	## Find the boss combatant and build a top-center HP bar for it.
 	for e: Combatant in _enemies:
-		if e.sprite_key == "boss":
+		if e.sprite_key.begins_with("boss"):
 			_boss = e
 			break
 	if _boss == null:

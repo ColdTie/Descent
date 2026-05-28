@@ -69,7 +69,7 @@ const BOSSES: Array[Dictionary] = [
 		"speed": 9,
 		"abilities": ["enemy_claw", "enemy_fireball"],
 		"xp_reward": 150,
-		"sprite_key": "boss",
+		"sprite_key": "boss_dungeon_lord",
 		"min_floor": 1,
 		"max_floor": 6,
 	},
@@ -81,7 +81,7 @@ const BOSSES: Array[Dictionary] = [
 		"speed": 7,
 		"abilities": ["enemy_fireball", "enemy_claw", "enemy_bite"],
 		"xp_reward": 250,
-		"sprite_key": "boss",
+		"sprite_key": "boss_warden",
 		"min_floor": 7,
 		"max_floor": 12,
 	},
@@ -93,7 +93,7 @@ const BOSSES: Array[Dictionary] = [
 		"speed": 8,
 		"abilities": ["enemy_fireball", "enemy_claw", "enemy_bite"],
 		"xp_reward": 400,
-		"sprite_key": "boss",
+		"sprite_key": "boss_abyss_keeper",
 		"min_floor": 13,
 		"max_floor": 18,
 	},
@@ -127,7 +127,7 @@ static func make_boss(floor_num: int, position: Vector2i, rng: RandomNumberGener
 		typed_abilities.append(a)
 	c.abilities = typed_abilities
 	c.xp_reward = boss_def.get("xp_reward", 150)
-	c.sprite_key = "boss"
+	c.sprite_key = boss_def.get("sprite_key", "boss_dungeon_lord")
 	return c
 
 static func get_enemies_for_floor(floor_num: int) -> Array[Dictionary]:
