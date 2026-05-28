@@ -38,6 +38,7 @@ var _selected_ability: String = "basic_attack"
 var _player_turn: bool = false
 var _battle_rng: RandomNumberGenerator
 var _enemies_killed: int = 0
+var _low_hp_warned: bool = false
 
 @onready var _hex_layer: Node2D = $HexLayer
 @onready var _entity_layer: Node2D = $EntityLayer
@@ -115,6 +116,7 @@ func _build_encounter() -> void:
 	_engine.combatant_died.connect(_on_combatant_died)
 	_engine.status_ticked.connect(_on_status_ticked)
 	_engine.hero_moved.connect(_on_hero_moved)
+	_engine.combatant_pushed.connect(_on_combatant_pushed)
 	_engine.setup(_all_combatants)
 
 ## ─── Cave Atmosphere ──────────────────────────────────────────────────────────
@@ -363,6 +365,14 @@ func _next_turn() -> void:
 			_hero_ability_objs[id].tick_cooldown()
 		_refresh_ability_bar()
 
+		# Surrounded commentary (3+ enemies adjacent)
+		var adj_enemies: int = 0
+		for e: Combatant in _enemies:
+			if e.is_alive() and HexGrid.hex_distance(_hero.position, e.position) == 1:
+				adj_enemies += 1
+		if adj_enemies >= 3:
+			SystemVoice.speak("surrounded")
+
 		# Apply lava heat damage if adjacent to lava
 		_apply_lava_heat(active)
 		if _engine.battle_over:
@@ -426,10 +436,12 @@ func _on_hex_input(_viewport: Viewport, event: InputEvent, _shape_idx: int, hex:
 	var abl_target: String = abl.get("target", "single_enemy")
 	var abl_range: int = abl.get("range", 1)
 
-	# Clicking hero's own hex → use self-target abilities
+	# Clicking hero's own hex → use self-target abilities or self-centered AoE
 	if hex == _hero.position:
 		if abl_target == "self":
 			_do_hero_self_ability()
+		elif abl_target == "all_enemies":
+			_do_hero_aoe_ability(hex)
 		return
 
 	# Check for enemy at clicked hex
@@ -495,6 +507,19 @@ func _do_hero_attack(target: Combatant) -> void:
 	_clear_highlights()
 	_engine.perform_attack(_hero, target, _selected_ability)
 	SystemVoice.speak("hit")
+	# Backstab commentary
+	if _selected_ability == "backstab":
+		SystemVoice.speak("backstab_hit")
+	# Shield Bash pushback
+	var abl_data_local: Dictionary = Abilities.get_ability(_selected_ability)
+	if abl_data_local.get("push_back", false):
+		var slammed: bool = _engine.apply_push(_hero, target, _map)
+		if slammed:
+			var slam_dmg: int = _engine.apply_environment_damage(target, 15)
+			_show_damage_number(target, slam_dmg, Color(1.0, 0.6, 0.0))
+			SystemVoice.speak("push_slam")
+		_sync_entity_positions()
+		_update_all_hp_bars()
 	# Consume the charge
 	if abl_obj != null:
 		abl_obj.use()
@@ -506,7 +531,7 @@ func _do_hero_attack(target: Combatant) -> void:
 	_next_turn()
 
 func _do_hero_aoe_ability(center_hex: Vector2i) -> void:
-	## Handles fireball (damage AOE) and frost_nova (freeze AOE)
+	## Handles all AoE abilities: fireball, frost_nova, whirlwind, smoke_bomb.
 	var abl_obj: Ability = _hero_ability_objs.get(_selected_ability)
 	if abl_obj != null and not abl_obj.can_use():
 		_show_system_banner("Ability on cooldown! Pick something that works.", 1.8)
@@ -515,39 +540,59 @@ func _do_hero_aoe_ability(center_hex: Vector2i) -> void:
 	_player_turn = false
 	_clear_highlights()
 
-	var aoe_radius: int = 2  # default AOE radius for fireball
+	var abl: Dictionary = Abilities.get_ability(_selected_ability)
+	var aoe_radius: int = abl.get("aoe_radius", 1)
 
-	if _selected_ability == "frost_nova":
-		aoe_radius = 1
-		# Apply frozen status to all enemies in range 1 of hero (not center_hex)
-		var frozen_count: int = 0
-		for e: Combatant in _enemies:
-			if e.is_alive() and HexGrid.is_in_range(_hero.position, e.position, 1):
-				e.apply_status(StatusEffect.frozen(2))
-				frozen_count += 1
-		if frozen_count > 0:
-			SystemVoice.speak_direct("Frost Nova! %d enemies frozen. Cold comfort." % frozen_count)
+	match _selected_ability:
+		"frost_nova":
+			var frozen_count: int = 0
+			for e: Combatant in _enemies:
+				if e.is_alive() and HexGrid.is_in_range(_hero.position, e.position, 1):
+					e.apply_status(StatusEffect.frozen(2))
+					frozen_count += 1
+			if frozen_count > 0:
+				SystemVoice.speak_direct("Frost Nova! %d enemies frozen. Cold comfort." % frozen_count)
+			else:
+				SystemVoice.speak_direct("Frost Nova fires into empty space. The dungeon sighs.")
 			_flash_hex_area(_hero.position, 1, FROST_CLR)
-		else:
-			SystemVoice.speak_direct("Frost Nova fires into empty space. The dungeon sighs.")
-	else:
-		# Damage AOE (fireball etc.)
-		var disk_hexes: Array[Vector2i] = HexGrid.disk(center_hex, aoe_radius)
-		var targets: Array[Combatant] = []
-		for e: Combatant in _enemies:
-			if e.is_alive() and e.position in disk_hexes:
-				targets.append(e)
-		if not targets.is_empty():
-			_engine.perform_aoe_attack(_hero, targets, _selected_ability)
-			SystemVoice.speak_direct("Fireball! %d targets caught in the blast." % targets.size())
-		else:
-			SystemVoice.speak_direct("Fireball detonates. Impressively. On nothing.")
-		_flash_hex_area(center_hex, aoe_radius, AOE_CLR)
+		"smoke_bomb":
+			var frozen_count: int = 0
+			for e: Combatant in _enemies:
+				if e.is_alive() and HexGrid.is_in_range(_hero.position, e.position, aoe_radius):
+					e.apply_status(StatusEffect.frozen(2))
+					frozen_count += 1
+			if frozen_count > 0:
+				SystemVoice.speak_direct("Smoke Bomb! %d enemies choke and freeze." % frozen_count)
+			else:
+				SystemVoice.speak_direct("Smoke fills the air. Dramatically. To no effect.")
+			_flash_hex_area(_hero.position, aoe_radius, FROST_CLR)
+		"whirlwind":
+			var ww_targets: Array[Combatant] = []
+			for e: Combatant in _enemies:
+				if e.is_alive() and HexGrid.is_in_range(_hero.position, e.position, 1):
+					ww_targets.append(e)
+			if not ww_targets.is_empty():
+				_engine.perform_aoe_attack(_hero, ww_targets, _selected_ability)
+				SystemVoice.speak_direct("Whirlwind! %d enemies struck!" % ww_targets.size())
+			else:
+				SystemVoice.speak_direct("Whirlwind spins. The air is unimpressed.")
+			_flash_hex_area(_hero.position, 1, AOE_CLR)
+		_:
+			# Ranged targeted AOE (fireball and any future targeted AoE)
+			var disk_hexes: Array[Vector2i] = HexGrid.disk(center_hex, aoe_radius)
+			var fb_targets: Array[Combatant] = []
+			for e: Combatant in _enemies:
+				if e.is_alive() and e.position in disk_hexes:
+					fb_targets.append(e)
+			if not fb_targets.is_empty():
+				_engine.perform_aoe_attack(_hero, fb_targets, _selected_ability)
+				SystemVoice.speak_direct("Fireball! %d targets caught in the blast." % fb_targets.size())
+			else:
+				SystemVoice.speak_direct("Fireball detonates. Impressively. On nothing.")
+			_flash_hex_area(center_hex, aoe_radius, AOE_CLR)
 
-	# Consume the charge
 	if abl_obj != null:
 		abl_obj.use()
-
 	_update_all_hp_bars()
 	_update_hero_hp_label()
 	_refresh_ability_bar()
@@ -701,10 +746,20 @@ func _on_action_taken(_attacker: Combatant, target: Combatant, damage: int, _abi
 	_show_damage_number(target, damage)
 	_update_hp_bar(target)
 	_update_status_label(target)
+	# Low HP commentary (hero)
+	if target.faction == Combatant.Faction.HERO and not _low_hp_warned:
+		var ratio: float = float(target.hp) / float(max(1, target.max_hp))
+		if ratio < 0.2:
+			_low_hp_warned = true
+			SystemVoice.speak("low_hp")
 
 func _on_combatant_died(c: Combatant) -> void:
 	if c.faction == Combatant.Faction.ENEMY:
-		SystemVoice.speak("kill")
+		if not GameState.first_kill_done:
+			GameState.first_kill_done = true
+			SystemVoice.speak("first_kill")
+		else:
+			SystemVoice.speak("kill")
 		_enemies_killed += 1
 	else:
 		# Hero died — start death overlay after a moment
@@ -894,6 +949,11 @@ func _show_system_banner(text: String, duration: float) -> void:
 	var tw: Tween = create_tween()
 	tw.tween_interval(duration)
 	tw.tween_callback(func() -> void: _system_banner.visible = false)
+
+func _on_combatant_pushed(c: Combatant, _from: Vector2i, _to: Vector2i, slammed: bool) -> void:
+	_sync_entity_positions()
+	if slammed:
+		_update_all_hp_bars()
 
 func _make_hex_pts(size: float) -> PackedVector2Array:
 	var pts := PackedVector2Array()

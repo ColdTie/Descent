@@ -30,7 +30,7 @@ DESCENT is a turn-based tactical dungeon crawler in the spirit of **Dungeon Craw
 - **Architecture rule**: `BattleEngine._calculate_damage()` returns RAW damage (no armor). `Combatant.take_damage(amount, ignore_armor=false)` applies armor. Don't double-apply armor in both places.
 - `Combatant.take_damage(amount, ignore_armor)` — the `ignore_armor` parameter bypasses the `armor` field reduction (for backstab, env damage, etc.)
 
-## Current State (Run 3 — Charges, Scaling, Lava, Victory Screen)
+## Current State (Run 4 — Shield Bash, Ability Unlocks, Commentary)
 ### Implemented ✅
 **Run 1 (Bootstrap):**
 - `GameRng`, `GameState`, `SystemVoice` autoloads
@@ -47,29 +47,41 @@ DESCENT is a turn-based tactical dungeon crawler in the spirit of **Dungeon Craw
 - 69 headless tests
 
 **Run 3 (Charges + Scaling + Tactical Depth):**
-- **Ability charges/cooldown wired into BattleScene HUD:**
-  - Each hero ability tracked with an `Ability` object (`_hero_ability_objs` dict)
-  - Buttons show charge dots (●●○), cooldown countdown (↻3), or ∞ for unlimited
-  - Depleted abilities are greyed out and disabled; can't be clicked
-  - Cooldowns tick at the START of each hero turn (so cooldown 4 = 4 of YOUR turns)
-  - Message shown when trying to use an ability on cooldown
-- **Backstab correctly ignores armor** — `ignore_armor` flag in `Abilities.DATA` + `Combatant.take_damage(amount, ignore_armor=false)` param
-- **Architecture fix**: `_calculate_damage` returns raw damage; `take_damage` is the single armor-application point. Eliminated double-armor bug from Run 1/2.
-- **Enemy collision avoidance** — `BattleEngine._move_toward` checks for living combatants at target hex; enemies can't stack
-- **Lava heat damage** — Any entity starting their turn adjacent to lava takes heat damage (3 + 3*(adjacent_count-1)), bypassing armor. Makes lava tiles tactically significant.
-- **Victory screen** (`VictoryScreen.tscn/.gd`) — "FLOOR N CLEARED!" with gold title, System quip, stats (kills / XP / level / HP), "DESCEND DEEPER" button
-  - Flow: BattleScene → VictoryScreen → (level check) → LevelUp or LootScreen → next floor
-- **Floor scaling** — `EnemyDefs.make_combatant(def, pos, rng, floor_num)`: +20% HP per floor above 1; +1 armor every 2 floors
-- **Class glyph on hero** — entity node shows ⚔ for Brawler, 🗡 for Rogue, ✦ for Arcanist; class-colored hex body
-- **Enemy glyphs** — 👿 Imp, G Goblin, 💀 Skeleton, D Demon, ⬡ Golem
-- **`apply_environment_damage`** on BattleEngine — deals armor-ignoring damage for lava/env hazards
-- **109 headless tests** — all passing: RNG (5), Hex (13), Combat (27), Movement+Abilities (24), Run3 (40)
+- Ability charges/cooldown wired into BattleScene HUD (dots, cooldown countdown, disabled state)
+- Backstab ignores armor, architecture fix for double-armor bug
+- Enemy collision avoidance, lava heat damage, victory screen, floor scaling
+- Class + enemy glyphs, `apply_environment_damage`
+- 109 headless tests
 
-### Next Priorities (Run 4)
-1. **Sounds** — Even a minimal audio pass: hit, kill, move, ability sounds (use Godot's AudioStreamGenerator or import simple beeps)
-2. **Class abilities tab on upgrade screen** — the Level-up screen currently only shows stat upgrades; add a "NEW ABILITY" option so hero can unlock fireball/backstab/etc. mid-run
-3. **Pushback mechanic** — the Brawler class should have a "Shield Bash" that pushes enemies toward lava; makes lava truly tactical
-4. **Multi-floor run feel** — currently each floor starts fresh; heroes should FEEL stronger on floor 5 vs floor 1 — the scaling helps enemies but hero stat upgrades should visibly compound
+**Run 4 (Shield Bash + Ability Unlocks + Commentary):**
+- **Shield Bash** (Brawler starting ability) — pushes enemy one hex away; if blocked by wall/lava or another unit → SLAM (15 armor-ignoring bonus damage). Makes lava edges lethal for Brawler.
+  - `BattleEngine.apply_push(attacker, target, map)` — pure, testable, emits `combatant_pushed(c, from, to, slammed)` signal
+- **New abilities per class (unlockable at level-up):**
+  - Brawler → **Whirlwind**: hits all adjacent enemies, 12 dmg each, range 1, 3 cooldown
+  - Rogue → **Smoke Bomb**: freezes all enemies within radius 2 for 2 turns, 4 cooldown
+  - Arcanist → **Lightning Bolt**: 45 dmg single target, range 4, 3 cooldown
+- **Ability unlocks on LevelUp screen** — when a class has an ability in `unlockable_abilities` that the hero hasn't learned, one guaranteed ability-unlock card appears (cyan) alongside 2 stat upgrades. Ability icon + `[NEW ABILITY]` tag distinguishes them visually.
+- **`_do_hero_aoe_ability` refactored** — match statement handles frost_nova / smoke_bomb (hero-centered freeze), whirlwind (hero-centered damage AoE), fireball (targeted AoE). Uses `aoe_radius` from ability data.
+- **The System mid-battle commentary** — 5 new trigger pools:
+  - `low_hp`: fires once per battle when hero falls below 20% HP
+  - `first_kill`: fires on the very first enemy kill of a run (`GameState.first_kill_done` flag)
+  - `backstab_hit`: fires after hero uses backstab
+  - `surrounded`: fires at start of hero turn when 3+ enemies are adjacent
+  - `push_slam`: fires when Shield Bash slams an enemy into a wall
+- **HP regen between floors** — `Main._on_floor_cleared` heals hero 10 HP before processing XP/loot
+- **144 headless tests** — all passing: RNG (5), Hex (13), Combat (27), Movement+Abilities (24), Run3 (40), Run4 (35)
+
+### Godot 4.4.1 API Gotchas (learned in Runs 1–4)
+- `aoe_radius` must be stored in ability DATA and read with `abl.get("aoe_radius", 1)` — don't hardcode AOE radii in scene code
+- `GameRng.shuffle(typed_array)` works because typed `Array[T]` coerces to untyped `Array` in GDScript method calls
+- Tests that access autoload constants (e.g. `SystemVoice.LINES`) produce compile warnings in `--script` mode but still pass; keep test assertions autoload-free where possible
+
+### Next Priorities (Run 5)
+1. **Sounds** — Minimal audio pass: hit, kill, move, ability sounds (AudioStreamGenerator or simple WAVs)
+2. **Multi-floor run feel** — Hero stat upgrades should visibly compound; add a "Run Stats" panel to VictoryScreen showing cumulative bonuses
+3. **Enemy variety on deep floors** — New enemy types for floors 5+: Demon Archer (ranged 3, high damage), Elite Goblin (moves twice per turn), Boss on floor 10
+4. **Minimap / floor depth indicator** — small progress indicator (Floor N of 10) shown during battle and on VictoryScreen
+5. **Ability highlight improvements** — show Whirlwind/Smoke Bomb range overlay when hovering button; show Lightning Bolt targeting arc
 5. **The System mid-battle commentary** — trigger quips on: hero surviving below 20% HP, first kill of run, using backstab successfully, hero standing adjacent to lava, enemies surrounding hero
 6. **HP regeneration between floors** — currently hero HP is frozen between floors unless they take healing loot; add small passive regen (5-10 HP) between floors as a quality-of-life change
 7. **Minimap / floor preview** — small indicator showing which floor you're on out of N (generate run length at run start)

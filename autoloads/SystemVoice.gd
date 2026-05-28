@@ -53,6 +53,32 @@ const LINES: Dictionary = {
 		"Choose your doomed archetype.",
 		"Pick wisely. Or don't. You'll probably die anyway.",
 	],
+	"low_hp": [
+		"Critical condition. The System is watching with morbid interest.",
+		"Below 20% HP. The dungeon smells blood.",
+		"You're critically wounded. Remarkable that you're still upright.",
+		"That's not a lot of HP. That is not a lot of HP at all.",
+	],
+	"first_kill": [
+		"First blood. The dungeon wakes up.",
+		"Kill confirmed. The run begins in earnest.",
+		"One down. The dungeon adjusts its estimates upward.",
+	],
+	"backstab_hit": [
+		"Backstab! From the shadows, efficiently terrible.",
+		"Hit from nowhere. The enemy did not appreciate that.",
+		"Shadows outperform armor. The System is unsurprised.",
+	],
+	"surrounded": [
+		"You are surrounded. The System is impressed you're still processing inputs.",
+		"Three enemies adjacent. The dungeon admires your confidence.",
+		"Surrounded. Consider this a learning experience. Briefly.",
+	],
+	"push_slam": [
+		"SLAM! The wall is unimpressed. The enemy, slightly more so.",
+		"Physics: walls don't move. Enemies do. Lesson delivered.",
+		"Shield Bash into architecture. Maximum efficiency.",
+	],
 }
 
 var _last_indices: Dictionary = {}
