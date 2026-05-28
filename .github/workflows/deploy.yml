@@ -1,0 +1,58 @@
+name: Export and Deploy to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  export:
+    name: Web Export
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Godot 4.4.1
+        run: |
+          wget -q -O godot.zip \
+            https://github.com/godotengine/godot/releases/download/4.4.1-stable/Godot_v4.4.1-stable_linux.x86_64.zip
+          unzip -q godot.zip
+          mv Godot_v4.4.1-stable_linux.x86_64 /usr/local/bin/godot
+          chmod +x /usr/local/bin/godot
+          rm godot.zip
+
+      - name: Install Web export templates
+        run: |
+          wget -q -O templates.tpz \
+            https://github.com/godotengine/godot/releases/download/4.4.1-stable/Godot_v4.4.1-stable_export_templates.tpz
+          mkdir -p ~/.local/share/godot/export_templates/4.4.1.stable
+          unzip -q templates.tpz
+          mv templates/web* ~/.local/share/godot/export_templates/4.4.1.stable/
+          rm -rf templates templates.tpz
+
+      - name: Export project to Web
+        run: |
+          mkdir -p build/web
+          godot --headless --export-release "Web" "$(pwd)/build/web/index.html"
+
+      - name: Prepare deployment folder
+        run: |
+          cp coi-serviceworker.js build/web/
+          touch build/web/.nojekyll
+
+      - name: Deploy to gh-pages
+        run: |
+          cd build/web
+          git init -b gh-pages
+          git add -A
+          git -c user.email="github-actions@github.com" \
+              -c user.name="GitHub Actions" \
+              commit -m "Deploy: ${{ github.sha }}"
+          git push --force \
+            "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" \
+            HEAD:gh-pages
