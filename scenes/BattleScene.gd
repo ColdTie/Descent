@@ -7,9 +7,12 @@ signal battle_complete(hero_won: bool, xp_earned: int, enemies_killed: int)
 const HEX_SIZE: float = 38.0
 const HERO_COLOR     := Color(0.25, 0.55, 1.0)
 const ENEMY_COLOR    := Color(0.9, 0.2, 0.15)
-const LAVA_COLOR     := Color(0.82, 0.32, 0.04)
-const FLOOR_COLOR    := Color(0.16, 0.13, 0.19)
+const LAVA_COLOR     := Color(0.88, 0.36, 0.04)
+const LAVA_GLOW      := Color(1.0, 0.60, 0.08, 0.35)
+const FLOOR_COLOR    := Color(0.18, 0.15, 0.22)
+const FLOOR_ALT      := Color(0.14, 0.11, 0.17)
 const FLOOR_DARK     := Color(0.10, 0.08, 0.13)
+const STONE_EDGE     := Color(0.38, 0.30, 0.45)
 const SELECTED_CLR   := Color(1.0, 0.9, 0.2)
 const DEAD_MODULATE  := Color(0.35, 0.35, 0.35, 0.4)
 const MOVE_CLR       := Color(0.15, 0.85, 0.35, 0.45)
@@ -134,10 +137,25 @@ func _build_encounter() -> void:
 ## ─── Cave Atmosphere ──────────────────────────────────────────────────────────
 
 func _draw_cave_background() -> void:
-	# Subtle dungeon-atmosphere color modulation
+	# Stone-tinted atmosphere
 	var cm := CanvasModulate.new()
-	cm.color = Color(0.78, 0.72, 0.92)
+	cm.color = Color(0.82, 0.76, 0.96)
 	add_child(cm)
+
+	# Vignette — four dark gradient strips around the viewport edges
+	var ui: CanvasLayer = $UILayer
+	for edge_rect: Array in [
+		[0, 0, 1280, 80],     # top
+		[0, 640, 1280, 80],   # bottom
+		[0, 0, 90, 720],      # left
+		[1190, 0, 90, 720],   # right
+	]:
+		var cr := ColorRect.new()
+		cr.position = Vector2(edge_rect[0], edge_rect[1])
+		cr.size = Vector2(edge_rect[2], edge_rect[3])
+		cr.color = Color(0.03, 0.01, 0.06, 0.72)
+		cr.z_index = -10
+		ui.add_child(cr)
 
 func _draw_stalagmites() -> void:
 	## Draw dark triangular stalagmites in the outer ring — purely decorative
@@ -179,31 +197,41 @@ func _draw_hex_grid() -> void:
 		var poly := Polygon2D.new()
 		poly.polygon = _make_hex_pts(HEX_SIZE - 2.0)
 		poly.position = world_pos
+		var is_lava: bool = tile_type == "lava"
 		match tile_type:
 			"lava":
 				poly.color = LAVA_COLOR
 			_:
-				var shade: float = 0.0 if (hex.x + hex.y) % 2 == 0 else 0.04
-				poly.color = FLOOR_COLOR + Color(shade, shade, shade, 0.0)
+				var alt: bool = (hex.x + hex.y) % 2 == 0
+				poly.color = FLOOR_COLOR if alt else FLOOR_ALT
 		_hex_layer.add_child(poly)
 		_hex_polys[hex] = poly
 
-		# Hex border
+		# Lava: add a soft glow polygon behind the tile
+		if is_lava:
+			var glow_poly := Polygon2D.new()
+			glow_poly.polygon = _make_hex_pts(HEX_SIZE + 4.0)
+			glow_poly.color = LAVA_GLOW
+			glow_poly.position = world_pos
+			glow_poly.z_index = -1
+			_hex_layer.add_child(glow_poly)
+
+		# Hex border — thicker for lava, stone-purple for floor
 		var border := Line2D.new()
 		var bpts: PackedVector2Array = _make_hex_pts(HEX_SIZE - 1.5)
 		bpts.append(bpts[0])
 		border.points = bpts
-		border.width = 1.2
-		border.default_color = Color(0.28, 0.22, 0.32)
+		border.width = 1.6 if is_lava else 1.0
+		border.default_color = Color(0.95, 0.42, 0.04) if is_lava else STONE_EDGE
 		poly.add_child(border)
 
 		# Lava shimmer glyph
-		if tile_type == "lava":
+		if is_lava:
 			var lava_lbl := Label.new()
 			lava_lbl.text = "~"
-			lava_lbl.add_theme_font_size_override("font_size", 14)
-			lava_lbl.add_theme_color_override("font_color", Color(1.0, 0.72, 0.1, 0.9))
-			lava_lbl.position = Vector2(-5.0, -8.0)
+			lava_lbl.add_theme_font_size_override("font_size", 15)
+			lava_lbl.add_theme_color_override("font_color", Color(1.0, 0.78, 0.1, 0.95))
+			lava_lbl.position = Vector2(-6.0, -9.0)
 			poly.add_child(lava_lbl)
 			_start_lava_pulse(poly)
 
@@ -241,13 +269,20 @@ func _spawn_entity_node(c: Combatant) -> void:
 		sprite_tex = load(sprite_path) as Texture2D
 	var is_boss: bool = c.sprite_key.begins_with("boss")
 	if sprite_tex != null:
+		# Drop shadow ellipse drawn first (behind sprite)
+		var shadow := Polygon2D.new()
+		shadow.polygon = _make_hex_pts(HEX_SIZE * 0.48)
+		shadow.color = Color(0.0, 0.0, 0.0, 0.55)
+		shadow.position = Vector2(0.0, HEX_SIZE * 0.30)
+		root.add_child(shadow)
+
 		var sprite := Sprite2D.new()
 		sprite.texture = sprite_tex
-		# 96×96 sprites; bosses scaled larger to loom over regular enemies
-		var sprite_scale: float = 0.92 if is_boss else 0.75
+		# HQ sprites rendered at 4× and downsampled — use LINEAR for smooth display
+		var sprite_scale: float = 1.22 if is_boss else 0.95
 		sprite.scale = Vector2(sprite_scale, sprite_scale)
-		sprite.position = Vector2(0.0, -14.0)
-		sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+		sprite.position = Vector2(0.0, -16.0)
+		sprite.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
 		root.add_child(sprite)
 	else:
 		# Fallback: colored hex + glyph (used before Godot imports the assets)
@@ -271,19 +306,24 @@ func _spawn_entity_node(c: Combatant) -> void:
 		lbl.position = Vector2(-12.0, -12.0)
 		root.add_child(lbl)
 
-	# HP bar background
+	# HP bar — taller and with a visible dark border
+	var hp_border := ColorRect.new()
+	hp_border.size = Vector2(42.0, 9.0)
+	hp_border.position = Vector2(-21.0, HEX_SIZE * 0.50)
+	hp_border.color = Color(0.06, 0.04, 0.08)
+	root.add_child(hp_border)
+
 	var hp_bg := ColorRect.new()
-	hp_bg.size = Vector2(38.0, 5.0)
-	hp_bg.position = Vector2(-19.0, HEX_SIZE * 0.48)
-	hp_bg.color = Color(0.25, 0.0, 0.0)
+	hp_bg.size = Vector2(40.0, 7.0)
+	hp_bg.position = Vector2(-20.0, HEX_SIZE * 0.50 + 1.0)
+	hp_bg.color = Color(0.30, 0.05, 0.05)
 	root.add_child(hp_bg)
 
-	# HP bar fill
 	var hp_bar := ColorRect.new()
 	hp_bar.name = "HPBar"
-	hp_bar.size = Vector2(38.0, 5.0)
-	hp_bar.position = Vector2(-19.0, HEX_SIZE * 0.48)
-	hp_bar.color = Color(0.2, 0.88, 0.2)
+	hp_bar.size = Vector2(40.0, 7.0)
+	hp_bar.position = Vector2(-20.0, HEX_SIZE * 0.50 + 1.0)
+	hp_bar.color = Color(0.18, 0.88, 0.22)
 	root.add_child(hp_bar)
 
 	# Status icons area
@@ -346,26 +386,33 @@ func _build_boss_hp_bar() -> void:
 
 	# Label
 	var name_lbl := Label.new()
-	name_lbl.text = "⚠ %s ⚠" % _boss.display_name
-	name_lbl.position = Vector2(640.0 - bar_w / 2.0, 70.0)
+	name_lbl.text = "☠  %s  ☠" % _boss.display_name.to_upper()
+	name_lbl.position = Vector2(640.0 - bar_w / 2.0, 68.0)
 	name_lbl.custom_minimum_size = Vector2(bar_w, 0.0)
 	name_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	name_lbl.add_theme_font_size_override("font_size", 13)
-	name_lbl.add_theme_color_override("font_color", Color(0.9, 0.3, 0.9))
+	name_lbl.add_theme_font_size_override("font_size", 14)
+	name_lbl.add_theme_color_override("font_color", Color(1.0, 0.45, 1.0))
 	ui.add_child(name_lbl)
+
+	# Outer border
+	var border := ColorRect.new()
+	border.position = Vector2(640.0 - bar_w / 2.0 - 2.0, 86.0)
+	border.size = Vector2(bar_w + 4.0, 18.0)
+	border.color = Color(0.5, 0.0, 0.6)
+	ui.add_child(border)
 
 	# Background
 	var bg := ColorRect.new()
 	bg.position = Vector2(640.0 - bar_w / 2.0, 88.0)
-	bg.size = Vector2(bar_w, 12.0)
-	bg.color = Color(0.2, 0.0, 0.2)
+	bg.size = Vector2(bar_w, 14.0)
+	bg.color = Color(0.12, 0.0, 0.16)
 	ui.add_child(bg)
 
 	# Fill
 	_boss_hp_fill = ColorRect.new()
 	_boss_hp_fill.position = Vector2(640.0 - bar_w / 2.0, 88.0)
-	_boss_hp_fill.size = Vector2(bar_w, 12.0)
-	_boss_hp_fill.color = Color(0.7, 0.1, 0.8)
+	_boss_hp_fill.size = Vector2(bar_w, 14.0)
+	_boss_hp_fill.color = Color(0.72, 0.10, 0.82)
 	ui.add_child(_boss_hp_fill)
 
 func _update_boss_hp_bar() -> void:
@@ -373,7 +420,7 @@ func _update_boss_hp_bar() -> void:
 		return
 	var ratio: float = float(_boss.hp) / float(max(1, _boss.max_hp))
 	_boss_hp_fill.size.x = 400.0 * clampf(ratio, 0.0, 1.0)
-	_boss_hp_fill.color = Color(0.7 - ratio * 0.3, 0.1 + ratio * 0.1, 0.8 - ratio * 0.4)
+	_boss_hp_fill.color = Color(0.72 - ratio * 0.22, 0.10 + ratio * 0.08, 0.82 - ratio * 0.42)
 
 ## ─── Ability Bar ──────────────────────────────────────────────────────────────
 
@@ -950,8 +997,9 @@ func _update_hp_bar(c: Combatant) -> void:
 	if hp_bar == null:
 		return
 	var ratio: float = float(c.hp) / float(max(1, c.max_hp))
-	hp_bar.size.x = 38.0 * clampf(ratio, 0.0, 1.0)
-	hp_bar.color = Color(1.0 - ratio * 0.8, 0.2 + ratio * 0.68, 0.1)
+	hp_bar.size.x = 40.0 * clampf(ratio, 0.0, 1.0)
+	# Green → yellow → red gradient as HP drops
+	hp_bar.color = Color(1.0 - ratio * 0.78, 0.18 + ratio * 0.70, 0.08)
 
 func _update_status_label(c: Combatant) -> void:
 	var node: Node2D = _entity_nodes.get(c.id)

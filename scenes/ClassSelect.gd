@@ -1,8 +1,8 @@
 extends Control
 ## Class selection screen — the front end of each run.
 
-const CARD_WIDTH: float = 190.0
-const CARD_HEIGHT: float = 270.0
+const CARD_WIDTH: float = 210.0
+const CARD_HEIGHT: float = 310.0
 
 var _selected_class: String = ""
 
@@ -39,11 +39,11 @@ func _make_class_card(class_id: String) -> PanelContainer:
 		portrait_tex = load(portrait_path) as Texture2D
 	if portrait_tex != null:
 		var portrait := TextureRect.new()
-		portrait.custom_minimum_size = Vector2(CARD_WIDTH - 10.0, 160.0)
+		portrait.custom_minimum_size = Vector2(CARD_WIDTH - 10.0, 192.0)
 		portrait.texture = portrait_tex
 		portrait.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 		portrait.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-		portrait.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+		portrait.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
 		vbox.add_child(portrait)
 	else:
 		var swatch := ColorRect.new()
