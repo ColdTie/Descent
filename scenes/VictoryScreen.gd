@@ -8,14 +8,7 @@ signal floor_cleared
 var xp_earned: int = 0
 var enemies_killed: int = 0
 
-const QUIPS: Array[String] = [
-	"Floor cleared. The dungeon is mildly impressed. That's as good as it gets.",
-	"All hostiles eliminated. The System awards a grudging nod.",
-	"You survived. Statistically, this was improbable.",
-	"Victory. The dungeon recalibrates. You should be concerned.",
-	"Enemies defeated. You remain alive. For now.",
-	"Floor complete. Something worse waits below.",
-]
+# Victory quips now live in SystemVoice "victory" pool — see autoloads/SystemVoice.gd
 
 func prepare(data: Dictionary) -> void:
 	## Called by Main before adding to scene tree.
@@ -73,12 +66,9 @@ func _build_ui() -> void:
 	sep.add_theme_color_override("color", Color(0.4, 0.3, 0.1, 0.6))
 	center.add_child(sep)
 
-	# System quip
-	var rng := RandomNumberGenerator.new()
-	rng.seed = GameState.run_seed + GameState.floor_num * 1337
-	var quip_idx: int = rng.randi_range(0, QUIPS.size() - 1)
+	# System quip — drawn from the SystemVoice "victory" pool
 	var quip_lbl := Label.new()
-	quip_lbl.text = QUIPS[quip_idx]
+	quip_lbl.text = SystemVoice.pick("victory")
 	quip_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	quip_lbl.add_theme_font_size_override("font_size", 18)
 	quip_lbl.add_theme_color_override("font_color", Color(0.8, 0.8, 0.65))

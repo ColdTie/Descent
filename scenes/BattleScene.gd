@@ -38,6 +38,7 @@ var _selected_ability: String = "basic_attack"
 var _player_turn: bool = false
 var _battle_rng: RandomNumberGenerator
 var _enemies_killed: int = 0
+var _first_kill_done: bool = false   # for first_kill quip
 var _boss: Combatant = null
 var _boss_hp_fill: ColorRect = null
 
@@ -331,6 +332,9 @@ func _build_boss_hp_bar() -> void:
 			break
 	if _boss == null:
 		return
+	# Announce boss encounter after a brief delay so floor_enter lands first
+	get_tree().create_timer(1.8).timeout.connect(func() -> void:
+		SystemVoice.speak("boss_encounter"), CONNECT_ONE_SHOT)
 
 	var ui: CanvasLayer = $UILayer
 	var bar_w: float = 400.0
@@ -443,6 +447,11 @@ func _next_turn() -> void:
 			_hero_ability_objs[id].tick_cooldown()
 		_refresh_ability_bar()
 
+		# Near-death warning (≤25% HP) — occasional, not every single turn
+		var hp_ratio: float = float(_hero.hp) / float(max(1, _hero.max_hp))
+		if hp_ratio <= 0.25 and _battle_rng.randf() < 0.55:
+			SystemVoice.speak("near_death")
+
 		# Apply lava heat damage if adjacent to lava
 		_apply_lava_heat(active)
 		if _engine.battle_over:
@@ -516,7 +525,7 @@ func _on_hex_input(_viewport: Viewport, event: InputEvent, _shape_idx: int, hex:
 	var target: Combatant = _find_enemy_at(hex)
 	if target != null:
 		if not HexGrid.is_in_range(_hero.position, hex, abl_range):
-			_show_system_banner("Out of range!", 1.2)
+			SystemVoice.speak("out_of_range")
 			return
 		if abl_target == "all_enemies":
 			# AOE centered on target hex
@@ -554,12 +563,7 @@ func _do_hero_move(hex: Vector2i) -> void:
 	_clear_highlights()
 	_engine.move_combatant(_hero, hex)
 	# Visual movement handled by _on_hero_moved signal
-	var quips: Array[String] = [
-		"Tactical repositioning. The System is cautiously optimistic.",
-		"You move. The dungeon shrugs.",
-		"New position acquired. Try not to die there.",
-	]
-	_show_system_banner(quips[_battle_rng.randi_range(0, quips.size() - 1)], 1.5)
+	SystemVoice.speak("move")
 	await get_tree().create_timer(0.28).timeout
 	_engine.end_turn()
 	_next_turn()
@@ -568,13 +572,16 @@ func _do_hero_attack(target: Combatant) -> void:
 	# Check cooldown/charges before attacking
 	var abl_obj: Ability = _hero_ability_objs.get(_selected_ability)
 	if abl_obj != null and not abl_obj.can_use():
-		_show_system_banner("Ability on cooldown! The System suggests a different strategy.", 1.8)
+		SystemVoice.speak("ability_cooldown")
 		return
 
 	_player_turn = false
 	_clear_highlights()
 	_engine.perform_attack(_hero, target, _selected_ability)
-	SystemVoice.speak("hit")
+	if _selected_ability == "backstab":
+		SystemVoice.speak("ability_backstab")
+	else:
+		SystemVoice.speak("hit")
 	# Consume the charge
 	if abl_obj != null:
 		abl_obj.use()
@@ -589,7 +596,7 @@ func _do_hero_aoe_ability(center_hex: Vector2i) -> void:
 	## Handles fireball (damage AOE) and frost_nova (freeze AOE)
 	var abl_obj: Ability = _hero_ability_objs.get(_selected_ability)
 	if abl_obj != null and not abl_obj.can_use():
-		_show_system_banner("Ability on cooldown! Pick something that works.", 1.8)
+		SystemVoice.speak("ability_cooldown")
 		return
 
 	_player_turn = false
@@ -606,10 +613,10 @@ func _do_hero_aoe_ability(center_hex: Vector2i) -> void:
 				e.apply_status(StatusEffect.frozen(2))
 				frozen_count += 1
 		if frozen_count > 0:
-			SystemVoice.speak_direct("Frost Nova! %d enemies frozen. Cold comfort." % frozen_count)
+			SystemVoice.speak_direct(SystemVoice.pick("ability_frost_hit") % frozen_count)
 			_flash_hex_area(_hero.position, 1, FROST_CLR)
 		else:
-			SystemVoice.speak_direct("Frost Nova fires into empty space. The dungeon sighs.")
+			SystemVoice.speak("ability_frost_miss")
 	else:
 		# Damage AOE (fireball etc.)
 		var disk_hexes: Array[Vector2i] = HexGrid.disk(center_hex, aoe_radius)
@@ -619,9 +626,9 @@ func _do_hero_aoe_ability(center_hex: Vector2i) -> void:
 				targets.append(e)
 		if not targets.is_empty():
 			_engine.perform_aoe_attack(_hero, targets, _selected_ability)
-			SystemVoice.speak_direct("Fireball! %d targets caught in the blast." % targets.size())
+			SystemVoice.speak_direct(SystemVoice.pick("ability_fireball_hit") % targets.size())
 		else:
-			SystemVoice.speak_direct("Fireball detonates. Impressively. On nothing.")
+			SystemVoice.speak("ability_fireball_miss")
 		_flash_hex_area(center_hex, aoe_radius, AOE_CLR)
 
 	# Consume the charge
@@ -639,7 +646,7 @@ func _do_hero_self_ability() -> void:
 	## Use self-target ability (taunt, vanish)
 	var abl_obj: Ability = _hero_ability_objs.get(_selected_ability)
 	if abl_obj != null and not abl_obj.can_use():
-		_show_system_banner("Ability on cooldown! Patience, Hero.", 1.8)
+		SystemVoice.speak("ability_cooldown")
 		return
 
 	_player_turn = false
@@ -651,11 +658,11 @@ func _do_hero_self_ability() -> void:
 			var armor_bonus: int = abl.get("fortified_armor", 5)
 			var dur: int = abl.get("fortified_duration", 3)
 			_hero.apply_status(StatusEffect.fortified(dur, armor_bonus))
-			SystemVoice.speak_direct("Taunted. All enemies focus on you. You asked for this.")
+			SystemVoice.speak("ability_taunt")
 			_flash_hex_area(_hero.position, 0, SELF_CLR)
 		"vanish":
 			_hero.apply_status(StatusEffect.vanished(3.0))
-			SystemVoice.speak_direct("Vanished. Await your moment. Make it count.")
+			SystemVoice.speak("ability_vanish")
 			# Visual: briefly dim hero node
 			var hnode: Node2D = _entity_nodes.get(_hero.id)
 			if hnode != null:
@@ -785,8 +792,14 @@ func _on_action_taken(_attacker: Combatant, target: Combatant, damage: int, _abi
 
 func _on_combatant_died(c: Combatant) -> void:
 	if c.faction == Combatant.Faction.ENEMY:
-		SystemVoice.speak("kill")
 		_enemies_killed += 1
+		if not _first_kill_done:
+			_first_kill_done = true
+			SystemVoice.speak("first_kill")
+		elif c.sprite_key.begins_with("boss"):
+			SystemVoice.speak("boss_killed")
+		else:
+			SystemVoice.speak("kill")
 	else:
 		# Hero died — start death overlay after a moment
 		await get_tree().create_timer(0.5).timeout

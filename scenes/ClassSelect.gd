@@ -100,7 +100,7 @@ func _on_class_selected(class_id: String, panel: PanelContainer) -> void:
 	panel.modulate = Color(1.0, 1.0, 1.0)
 	_start_button.visible = true
 	var cls_name: String = Classes.get_class_data(class_id).get("display_name", class_id)
-	SystemVoice.speak_direct("You've chosen %s. Bold. Probably foolish. Let's find out." % cls_name)
+	SystemVoice.speak_direct(SystemVoice.pick("class_chosen") % cls_name)
 
 func _on_start_pressed() -> void:
 	if _selected_class.is_empty():

@@ -82,23 +82,41 @@ func _apply_upgrade(item: Dictionary) -> void:
 	match item["id"]:
 		"atk_up":
 			GameState.hero_base_stats["attack"] = GameState.hero_base_stats.get("attack", 0) + 8
-			SystemVoice.speak_direct("Attack increased. The dungeon feels the difference.")
+			SystemVoice.speak_direct(["Attack increased. The dungeon feels the difference.",
+				"Damage output elevated. The enemies will notice. That's the point.",
+				"Attack up. The dungeon adjusts its projections. Upward, for you.",
+			][randi() % 3])
 		"spd_up":
 			GameState.hero_base_stats["speed"] = GameState.hero_base_stats.get("speed", 10) + 4
-			SystemVoice.speak_direct("Speed increased. You are now slightly less slow.")
+			SystemVoice.speak_direct(["Speed increased. You are now slightly less slow.",
+				"Faster. The dungeon's turn-order calculations have been updated.",
+				"Speed up. You move before more things. Use that.",
+			][randi() % 3])
 		"hp_up":
 			GameState.hero_max_hp += 30
 			GameState.heal(30)
-			SystemVoice.speak_direct("Max HP increased. You're harder to kill. Noted.")
+			SystemVoice.speak_direct(["Max HP increased. You're harder to kill. Noted.",
+				"HP ceiling raised. You can survive more mistakes. Try not to make them.",
+				"More HP. The dungeon finds this irritating. Good.",
+			][randi() % 3])
 		"def_up":
 			GameState.hero_base_stats["defense"] = GameState.hero_base_stats.get("defense", 0) + 4
-			SystemVoice.speak_direct("Armor increased. Pain is now less painful.")
+			SystemVoice.speak_direct(["Armor increased. Pain is now less painful.",
+				"Defense up. The dungeon's attacks will hurt slightly less. Slightly.",
+				"More armor. The dungeon recalculates required hits to kill you. It does not look pleased.",
+			][randi() % 3])
 		"xp_bonus":
 			GameState.hero_base_stats["xp_bonus"] = GameState.hero_base_stats.get("xp_bonus", 0) + 50
-			SystemVoice.speak_direct("XP bonus applied. Efficient. Grind on, Hero.")
+			SystemVoice.speak_direct(["XP bonus applied. Efficient. Grind on, Hero.",
+				"XP multiplier active. You will level faster. The dungeon will respond in kind.",
+				"Bonus XP unlocked. The System rewards your commitment to violence.",
+			][randi() % 3])
 		"heal_big":
 			GameState.heal(50)
-			SystemVoice.speak_direct("Healed 50 HP. The dungeon is briefly generous.")
+			SystemVoice.speak_direct(["Healed 50 HP. The dungeon is briefly generous.",
+				"50 HP restored. The dungeon notes your survival with mild displeasure.",
+				"Healing applied. You are less dead than you were. This is good.",
+			][randi() % 3])
 
 func _on_continue() -> void:
 	upgrade_chosen.emit(_chosen)

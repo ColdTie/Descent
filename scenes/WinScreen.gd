@@ -48,17 +48,9 @@ func _build_ui() -> void:
 	sep.add_theme_color_override("color", Color(0.6, 0.48, 0.1, 0.7))
 	center.add_child(sep)
 
-	# System voice — reluctant praise
-	var quips: Array[String] = [
-		"Floor 18 cleared. The System is… surprised. Don't let it go to your head.",
-		"You've reached the bottom. Somehow. Against all statistical projections.",
-		"Run complete. The dungeon concedes. You are, marginally, impressive.",
-		"18 floors. All hostiles dead. The System has no further commentary. For now.",
-	]
-	var rng := RandomNumberGenerator.new()
-	rng.seed = GameState.run_seed ^ 0xDEADBEEF
+	# System voice — reluctant praise, from the SystemVoice "win" pool
 	var quip_lbl := Label.new()
-	quip_lbl.text = quips[rng.randi_range(0, quips.size() - 1)]
+	quip_lbl.text = SystemVoice.pick("win")
 	quip_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	quip_lbl.add_theme_font_size_override("font_size", 18)
 	quip_lbl.add_theme_color_override("font_color", Color(0.82, 0.82, 0.65))
