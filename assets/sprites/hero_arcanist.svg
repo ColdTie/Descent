@@ -1,63 +1,124 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
-  <!-- Orb glow -->
-  <circle cx="54" cy="11" r="11" fill="#6060FF" opacity="0.18"/>
-  <circle cx="54" cy="11" r="7" fill="#8888FF" opacity="0.28"/>
-  <!-- Shadow -->
-  <ellipse cx="30" cy="61" rx="14" ry="3.5" fill="#000" opacity="0.25"/>
-  <!-- Robe body -->
-  <path d="M20,40 Q16,54 18,64 L46,64 Q48,54 44,40 Z" fill="#1A2468"/>
-  <!-- Robe front highlight -->
-  <path d="M22,40 Q18,54 20,64 L44,64 Q46,54 42,40 Z" fill="#1E2A74"/>
-  <!-- Robe trim gold -->
-  <path d="M20,40 L18,64" stroke="#8A7020" stroke-width="1.5" fill="none"/>
-  <path d="M44,40 L46,64" stroke="#8A7020" stroke-width="1.5" fill="none"/>
-  <!-- Star motifs -->
-  <circle cx="32" cy="50" r="1.5" fill="#4A5AA8" opacity="0.6"/>
-  <circle cx="28" cy="57" r="1" fill="#4A5AA8" opacity="0.5"/>
-  <circle cx="36" cy="57" r="1" fill="#4A5AA8" opacity="0.5"/>
-  <!-- Belt -->
-  <rect x="20" y="43" width="24" height="3" rx="1" fill="#8A7020"/>
-  <rect x="30" y="42.5" width="4" height="4" rx="1" fill="#C0A030"/>
-  <!-- Left sleeve -->
-  <rect x="11" y="38" width="10" height="14" rx="5" fill="#1E2A74"/>
-  <!-- Left hand casting glow -->
-  <circle cx="14" cy="54" r="5" fill="#C8A878"/>
-  <circle cx="14" cy="54" r="3.5" fill="#6060E0" opacity="0.45"/>
-  <circle cx="11" cy="50" r="1.5" fill="#8888FF" opacity="0.7"/>
-  <circle cx="8" cy="56" r="1" fill="#AAAAFF" opacity="0.55"/>
-  <!-- Pointed hat -->
-  <polygon points="32,2 20,22 44,22" fill="#131348"/>
-  <polygon points="32,2 22,22 42,22" fill="#191960"/>
-  <!-- Hat stars -->
-  <circle cx="32" cy="12" r="1" fill="#6868E0" opacity="0.6"/>
-  <circle cx="28" cy="18" r="0.7" fill="#6868E0" opacity="0.4"/>
-  <!-- Hat brim -->
-  <rect x="17" y="21" width="30" height="4" rx="2" fill="#131348"/>
-  <!-- Hat band gold -->
-  <rect x="18" y="22" width="28" height="2" rx="1" fill="#8A7020"/>
-  <!-- Head -->
-  <circle cx="32" cy="31" r="9.5" fill="#C8A070"/>
-  <!-- Beard white -->
-  <ellipse cx="32" cy="38" rx="6.5" ry="4" fill="#C8C0A0"/>
-  <!-- Bushy eyebrows -->
-  <rect x="24" y="27.5" width="6" height="2" rx="1" fill="#5A4020"/>
-  <rect x="34" y="27.5" width="6" height="2" rx="1" fill="#5A4020"/>
-  <!-- Eyes - piercing blue -->
-  <circle cx="27" cy="31" r="2.5" fill="#E8E8E0"/>
-  <circle cx="37" cy="31" r="2.5" fill="#E8E8E0"/>
-  <circle cx="27" cy="31" r="1.5" fill="#4060D0"/>
-  <circle cx="37" cy="31" r="1.5" fill="#4060D0"/>
-  <circle cx="27.5" cy="30.5" r="0.6" fill="#FFFFFF"/>
-  <circle cx="37.5" cy="30.5" r="0.6" fill="#FFFFFF"/>
-  <!-- Staff -->
-  <rect x="51" y="16" width="3" height="46" rx="1.5" fill="#6A4818"/>
-  <!-- Staff orb -->
-  <circle cx="52.5" cy="11" r="7" fill="#2828A8" opacity="0.55"/>
-  <circle cx="52.5" cy="11" r="5" fill="#5050CC"/>
-  <circle cx="52.5" cy="11" r="3" fill="#8888FF"/>
-  <circle cx="51" cy="9.5" r="1.2" fill="#FFFFFF" opacity="0.9"/>
-  <!-- Magic particles -->
-  <circle cx="46" cy="14" r="1.2" fill="#8888FF" opacity="0.7"/>
-  <circle cx="58" cy="19" r="1" fill="#6666DD" opacity="0.6"/>
-  <circle cx="44" cy="21" r="0.8" fill="#AAAAFF" opacity="0.5"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96">
+  <!-- Magic aura glow -->
+  <circle cx="48" cy="50" r="38" fill="#5520A0" opacity="0.09"/>
+  <!-- Ground shadow — purple-tinted -->
+  <ellipse cx="44" cy="93" rx="20" ry="4" fill="#200840" opacity="0.35"/>
+
+  <!-- STAFF (right side, runs full height) -->
+  <rect x="74" y="10" width="5" height="72" rx="2.5" fill="#5A3C18"/>
+  <rect x="75" y="10" width="2" height="72" rx="1" fill="#7A5428" opacity="0.55"/>
+  <!-- Staff top ring -->
+  <rect x="71" y="16" width="11" height="4" rx="2" fill="#C09030"/>
+
+  <!-- Staff orb — bright magical -->
+  <circle cx="76" cy="10" r="11" fill="#4420A8" opacity="0.4"/>
+  <circle cx="76" cy="10" r="8" fill="#6030CC"/>
+  <circle cx="76" cy="10" r="6" fill="#8050E8"/>
+  <circle cx="76" cy="10" r="4" fill="#A870FF"/>
+  <circle cx="76" cy="10" r="2" fill="#D0AAFF"/>
+  <circle cx="74.5" cy="8.5" r="1.5" fill="#FFF" opacity="0.85"/>
+  <!-- Orb sparkles -->
+  <circle cx="68" cy="16" r="1.5" fill="#9060E0" opacity="0.7"/>
+  <circle cx="84" cy="20" r="1.2" fill="#7040CC" opacity="0.65"/>
+  <circle cx="70" cy="24" r="1" fill="#AA80FF" opacity="0.55"/>
+
+  <!-- ROBE BOTTOM — wide, floor length -->
+  <path d="M14,50 Q10,70 12,93 L78,93 Q80,70 76,50 Z" fill="#2E1A6A"/>
+  <!-- Robe panels / folds -->
+  <path d="M14,50 L18,93" stroke="#3A2280" stroke-width="1" fill="none" opacity="0.5"/>
+  <path d="M28,50 L30,93" stroke="#3A2280" stroke-width="1" fill="none" opacity="0.4"/>
+  <path d="M50,50 L50,93" stroke="#2A1860" stroke-width="1" fill="none" opacity="0.4"/>
+  <path d="M68,50 L66,93" stroke="#3A2280" stroke-width="1" fill="none" opacity="0.4"/>
+  <!-- Robe gold trim bottom -->
+  <path d="M12,90 L78,90" stroke="#C09030" stroke-width="2" fill="none" opacity="0.6"/>
+  <!-- Robe gold trim sides -->
+  <path d="M14,50 L12,90" stroke="#C09030" stroke-width="1.5" fill="none" opacity="0.5"/>
+  <path d="M76,50 L78,90" stroke="#C09030" stroke-width="1.5" fill="none" opacity="0.5"/>
+
+  <!-- TORSO ROBE — upper -->
+  <rect x="22" y="32" width="46" height="22" rx="5" fill="#3A2278"/>
+  <rect x="22" y="32" width="46" height="5" rx="3" fill="#4A2E90" opacity="0.5"/>
+  <!-- Chest rune circle -->
+  <circle cx="44" cy="44" r="10" fill="#2A1660" opacity="0.8"/>
+  <circle cx="44" cy="44" r="7" fill="#5030A8" opacity="0.6"/>
+  <circle cx="44" cy="44" r="5" fill="#7848D0" opacity="0.7"/>
+  <circle cx="44" cy="44" r="2.5" fill="#AA60FF"/>
+  <circle cx="44" cy="44" r="1" fill="#E0C0FF"/>
+  <!-- Rune tickmarks -->
+  <rect x="42" y="34" width="2" height="3" rx="1" fill="#9060D8" opacity="0.7"/>
+  <rect x="42" y="52" width="2" height="3" rx="1" fill="#9060D8" opacity="0.7"/>
+  <rect x="33" y="42" width="3" height="2" rx="1" fill="#9060D8" opacity="0.7"/>
+  <rect x="52" y="42" width="3" height="2" rx="1" fill="#9060D8" opacity="0.7"/>
+  <!-- Gold belt -->
+  <rect x="22" y="52" width="46" height="5" rx="2" fill="#C09030"/>
+  <rect x="39" y="51" width="10" height="7" rx="2" fill="#D4A840"/>
+
+  <!-- SLEEVES -->
+  <rect x="8" y="32" width="15" height="22" rx="6" fill="#3A2278"/>
+  <rect x="8" y="32" width="5" height="22" rx="4" fill="#4A2E90" opacity="0.3"/>
+  <!-- Left sleeve cuff gold -->
+  <rect x="7" y="51" width="16" height="4" rx="2" fill="#C09030"/>
+
+  <!-- RIGHT SLEEVE (holding staff) -->
+  <rect x="68" y="32" width="12" height="20" rx="6" fill="#3A2278"/>
+  <rect x="75" y="36" width="4" height="16" rx="2" fill="#4A2E90" opacity="0.3"/>
+  <!-- Right cuff -->
+  <rect x="67" y="49" width="13" height="4" rx="2" fill="#C09030"/>
+
+  <!-- CASTING HAND left — glowing -->
+  <circle cx="15" cy="58" r="7" fill="#C0946A"/>
+  <circle cx="15" cy="55" r="5" fill="#8048D0" opacity="0.5"/>
+  <circle cx="12" cy="52" r="2.5" fill="#AA60FF" opacity="0.7"/>
+  <circle cx="10" cy="56" r="1.5" fill="#CC90FF" opacity="0.6"/>
+
+  <!-- NECK -->
+  <rect x="38" y="22" width="14" height="12" rx="4" fill="#C8A070"/>
+
+  <!-- HEAD -->
+  <ellipse cx="43" cy="16" rx="15" ry="14" fill="#C8A070"/>
+  <ellipse cx="48" cy="18" rx="9" ry="11" fill="#A07040" opacity="0.3"/>
+
+  <!-- WHITE BEARD — wide and prominent -->
+  <ellipse cx="43" cy="25" rx="12" ry="6" fill="#D0CCB8"/>
+  <ellipse cx="43" cy="29" rx="10" ry="5" fill="#C0BCA8"/>
+  <ellipse cx="43" cy="31" rx="8" ry="3.5" fill="#B0ACA0"/>
+
+  <!-- WIZARD HAT -->
+  <!-- Brim -->
+  <rect x="20" y="8" width="46" height="7" rx="3" fill="#221160"/>
+  <rect x="20" y="8" width="46" height="3" rx="2" fill="#301876" opacity="0.5"/>
+  <!-- Hat body - tapers up -->
+  <polygon points="43,0 28,10 58,10" fill="#2A1670"/>
+  <polygon points="43,0 30,10 56,10" fill="#3820880"/>
+  <!-- Hat shine -->
+  <polygon points="43,0 30,10 38,10" fill="#3A2288" opacity="0.4"/>
+  <!-- Hat gold band -->
+  <rect x="28" y="8.5" width="30" height="2.5" rx="1" fill="#C09030"/>
+  <!-- Hat star tip -->
+  <polygon points="43,0 41,3 44,3" fill="#D4A838" opacity="0.8"/>
+
+  <!-- BUSHY EYEBROWS -->
+  <rect x="28" y="11" width="10" height="3.5" rx="1.5" fill="#4A3010"/>
+  <rect x="48" y="11" width="10" height="3.5" rx="1.5" fill="#4A3010"/>
+
+  <!-- EYES — piercing blue, wizened -->
+  <ellipse cx="35" cy="17" rx="5" ry="4.5" fill="#FFF8F0"/>
+  <circle cx="35" cy="17" r="3" fill="#3050D8"/>
+  <circle cx="35" cy="17" r="2" fill="#1828B0"/>
+  <circle cx="35" cy="17" r="1" fill="#0810A0"/>
+  <circle cx="34" cy="16" r="0.9" fill="#FFF" opacity="0.8"/>
+
+  <ellipse cx="51" cy="17" rx="5" ry="4.5" fill="#FFF8F0"/>
+  <circle cx="51" cy="17" r="3" fill="#3050D8"/>
+  <circle cx="51" cy="17" r="2" fill="#1828B0"/>
+  <circle cx="51" cy="17" r="1" fill="#0810A0"/>
+  <circle cx="50" cy="16" r="0.9" fill="#FFF" opacity="0.8"/>
+
+  <!-- NOSE — prominent wizard nose -->
+  <ellipse cx="43" cy="21" rx="3.5" ry="3" fill="#B08050"/>
+  <circle cx="42" cy="23" r="1.4" fill="#906030" opacity="0.6"/>
+  <circle cx="45" cy="23" r="1.4" fill="#906030" opacity="0.6"/>
+
+  <!-- Slight smile under beard -->
+  <rect x="37" y="25" width="12" height="2" rx="1" fill="#7A4A18" opacity="0.5"/>
 </svg>

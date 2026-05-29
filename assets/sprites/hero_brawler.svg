@@ -1,48 +1,97 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
-  <!-- Shadow -->
-  <ellipse cx="32" cy="61" rx="16" ry="3.5" fill="#000" opacity="0.3"/>
-  <!-- Hair -->
-  <ellipse cx="32" cy="13" rx="12" ry="7" fill="#1C0E04"/>
-  <!-- Head -->
-  <circle cx="32" cy="20" r="11" fill="#C07840"/>
-  <!-- Ears -->
-  <ellipse cx="21" cy="20" rx="3" ry="3.5" fill="#A86428"/>
-  <ellipse cx="43" cy="20" rx="3" ry="3.5" fill="#A86428"/>
-  <!-- Brow ridge -->
-  <rect x="23" y="15.5" width="8" height="2" rx="1" fill="#6A3810"/>
-  <rect x="33" y="15.5" width="8" height="2" rx="1" fill="#6A3810"/>
-  <!-- Eyes - squinting determined -->
-  <ellipse cx="27" cy="18.5" rx="3.5" ry="2" fill="#1A0A04"/>
-  <ellipse cx="37" cy="18.5" rx="3.5" ry="2" fill="#1A0A04"/>
-  <!-- Nose -->
-  <ellipse cx="32" cy="23" rx="2" ry="1.5" fill="#A06028"/>
-  <!-- Mouth - stern set jaw -->
-  <rect x="27" y="26" width="10" height="2" rx="1" fill="#7A3218"/>
-  <!-- Neck -->
-  <rect x="28" y="30" width="8" height="5" fill="#C07840"/>
-  <!-- Tank top chest -->
-  <rect x="18" y="35" width="28" height="18" rx="3" fill="#2A3A58"/>
-  <!-- Pec shadow -->
-  <ellipse cx="26" cy="40" rx="5" ry="4" fill="#324464" opacity="0.55"/>
-  <ellipse cx="38" cy="40" rx="5" ry="4" fill="#324464" opacity="0.55"/>
-  <!-- Left upper arm -->
-  <rect x="8" y="35" width="10" height="13" rx="5" fill="#C07840"/>
-  <!-- Right upper arm -->
-  <rect x="46" y="35" width="10" height="13" rx="5" fill="#C07840"/>
-  <!-- Left fist raised -->
-  <rect x="7" y="27" width="11" height="10" rx="4" fill="#9A5828"/>
-  <!-- Right fist raised -->
-  <rect x="46" y="27" width="11" height="10" rx="4" fill="#9A5828"/>
-  <!-- Knuckle lines left -->
-  <line x1="8" y1="30" x2="16" y2="30" stroke="#C07840" stroke-width="1"/>
-  <line x1="8" y1="33" x2="16" y2="33" stroke="#C07840" stroke-width="1"/>
-  <!-- Knuckle lines right -->
-  <line x1="48" y1="30" x2="56" y2="30" stroke="#C07840" stroke-width="1"/>
-  <line x1="48" y1="33" x2="56" y2="33" stroke="#C07840" stroke-width="1"/>
-  <!-- Belt -->
-  <rect x="18" y="51" width="28" height="3" rx="1" fill="#5A4020"/>
-  <rect x="30" y="50.5" width="4" height="4" rx="1" fill="#A07830"/>
-  <!-- Pants -->
-  <rect x="20" y="53" width="11" height="11" rx="2" fill="#283060"/>
-  <rect x="33" y="53" width="11" height="11" rx="2" fill="#283060"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96">
+  <!-- Ground shadow -->
+  <ellipse cx="48" cy="93" rx="22" ry="4" fill="#000" opacity="0.3"/>
+
+  <!-- BOOTS -->
+  <rect x="28" y="82" width="19" height="9" rx="3" fill="#100A04"/>
+  <rect x="49" y="82" width="19" height="9" rx="3" fill="#100A04"/>
+  <rect x="28" y="82" width="19" height="3" rx="2" fill="#201408" opacity="0.6"/>
+
+  <!-- JEANS / LEGS -->
+  <rect x="30" y="58" width="15" height="26" rx="4" fill="#1C2B4E"/>
+  <rect x="51" y="58" width="15" height="26" rx="4" fill="#1C2B4E"/>
+  <rect x="30" y="58" width="5" height="26" rx="3" fill="#2A3F6A" opacity="0.5"/>
+  <rect x="51" y="58" width="5" height="26" rx="3" fill="#2A3F6A" opacity="0.5"/>
+
+  <!-- BELT -->
+  <rect x="27" y="55" width="42" height="6" rx="2" fill="#3C2410"/>
+  <rect x="44" y="54" width="8" height="8" rx="1" fill="#6A4820"/>
+  <rect x="45" y="55" width="6" height="6" rx="1" fill="#523818"/>
+
+  <!-- TORSO — tank top -->
+  <rect x="26" y="30" width="44" height="28" rx="5" fill="#1E1E1E"/>
+  <ellipse cx="37" cy="43" rx="9" ry="12" fill="#161616" opacity="0.45"/>
+  <ellipse cx="59" cy="43" rx="9" ry="12" fill="#161616" opacity="0.45"/>
+  <rect x="47" y="32" width="2" height="24" fill="#141414" opacity="0.4"/>
+  <!-- Collar -->
+  <path d="M38,30 Q48,35 58,30" stroke="#2A2A2A" stroke-width="2" fill="none"/>
+  <!-- Straps -->
+  <rect x="32" y="20" width="8" height="13" rx="3" fill="#1E1E1E"/>
+  <rect x="56" y="20" width="8" height="13" rx="3" fill="#1E1E1E"/>
+
+  <!-- LEFT ARM + FIST (leading punch) -->
+  <rect x="6" y="28" width="21" height="24" rx="8" fill="#B87040"/>
+  <rect x="6" y="28" width="7" height="24" rx="6" fill="#C88050" opacity="0.35"/>
+  <rect x="5" y="50" width="19" height="14" rx="5" fill="#A05C30"/>
+  <!-- Fist left -->
+  <rect x="3" y="59" width="18" height="12" rx="4" fill="#8A3E1C"/>
+  <rect x="4" y="61" width="15" height="2" rx="1" fill="#B06030" opacity="0.55"/>
+  <rect x="4" y="64" width="15" height="2" rx="1" fill="#B06030" opacity="0.55"/>
+  <rect x="4" y="67" width="15" height="2" rx="1" fill="#B06030" opacity="0.55"/>
+
+  <!-- RIGHT ARM + FIST (raised guard) -->
+  <rect x="69" y="18" width="21" height="24" rx="8" fill="#B87040"/>
+  <rect x="76" y="18" width="7" height="24" rx="6" fill="#C88050" opacity="0.35"/>
+  <rect x="72" y="40" width="19" height="14" rx="5" fill="#A05C30"/>
+  <!-- Fist right raised -->
+  <rect x="74" y="28" width="18" height="12" rx="4" fill="#8A3E1C"/>
+  <rect x="75" y="30" width="15" height="2" rx="1" fill="#B06030" opacity="0.55"/>
+  <rect x="75" y="33" width="15" height="2" rx="1" fill="#B06030" opacity="0.55"/>
+  <rect x="75" y="36" width="15" height="2" rx="1" fill="#B06030" opacity="0.55"/>
+
+  <!-- NECK -->
+  <rect x="40" y="20" width="16" height="12" rx="4" fill="#C07840"/>
+
+  <!-- HEAD -->
+  <ellipse cx="48" cy="13" rx="19" ry="17" fill="#C07840"/>
+  <ellipse cx="56" cy="15" rx="10" ry="12" fill="#903C10" opacity="0.25"/>
+  <ellipse cx="41" cy="10" rx="9" ry="8" fill="#D08850" opacity="0.25"/>
+
+  <!-- HAIR — dark, messy -->
+  <ellipse cx="48" cy="2" rx="19" ry="9" fill="#1A0C04"/>
+  <ellipse cx="32" cy="8" rx="8" ry="7" fill="#1A0C04"/>
+  <ellipse cx="64" cy="9" rx="7" ry="6" fill="#1A0C04"/>
+  <ellipse cx="48" cy="2" rx="11" ry="5" fill="#2A1408" opacity="0.5"/>
+
+  <!-- BROW — furrowed, determined -->
+  <rect x="32" y="11" width="13" height="3.5" rx="1.5" fill="#0E0602" transform="rotate(-14,38,13)"/>
+  <rect x="51" y="11" width="13" height="3.5" rx="1.5" fill="#0E0602" transform="rotate(14,58,13)"/>
+
+  <!-- EYES -->
+  <ellipse cx="40" cy="17" rx="6" ry="5" fill="#0E0602"/>
+  <ellipse cx="40" cy="17" rx="4.5" ry="3.5" fill="#3A1806"/>
+  <circle cx="40" cy="17" r="2.5" fill="#6A2E0A"/>
+  <circle cx="40" cy="17" r="1.4" fill="#080402"/>
+  <circle cx="39" cy="16" r="1" fill="#FFF" opacity="0.6"/>
+
+  <ellipse cx="56" cy="17" rx="6" ry="5" fill="#0E0602"/>
+  <ellipse cx="56" cy="17" rx="4.5" ry="3.5" fill="#3A1806"/>
+  <circle cx="56" cy="17" r="2.5" fill="#6A2E0A"/>
+  <circle cx="56" cy="17" r="1.4" fill="#080402"/>
+  <circle cx="55" cy="16" r="1" fill="#FFF" opacity="0.6"/>
+
+  <!-- NOSE -->
+  <ellipse cx="48" cy="22" rx="3.5" ry="3" fill="#A05C28"/>
+  <circle cx="46.5" cy="23.5" r="1.3" fill="#783014" opacity="0.65"/>
+  <circle cx="49.5" cy="23.5" r="1.3" fill="#783014" opacity="0.65"/>
+
+  <!-- MOUTH — grim set jaw -->
+  <rect x="40" y="27" width="16" height="3.5" rx="1.5" fill="#6A2008"/>
+  <ellipse cx="48" cy="29" rx="10" ry="3" fill="#A86030" opacity="0.25"/>
+
+  <!-- Stubble -->
+  <rect x="37" y="25" width="22" height="6" rx="3" fill="#1A0A02" opacity="0.18"/>
+
+  <!-- Cheek bruise -->
+  <ellipse cx="58" cy="20" rx="5" ry="3" fill="#4A2880" opacity="0.22"/>
 </svg>

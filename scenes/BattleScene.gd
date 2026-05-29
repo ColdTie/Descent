@@ -234,7 +234,7 @@ func _spawn_entity_node(c: Combatant) -> void:
 	var root := Node2D.new()
 	root.position = HexGrid.hex_to_pixel(c.position, HEX_SIZE)
 
-	# Sprite — or fallback to colored hex + glyph if assets not yet imported
+	# Sprite — SVG preferred (96×96 vector, crisp at any scale), PNG fallback, then polygon
 	var sprite_path: String = _get_sprite_path(c)
 	var sprite_tex: Texture2D = null
 	if ResourceLoader.exists(sprite_path):
@@ -243,11 +243,11 @@ func _spawn_entity_node(c: Combatant) -> void:
 	if sprite_tex != null:
 		var sprite := Sprite2D.new()
 		sprite.texture = sprite_tex
-		# Sprites are 80×80 px — scale to fit nicely on the hex grid
-		var sprite_scale: float = 0.90 if is_boss else 0.72
+		# SVGs render at 96×96; scale so characters fit inside the hex tile with room
+		var sprite_scale: float = 0.82 if is_boss else 0.65
 		sprite.scale = Vector2(sprite_scale, sprite_scale)
-		sprite.position = Vector2(0.0, -8.0)
-		sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+		sprite.position = Vector2(0.0, -10.0)
+		sprite.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
 		root.add_child(sprite)
 	else:
 		# Fallback: colored hex + glyph (used before Godot imports the assets)
@@ -302,9 +302,12 @@ func _hero_class_color() -> Color:
 	return cls_data.get("icon_color", HERO_COLOR)
 
 func _get_sprite_path(c: Combatant) -> String:
-	if c.faction == Combatant.Faction.HERO:
-		return "res://assets/sprites/hero_%s.png" % GameState.hero_class
-	return "res://assets/sprites/enemy_%s.png" % c.sprite_key
+	var base: String = "hero_%s" % GameState.hero_class if c.faction == Combatant.Faction.HERO \
+		else "enemy_%s" % c.sprite_key
+	var svg_path: String = "res://assets/sprites/%s.svg" % base
+	if ResourceLoader.exists(svg_path):
+		return svg_path
+	return "res://assets/sprites/%s.png" % base
 
 func _entity_glyph(c: Combatant) -> String:
 	if c.faction == Combatant.Faction.HERO:

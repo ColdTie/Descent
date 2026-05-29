@@ -1,46 +1,106 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
-  <!-- Shadow -->
-  <ellipse cx="32" cy="61" rx="14" ry="3" fill="#000" opacity="0.25"/>
-  <!-- Cloak body -->
-  <path d="M16,38 Q12,52 15,64 L49,64 Q52,52 48,38 Q40,42 32,41 Q24,42 16,38Z" fill="#1E1038"/>
-  <!-- Cloak highlight center fold -->
-  <path d="M32,41 Q24,42 16,38 L18,54 Q25,52 32,53 Q39,52 46,54 L48,38 Q40,42 32,41Z" fill="#2A1850"/>
-  <!-- Hood outer -->
-  <ellipse cx="32" cy="22" rx="15" ry="14" fill="#150C28"/>
-  <!-- Hood -->
-  <ellipse cx="32" cy="21" rx="13" ry="12" fill="#1E1038"/>
-  <!-- Hood shadow interior -->
-  <ellipse cx="32" cy="23" rx="10" ry="10" fill="#150C28"/>
-  <!-- Face -->
-  <ellipse cx="32" cy="25" rx="8" ry="9" fill="#B07850"/>
-  <!-- Upper shadow on brow -->
-  <ellipse cx="32" cy="19" rx="9" ry="6" fill="#150C28" opacity="0.75"/>
-  <!-- Eyes - gleaming amber from shadow -->
-  <circle cx="28" cy="24" r="2.2" fill="#E8A020"/>
-  <circle cx="36" cy="24" r="2.2" fill="#E8A020"/>
-  <circle cx="28" cy="24" r="1.1" fill="#0A0A0A"/>
-  <circle cx="36" cy="24" r="1.1" fill="#0A0A0A"/>
-  <circle cx="27.5" cy="23.5" r="0.6" fill="#FFE880" opacity="0.9"/>
-  <circle cx="35.5" cy="23.5" r="0.6" fill="#FFE880" opacity="0.9"/>
-  <!-- Scarf -->
-  <path d="M22,32 Q32,35 42,32" stroke="#2A1A50" stroke-width="2.5" fill="none"/>
-  <!-- Left dagger blade -->
-  <rect x="9" y="30" width="3" height="20" rx="1.5" fill="#D0D0E8"/>
-  <!-- Left dagger fuller -->
-  <rect x="10.5" y="32" width="1" height="16" rx="0.5" fill="#EAEAF8" opacity="0.6"/>
-  <!-- Left crossguard -->
-  <rect x="7" y="29" width="7" height="2.5" rx="1" fill="#8A7030"/>
-  <!-- Left handle -->
-  <rect x="9" y="25" width="3" height="5" rx="1" fill="#6A5028"/>
-  <!-- Right dagger blade -->
-  <rect x="52" y="30" width="3" height="20" rx="1.5" fill="#D0D0E8"/>
-  <!-- Right dagger fuller -->
-  <rect x="53.5" y="32" width="1" height="16" rx="0.5" fill="#EAEAF8" opacity="0.6"/>
-  <!-- Right crossguard -->
-  <rect x="50" y="29" width="7" height="2.5" rx="1" fill="#8A7030"/>
-  <!-- Right handle -->
-  <rect x="52" y="25" width="3" height="5" rx="1" fill="#6A5028"/>
-  <!-- Subtle green poison on blades -->
-  <rect x="9" y="44" width="3" height="5" rx="1" fill="#40A020" opacity="0.4"/>
-  <rect x="52" y="44" width="3" height="5" rx="1" fill="#40A020" opacity="0.4"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96">
+  <!-- Ground shadow -->
+  <ellipse cx="48" cy="93" rx="18" ry="4" fill="#000" opacity="0.28"/>
+
+  <!-- BOOTS — slim, pointed -->
+  <rect x="30" y="82" width="14" height="10" rx="3" fill="#0C0816"/>
+  <rect x="44" y="82" width="5" height="7" rx="2" fill="#0C0816"/>
+  <rect x="52" y="82" width="14" height="10" rx="3" fill="#0C0816"/>
+  <rect x="30" y="82" width="14" height="3" fill="#18102A" opacity="0.5"/>
+
+  <!-- LEGS — slim dark trousers -->
+  <rect x="31" y="57" width="12" height="27" rx="4" fill="#12091E"/>
+  <rect x="53" y="57" width="12" height="27" rx="4" fill="#12091E"/>
+  <rect x="31" y="57" width="4" height="27" rx="3" fill="#1E1030" opacity="0.5"/>
+
+  <!-- BELT + POUCHES -->
+  <rect x="27" y="53" width="42" height="6" rx="2" fill="#3E280A"/>
+  <rect x="43" y="52" width="10" height="8" rx="2" fill="#5A3C12"/>
+  <!-- Pouch left -->
+  <rect x="28" y="54" width="8" height="7" rx="2" fill="#301A06"/>
+  <!-- Pouch right -->
+  <rect x="60" y="54" width="8" height="7" rx="2" fill="#301A06"/>
+
+  <!-- CLOAK sides — dramatic -->
+  <path d="M27,30 L10,38 L8,62 L22,58 L27,44 Z" fill="#0E081A" opacity="0.9"/>
+  <path d="M69,30 L86,38 L88,62 L74,58 L69,44 Z" fill="#0E081A" opacity="0.9"/>
+  <!-- Cloak inner highlight -->
+  <path d="M27,30 L13,38 L11,56 L22,53 Z" fill="#180E2A" opacity="0.5"/>
+  <path d="M69,30 L83,38 L85,56 L74,53 Z" fill="#180E2A" opacity="0.5"/>
+
+  <!-- TORSO — fitted leather -->
+  <rect x="27" y="28" width="42" height="27" rx="5" fill="#1A1028"/>
+  <rect x="27" y="28" width="42" height="4" rx="3" fill="#261640" opacity="0.5"/>
+  <!-- Leather chest panel -->
+  <rect x="31" y="32" width="34" height="20" rx="3" fill="#160C22"/>
+  <!-- Center buckle strip -->
+  <rect x="45" y="30" width="6" height="24" rx="2" fill="#1E1232" opacity="0.6"/>
+  <!-- Shoulder pads -->
+  <rect x="25" y="27" width="10" height="7" rx="3" fill="#22163A"/>
+  <rect x="61" y="27" width="10" height="7" rx="3" fill="#22163A"/>
+
+  <!-- DAGGER LEFT (held low, ready) -->
+  <rect x="7" y="42" width="4" height="28" rx="1.5" fill="#B8BAC8"/>
+  <rect x="7.5" y="43" width="1.5" height="26" fill="#DCDFF0" opacity="0.55"/>
+  <rect x="4" y="39" width="11" height="5" rx="1.5" fill="#6A4C18"/>
+  <rect x="8" y="67" width="4" height="5" rx="1.5" fill="#7A5C20"/>
+  <!-- Poison glint tip -->
+  <ellipse cx="9" cy="43" rx="2" ry="1.5" fill="#40C030" opacity="0.5"/>
+
+  <!-- DAGGER RIGHT (raised) -->
+  <rect x="85" y="30" width="4" height="28" rx="1.5" fill="#B8BAC8"/>
+  <rect x="85.5" y="31" width="1.5" height="26" fill="#DCDFF0" opacity="0.55"/>
+  <rect x="82" y="56" width="11" height="5" rx="1.5" fill="#6A4C18"/>
+  <rect x="84" y="57" width="4" height="5" rx="1.5" fill="#7A5C20"/>
+  <ellipse cx="87" cy="31" rx="2" ry="1.5" fill="#40C030" opacity="0.5"/>
+
+  <!-- ARMS — leather sleeves -->
+  <rect x="9" y="28" width="19" height="22" rx="7" fill="#1A1028"/>
+  <rect x="68" y="22" width="19" height="22" rx="7" fill="#1A1028"/>
+  <!-- Wrist wraps -->
+  <rect x="9" y="47" width="16" height="4" rx="2" fill="#3A2810"/>
+  <rect x="71" y="41" width="16" height="4" rx="2" fill="#3A2810"/>
+
+  <!-- HANDS — dark leather gloves -->
+  <ellipse cx="15" cy="53" rx="6" ry="5" fill="#251408"/>
+  <ellipse cx="83" cy="48" rx="6" ry="5" fill="#251408"/>
+
+  <!-- NECK -->
+  <rect x="42" y="20" width="12" height="10" rx="3" fill="#5E3820" opacity="0.8"/>
+
+  <!-- HOOD body -->
+  <ellipse cx="48" cy="14" rx="22" ry="20" fill="#14092A"/>
+  <!-- Hood top peak -->
+  <ellipse cx="48" cy="4" rx="18" ry="8" fill="#0C0618"/>
+  <!-- Hood side drapes framing face -->
+  <rect x="24" y="5" width="10" height="22" rx="5" fill="#0C0618"/>
+  <rect x="62" y="5" width="10" height="22" rx="5" fill="#0C0618"/>
+
+  <!-- FACE — in shadow, barely visible -->
+  <ellipse cx="48" cy="17" rx="13" ry="12" fill="#7A4828"/>
+  <!-- Strong brow shadow -->
+  <ellipse cx="48" cy="10" rx="14" ry="7" fill="#0C0618" opacity="0.75"/>
+  <!-- Chin shadow -->
+  <ellipse cx="48" cy="26" rx="9" ry="4" fill="#3A1A08" opacity="0.4"/>
+
+  <!-- TEAL GLOWING EYES — the defining feature -->
+  <!-- Left eye -->
+  <ellipse cx="41" cy="16" rx="5.5" ry="4" fill="#001810" opacity="0.95"/>
+  <ellipse cx="41" cy="16" rx="4.5" ry="3.2" fill="#008878"/>
+  <ellipse cx="41" cy="16" rx="3" ry="2.2" fill="#00C8B0"/>
+  <circle cx="41" cy="16" r="1.8" fill="#80FFF0"/>
+  <circle cx="40.2" cy="15.2" r="0.9" fill="#FFF" opacity="0.8"/>
+  <!-- Eye glow aura -->
+  <ellipse cx="41" cy="16" rx="8" ry="6" fill="#00D4BC" opacity="0.12"/>
+
+  <!-- Right eye -->
+  <ellipse cx="55" cy="16" rx="5.5" ry="4" fill="#001810" opacity="0.95"/>
+  <ellipse cx="55" cy="16" rx="4.5" ry="3.2" fill="#008878"/>
+  <ellipse cx="55" cy="16" rx="3" ry="2.2" fill="#00C8B0"/>
+  <circle cx="55" cy="16" r="1.8" fill="#80FFF0"/>
+  <circle cx="54.2" cy="15.2" r="0.9" fill="#FFF" opacity="0.8"/>
+  <ellipse cx="55" cy="16" rx="8" ry="6" fill="#00D4BC" opacity="0.12"/>
+
+  <!-- Smirk barely visible -->
+  <path d="M43,23 Q48,26 53,23" stroke="#3A1808" stroke-width="1.5" fill="none" opacity="0.65"/>
 </svg>

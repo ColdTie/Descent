@@ -1,57 +1,139 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
-  <!-- Shadow -->
-  <ellipse cx="32" cy="62" rx="12" ry="3" fill="#000" opacity="0.25"/>
-  <!-- Sword raised -->
-  <rect x="48" y="2" width="3" height="28" rx="1.5" fill="#B8B8C8"/>
-  <!-- Fuller groove -->
-  <rect x="49.5" y="4" width="1" height="24" rx="0.5" fill="#D8D8E8" opacity="0.65"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96">
+  <!-- Soul aura — cold blue -->
+  <circle cx="48" cy="48" r="40" fill="#0010A0" opacity="0.07"/>
+  <!-- Ground shadow -->
+  <ellipse cx="48" cy="93" rx="16" ry="4" fill="#000" opacity="0.25"/>
+
+  <!-- SWORD — raised high, right side -->
+  <!-- Blade -->
+  <rect x="64" y="4" width="5" height="46" rx="2" fill="#B8B8CC"/>
+  <rect x="65" y="6" width="2" height="42" rx="1" fill="#D8D8F0" opacity="0.6"/>
+  <!-- Blood stain on blade -->
+  <rect x="64" y="34" width="5" height="8" rx="1" fill="#880000" opacity="0.35"/>
   <!-- Crossguard -->
-  <rect x="43" y="18" width="13" height="3" rx="1.5" fill="#8A7830"/>
-  <!-- Grip -->
-  <rect x="48" y="16" width="3" height="5" rx="1.5" fill="#6A5028"/>
-  <!-- Pommel -->
-  <circle cx="49.5" cy="16" r="2.5" fill="#8A7830"/>
-  <!-- Cranium -->
-  <ellipse cx="32" cy="17" rx="11" ry="10" fill="#EDE4C8"/>
-  <!-- Jaw -->
-  <rect x="24" y="23" width="16" height="8" rx="3" fill="#E0D8B8"/>
-  <rect x="26" y="28" width="12" height="4" rx="2" fill="#D0C8A8"/>
-  <!-- Eye sockets - deep -->
-  <ellipse cx="27" cy="17" rx="4.5" ry="5" fill="#1A1A10"/>
-  <ellipse cx="37" cy="17" rx="4.5" ry="5" fill="#1A1A10"/>
-  <!-- Soul fire -->
-  <circle cx="27" cy="17" r="2.2" fill="#CC2000" opacity="0.85"/>
-  <circle cx="37" cy="17" r="2.2" fill="#CC2000" opacity="0.85"/>
-  <circle cx="27" cy="17" r="1.1" fill="#FF6000" opacity="0.75"/>
-  <circle cx="37" cy="17" r="1.1" fill="#FF6000" opacity="0.75"/>
-  <!-- Nasal cavity -->
-  <path d="M30,22 L32,20 L34,22 L33,24 L31,24 Z" fill="#1A1A10"/>
-  <!-- Teeth -->
-  <rect x="25" y="25" width="2.5" height="4.5" rx="0.5" fill="#C8C0A0"/>
-  <rect x="28.5" y="25" width="2.5" height="4.5" rx="0.5" fill="#C8C0A0"/>
-  <rect x="32" y="25" width="2.5" height="4.5" rx="0.5" fill="#C8C0A0"/>
-  <rect x="35.5" y="25" width="2.5" height="4.5" rx="0.5" fill="#C8C0A0"/>
-  <!-- Neck vertebra -->
-  <rect x="29" y="32" width="6" height="4" rx="2" fill="#D8D0B0"/>
-  <!-- Ribcage -->
-  <rect x="24" y="36" width="16" height="2.5" rx="1" fill="#DDD8C0"/>
-  <rect x="23" y="40" width="18" height="2.5" rx="1" fill="#DDD8C0"/>
-  <rect x="24" y="44" width="16" height="2.5" rx="1" fill="#DDD8C0"/>
-  <!-- Spine -->
-  <rect x="30" y="35" width="4" height="20" rx="2" fill="#CCC4A8"/>
-  <!-- Pelvis -->
-  <rect x="24" y="52" width="16" height="5" rx="2" fill="#C8C0A0"/>
-  <!-- Left arm - defense position -->
-  <rect x="12" y="36" width="13" height="4" rx="2" fill="#DDD8C0"/>
-  <rect x="10" y="38" width="6" height="12" rx="3" fill="#D0C8A8"/>
-  <!-- Left finger bones -->
-  <rect x="9" y="49" width="2" height="5" rx="1" fill="#C8C0A0"/>
-  <rect x="12" y="49" width="2" height="5" rx="1" fill="#C8C0A0"/>
-  <rect x="15" y="49" width="2" height="5" rx="1" fill="#C8C0A0"/>
-  <!-- Right arm - weapon arm -->
-  <rect x="39" y="34" width="13" height="4" rx="2" fill="#DDD8C0"/>
-  <rect x="46" y="27" width="6" height="12" rx="3" fill="#D0C8A8"/>
-  <!-- Leg bones -->
-  <rect x="24" y="56" width="6" height="8" rx="2" fill="#C8C0A0"/>
-  <rect x="34" y="56" width="6" height="8" rx="2" fill="#C8C0A0"/>
+  <rect x="57" y="36" width="19" height="5" rx="2" fill="#8A7028"/>
+  <rect x="59" y="37" width="15" height="3" rx="1" fill="#A08838" opacity="0.5"/>
+  <!-- Grip + Pommel -->
+  <rect x="64" y="40" width="5" height="10" rx="2" fill="#4A3018"/>
+  <rect x="65" y="49" width="3" height="3" fill="#6A4820" opacity="0.6"/>
+  <circle cx="66.5" cy="50" r="4" fill="#8A7028"/>
+  <circle cx="66.5" cy="50" r="2" fill="#A08838"/>
+
+  <!-- FOOT BONES -->
+  <rect x="26" y="84" width="8" height="8" rx="2" fill="#C8C0A0"/>
+  <rect x="36" y="86" width="5" height="6" rx="1" fill="#B8B0A0"/>
+  <rect x="54" y="84" width="8" height="8" rx="2" fill="#C8C0A0"/>
+  <rect x="47" y="86" width="5" height="6" rx="1" fill="#B8B0A0"/>
+
+  <!-- LEGS — tibia + fibula visible -->
+  <rect x="29" y="62" width="8" height="24" rx="3" fill="#D8D0B8"/>
+  <rect x="30.5" y="62" width="2.5" height="24" rx="1" fill="#EDE8D8" opacity="0.5"/>
+  <rect x="59" y="62" width="8" height="24" rx="3" fill="#D8D0B8"/>
+  <rect x="60.5" y="62" width="2.5" height="24" rx="1" fill="#EDE8D8" opacity="0.5"/>
+  <!-- Knee joint ball -->
+  <circle cx="33" cy="64" r="5" fill="#C8C0A0"/>
+  <circle cx="33" cy="64" r="3" fill="#D8D0B8"/>
+  <circle cx="63" cy="64" r="5" fill="#C8C0A0"/>
+  <circle cx="63" cy="64" r="3" fill="#D8D0B8"/>
+
+  <!-- PELVIS -->
+  <rect x="26" y="55" width="44" height="9" rx="4" fill="#C8C0A0"/>
+  <rect x="26" y="55" width="44" height="3" rx="2" fill="#D8D0B8" opacity="0.5"/>
+  <!-- Pelvis openings -->
+  <ellipse cx="35" cy="60" rx="6" ry="3.5" fill="#0A0808" opacity="0.5"/>
+  <ellipse cx="61" cy="60" rx="6" ry="3.5" fill="#0A0808" opacity="0.5"/>
+
+  <!-- SPINE -->
+  <rect x="45" y="30" width="6" height="26" rx="3" fill="#C0B89A"/>
+  <!-- Vertebra discs -->
+  <rect x="43" y="32" width="10" height="2.5" rx="1" fill="#D0C8B0" opacity="0.6"/>
+  <rect x="43" y="37" width="10" height="2.5" rx="1" fill="#D0C8B0" opacity="0.6"/>
+  <rect x="43" y="42" width="10" height="2.5" rx="1" fill="#D0C8B0" opacity="0.6"/>
+  <rect x="43" y="47" width="10" height="2.5" rx="1" fill="#D0C8B0" opacity="0.6"/>
+  <rect x="43" y="52" width="10" height="2.5" rx="1" fill="#D0C8B0" opacity="0.6"/>
+
+  <!-- RIBCAGE -->
+  <!-- Sternum -->
+  <rect x="44" y="28" width="8" height="28" rx="3" fill="#B8B098"/>
+  <!-- Ribs left (5 pairs) -->
+  <path d="M45,30 Q30,32 28,36" stroke="#D4CCA8" stroke-width="3" fill="none" stroke-linecap="round"/>
+  <path d="M45,35 Q28,37 26,42" stroke="#D4CCA8" stroke-width="3" fill="none" stroke-linecap="round"/>
+  <path d="M45,40 Q28,42 27,47" stroke="#D4CCA8" stroke-width="3" fill="none" stroke-linecap="round"/>
+  <path d="M45,45 Q30,47 28,52" stroke="#D4CCA8" stroke-width="3" fill="none" stroke-linecap="round"/>
+  <path d="M45,50 Q32,52 30,56" stroke="#C4BC98" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+  <!-- Ribs right -->
+  <path d="M52,30 Q67,32 68,36" stroke="#D4CCA8" stroke-width="3" fill="none" stroke-linecap="round"/>
+  <path d="M52,35 Q68,37 70,42" stroke="#D4CCA8" stroke-width="3" fill="none" stroke-linecap="round"/>
+  <path d="M52,40 Q68,42 69,47" stroke="#D4CCA8" stroke-width="3" fill="none" stroke-linecap="round"/>
+  <path d="M52,45 Q66,47 68,52" stroke="#D4CCA8" stroke-width="3" fill="none" stroke-linecap="round"/>
+  <path d="M52,50 Q64,52 66,56" stroke="#C4BC98" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+  <!-- Dark chest cavity interior -->
+  <rect x="32" y="28" width="14" height="26" rx="3" fill="#080808" opacity="0.35"/>
+  <rect x="50" y="28" width="14" height="26" rx="3" fill="#080808" opacity="0.35"/>
+  <!-- Soul glow inside ribcage -->
+  <circle cx="48" cy="42" r="5" fill="#2030C8" opacity="0.2"/>
+
+  <!-- SHOULDER BLADES -->
+  <rect x="16" y="26" width="14" height="6" rx="3" fill="#C8C0A0"/>
+  <rect x="66" y="26" width="14" height="6" rx="3" fill="#C8C0A0"/>
+
+  <!-- LEFT ARM (defense position) — radius/ulna -->
+  <rect x="18" y="30" width="8" height="24" rx="3" fill="#CCC4A4"/>
+  <rect x="19.5" y="30" width="2.5" height="24" rx="1" fill="#DED8C0" opacity="0.5"/>
+  <!-- Elbow joint -->
+  <circle cx="22" cy="32" r="4" fill="#BCBC9A"/>
+  <circle cx="22" cy="32" r="2.5" fill="#CCC4A4"/>
+  <!-- Left hand bones -->
+  <ellipse cx="22" cy="57" rx="6" ry="5" fill="#C0B89A"/>
+  <rect x="17" y="56" width="3" height="7" rx="1.5" fill="#B8B098"/>
+  <rect x="21" y="56" width="3" height="7" rx="1.5" fill="#B8B098"/>
+  <rect x="25" y="56" width="3" height="7" rx="1.5" fill="#B8B098"/>
+
+  <!-- RIGHT ARM (sword arm) -->
+  <rect x="70" y="30" width="8" height="24" rx="3" fill="#CCC4A4"/>
+  <rect x="71.5" y="30" width="2.5" height="24" rx="1" fill="#DED8C0" opacity="0.5"/>
+  <circle cx="74" cy="32" r="4" fill="#BCBC9A"/>
+  <circle cx="74" cy="32" r="2.5" fill="#CCC4A4"/>
+
+  <!-- NECK VERTEBRA -->
+  <rect x="43" y="22" width="10" height="8" rx="3" fill="#C8C0A0"/>
+  <rect x="43" y="22" width="10" height="3" rx="2" fill="#D8D0B8" opacity="0.5"/>
+
+  <!-- SKULL -->
+  <ellipse cx="48" cy="14" rx="17" ry="15" fill="#E0D8B8"/>
+  <ellipse cx="48" cy="14" rx="15" ry="13" fill="#EDE8D0"/>
+  <!-- Skull top dome highlight -->
+  <ellipse cx="46" cy="9" rx="10" ry="7" fill="#F5F0E0" opacity="0.4"/>
+
+  <!-- JAW -->
+  <rect x="34" y="23" width="28" height="10" rx="4" fill="#D8D0B0"/>
+  <rect x="36" y="29" width="24" height="5" rx="2" fill="#C8C0A0"/>
+
+  <!-- DEEP EYE SOCKETS -->
+  <ellipse cx="37" cy="13" rx="7" ry="8" fill="#060408"/>
+  <ellipse cx="59" cy="13" rx="7" ry="8" fill="#060408"/>
+  <!-- SOUL FIRE — bright blue -->
+  <circle cx="37" cy="13" r="4" fill="#1020C0" opacity="0.9"/>
+  <circle cx="37" cy="13" r="2.5" fill="#2040E0"/>
+  <circle cx="37" cy="13" r="1.5" fill="#4060FF"/>
+  <circle cx="37" cy="13" r="0.8" fill="#90B0FF"/>
+  <!-- Glow aura -->
+  <circle cx="37" cy="13" r="8" fill="#2040C0" opacity="0.12"/>
+
+  <circle cx="59" cy="13" r="4" fill="#1020C0" opacity="0.9"/>
+  <circle cx="59" cy="13" r="2.5" fill="#2040E0"/>
+  <circle cx="59" cy="13" r="1.5" fill="#4060FF"/>
+  <circle cx="59" cy="13" r="0.8" fill="#90B0FF"/>
+  <circle cx="59" cy="13" r="8" fill="#2040C0" opacity="0.12"/>
+
+  <!-- NASAL CAVITY -->
+  <path d="M45,19 L48,16 L51,19 L50,22 L46,22 Z" fill="#060408"/>
+
+  <!-- TEETH -->
+  <rect x="35" y="26" width="3" height="5" rx="1" fill="#D0C8A8"/>
+  <rect x="39.5" y="26" width="3" height="5" rx="1" fill="#D0C8A8"/>
+  <rect x="44" y="26" width="3" height="5" rx="1" fill="#D0C8A8"/>
+  <rect x="48.5" y="26" width="3" height="5" rx="1" fill="#D0C8A8"/>
+  <rect x="53" y="26" width="3" height="5" rx="1" fill="#D0C8A8"/>
+  <rect x="57.5" y="26" width="3" height="5" rx="1" fill="#D0C8A8"/>
 </svg>

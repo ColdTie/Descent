@@ -32,19 +32,20 @@ func _make_class_card(class_id: String) -> PanelContainer:
 	var vbox := VBoxContainer.new()
 	panel.add_child(vbox)
 
-	# Hero portrait sprite or color swatch fallback
-	var portrait_path: String = "res://assets/sprites/hero_%s.png" % class_id
+	# Hero portrait — SVG preferred (vector, scales crisply), PNG fallback, color swatch last
+	var svg_path: String = "res://assets/sprites/hero_%s.svg" % class_id
+	var png_path: String = "res://assets/sprites/hero_%s.png" % class_id
+	var portrait_path: String = svg_path if ResourceLoader.exists(svg_path) else png_path
 	var portrait_tex: Texture2D = null
 	if ResourceLoader.exists(portrait_path):
 		portrait_tex = load(portrait_path) as Texture2D
 	if portrait_tex != null:
 		var portrait := TextureRect.new()
-		# Show sprite at 2× pixel-art scale for crisp clarity (80px * 2 = 160px)
-		portrait.custom_minimum_size = Vector2(CARD_WIDTH - 10.0, 120.0)
+		portrait.custom_minimum_size = Vector2(CARD_WIDTH - 10.0, 130.0)
 		portrait.texture = portrait_tex
 		portrait.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 		portrait.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-		portrait.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+		portrait.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
 		vbox.add_child(portrait)
 	else:
 		var swatch := ColorRect.new()
