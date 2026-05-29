@@ -32,20 +32,18 @@ func _make_class_card(class_id: String) -> PanelContainer:
 	var vbox := VBoxContainer.new()
 	panel.add_child(vbox)
 
-	# Hero portrait — SVG preferred (vector, scales crisply), PNG fallback, color swatch last
-	var svg_path: String = "res://assets/sprites/hero_%s.svg" % class_id
-	var png_path: String = "res://assets/sprites/hero_%s.png" % class_id
-	var portrait_path: String = svg_path if ResourceLoader.exists(svg_path) else png_path
+	# Hero portrait — PNG loads reliably in headless/web export without editor import.
+	var portrait_path: String = "res://assets/sprites/hero_%s.png" % class_id
 	var portrait_tex: Texture2D = null
 	if ResourceLoader.exists(portrait_path):
 		portrait_tex = load(portrait_path) as Texture2D
 	if portrait_tex != null:
 		var portrait := TextureRect.new()
-		portrait.custom_minimum_size = Vector2(CARD_WIDTH - 10.0, 130.0)
+		portrait.custom_minimum_size = Vector2(CARD_WIDTH - 10.0, 160.0)
 		portrait.texture = portrait_tex
 		portrait.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 		portrait.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
-		portrait.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
+		portrait.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 		vbox.add_child(portrait)
 	else:
 		var swatch := ColorRect.new()

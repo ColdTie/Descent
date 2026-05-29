@@ -234,7 +234,7 @@ func _spawn_entity_node(c: Combatant) -> void:
 	var root := Node2D.new()
 	root.position = HexGrid.hex_to_pixel(c.position, HEX_SIZE)
 
-	# Sprite — SVG preferred (96×96 vector, crisp at any scale), PNG fallback, then polygon
+	# Sprite — PNG loads without Godot editor import, works in headless/web export.
 	var sprite_path: String = _get_sprite_path(c)
 	var sprite_tex: Texture2D = null
 	if ResourceLoader.exists(sprite_path):
@@ -243,11 +243,11 @@ func _spawn_entity_node(c: Combatant) -> void:
 	if sprite_tex != null:
 		var sprite := Sprite2D.new()
 		sprite.texture = sprite_tex
-		# SVGs render at 96×96; scale so characters fit inside the hex tile with room
-		var sprite_scale: float = 0.82 if is_boss else 0.65
+		# 96×96 sprites; bosses scaled larger to loom over regular enemies
+		var sprite_scale: float = 0.92 if is_boss else 0.75
 		sprite.scale = Vector2(sprite_scale, sprite_scale)
-		sprite.position = Vector2(0.0, -10.0)
-		sprite.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
+		sprite.position = Vector2(0.0, -14.0)
+		sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 		root.add_child(sprite)
 	else:
 		# Fallback: colored hex + glyph (used before Godot imports the assets)
@@ -304,9 +304,8 @@ func _hero_class_color() -> Color:
 func _get_sprite_path(c: Combatant) -> String:
 	var base: String = "hero_%s" % GameState.hero_class if c.faction == Combatant.Faction.HERO \
 		else "enemy_%s" % c.sprite_key
-	var svg_path: String = "res://assets/sprites/%s.svg" % base
-	if ResourceLoader.exists(svg_path):
-		return svg_path
+	# PNGs load reliably in headless/web export without editor import step.
+	# SVGs require the Godot editor import pass which silently fails in CI.
 	return "res://assets/sprites/%s.png" % base
 
 func _entity_glyph(c: Combatant) -> String:
