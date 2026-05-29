@@ -838,6 +838,7 @@ func _clear_highlights() -> void:
 
 func _on_action_taken(_attacker: Combatant, target: Combatant, damage: int, _ability_id: String) -> void:
 	_show_damage_number(target, damage)
+	_hit_flash(target)
 	_update_hp_bar(target)
 	_update_status_label(target)
 	_update_boss_hp_bar()
@@ -1038,6 +1039,15 @@ func _sync_hero_alpha() -> void:
 	if abs(hnode.modulate.a - target_alpha) > 0.05:
 		var tw: Tween = create_tween()
 		tw.tween_property(hnode, "modulate:a", target_alpha, 0.25)
+
+func _hit_flash(c: Combatant) -> void:
+	## Brief white flash on a hit — gives combat a punchy feel.
+	var node: Node2D = _entity_nodes.get(c.id)
+	if node == null:
+		return
+	var tw: Tween = create_tween()
+	tw.tween_property(node, "modulate", Color(2.5, 2.5, 2.5, 1.0), 0.05)
+	tw.tween_property(node, "modulate", Color(1.0, 1.0, 1.0, 1.0), 0.12)
 
 func _show_damage_number(c: Combatant, damage: int, color: Color = Color(1.0, 0.25, 0.1)) -> void:
 	var node: Node2D = _entity_nodes.get(c.id)
