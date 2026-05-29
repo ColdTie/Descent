@@ -3,9 +3,10 @@
 ; since the parameters that go here are not all obvious.
 ;
 ; Format:
-;   [section] ; section goes in []
-;   param=value ; assign values
-[gd_resource type="ProjectSettings" format=3]
+;   [section] ; section goes between []
+;   param=value ; assign values to parameters
+
+config_version=5
 
 [application]
 

@@ -138,19 +138,22 @@ func enemy_ai_action(enemy: Combatant, map: DungeonMap = null) -> void:
 	## Smart AI based on enemy type (sprite_key)
 	if is_combatant_frozen(enemy):
 		return  # frozen enemies skip their turn
-	var heroes: Array[Combatant] = combatants.filter(
-		func(c: Combatant) -> bool: return c.faction == Combatant.Faction.HERO and c.is_alive()
-	)
+	var heroes: Array[Combatant] = []
+	for c: Combatant in combatants:
+		if c.faction == Combatant.Faction.HERO and c.is_alive():
+			heroes.append(c)
 	if heroes.is_empty():
 		return
 	# Vanished heroes are invisible — enemies skip their turn rather than targeting them
-	var visible_heroes: Array[Combatant] = heroes.filter(
-		func(c: Combatant) -> bool:
-			for eff: Dictionary in c.status_effects:
-				if eff.get("id", "") == "vanished":
-					return false
-			return true
-	)
+	var visible_heroes: Array[Combatant] = []
+	for c: Combatant in heroes:
+		var is_vanished: bool = false
+		for eff: Dictionary in c.status_effects:
+			if eff.get("id", "") == "vanished":
+				is_vanished = true
+				break
+		if not is_vanished:
+			visible_heroes.append(c)
 	if visible_heroes.is_empty():
 		return  # all heroes vanished — enemy idles
 	var target: Combatant = visible_heroes[0]
@@ -214,7 +217,11 @@ func end_turn() -> void:
 	_check_battle_end()
 
 func _remove_dead_from_order() -> void:
-	turn_order = turn_order.filter(func(c: Combatant) -> bool: return c.is_alive())
+	var new_order: Array[Combatant] = []
+	for c: Combatant in turn_order:
+		if c.is_alive():
+			new_order.append(c)
+	turn_order = new_order
 
 func _check_battle_end() -> bool:
 	var living_heroes: int = combatants.filter(

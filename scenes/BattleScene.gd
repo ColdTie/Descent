@@ -119,7 +119,10 @@ func _build_encounter() -> void:
 		var e: Combatant = EnemyDefs.make_combatant(def, _map.spawn_points[i], _battle_rng, GameState.floor_num)
 		_enemies.append(e)
 
-	_all_combatants = [_hero] + _enemies
+	_all_combatants.clear()
+	_all_combatants.append(_hero)
+	for e: Combatant in _enemies:
+		_all_combatants.append(e)
 	_engine = BattleEngine.new(_battle_rng)
 	_engine.battle_ended.connect(_on_battle_ended)
 	_engine.action_taken.connect(_on_action_taken)
@@ -241,9 +244,10 @@ func _spawn_entity_node(c: Combatant) -> void:
 		var sprite := Sprite2D.new()
 		sprite.texture = sprite_tex
 		# Sprites are 80×80 px — scale to fit nicely on the hex grid
-		var sprite_scale: float = 0.90 if is_boss else 0.62
+		var sprite_scale: float = 0.90 if is_boss else 0.72
 		sprite.scale = Vector2(sprite_scale, sprite_scale)
 		sprite.position = Vector2(0.0, -8.0)
+		sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 		root.add_child(sprite)
 	else:
 		# Fallback: colored hex + glyph (used before Godot imports the assets)
