@@ -9,6 +9,7 @@ script = ExtResource("1_bs")
 position = Vector2(0, 0)
 size = Vector2(1280, 720)
 color = Color(0.04, 0.03, 0.06, 1)
+mouse_filter = 2
 
 [node name="HexLayer" type="Node2D" parent="."]
 name = "HexLayer"
