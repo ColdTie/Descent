@@ -333,8 +333,7 @@ func _build_boss_hp_bar() -> void:
 	if _boss == null:
 		return
 	# Announce boss encounter after a brief delay so floor_enter lands first
-	get_tree().create_timer(1.8).timeout.connect(func() -> void:
-		SystemVoice.speak("boss_encounter"), CONNECT_ONE_SHOT)
+	get_tree().create_timer(1.8).timeout.connect(func() -> void: SystemVoice.speak("boss_encounter"))
 
 	var ui: CanvasLayer = $UILayer
 	var bar_w: float = 400.0
