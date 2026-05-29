@@ -151,7 +151,7 @@ func test_status_effect_frozen_data() -> void:
 func test_status_effect_vanished_data() -> void:
 	var v: Dictionary = StatusEffect.vanished(2.5)
 	assert_eq(v["id"], "vanished", "vanished id correct")
-	assert_eq(v["duration"], 1, "vanished duration = 1")
+	assert_eq(v["duration"], 3, "vanished duration = 3 (Run 5 fix)")
 	assert_eq(v["damage_multiplier"], 2.5, "vanished multiplier set")
 
 func test_attack_bonus_adds_to_damage() -> void:
