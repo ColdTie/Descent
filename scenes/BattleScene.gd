@@ -337,11 +337,11 @@ func _spawn_entity_node(c: Combatant) -> void:
 
 		var sprite := Sprite2D.new()
 		sprite.texture = sprite_tex
-		# NEAREST for crisp pixel-art look; 128×128 DCSS CC0 sprites scaled 4×
-		var sprite_scale: float = 1.20 if is_boss else 0.95
+		# 192×192 custom SVG art — linear filter for smooth anti-aliased rendering
+		var sprite_scale: float = 0.85 if is_boss else 0.68
 		sprite.scale = Vector2(sprite_scale, sprite_scale)
 		sprite.position = Vector2(0.0, -24.0)
-		sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+		sprite.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
 		root.add_child(sprite)
 
 		# Idle breathing bob (enemies bounce a bit faster than hero)

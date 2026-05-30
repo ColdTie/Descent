@@ -87,12 +87,12 @@ func _make_class_card(class_id: String) -> PanelContainer:
 	)
 	if portrait_tex != null:
 		var portrait := TextureRect.new()
-		# 200×220 DCSS pixel-art portraits — keep pixel aspect, use NEAREST filter
+		# 200×220 SVG-rendered portraits — linear filter for smooth anti-aliased art
 		portrait.custom_minimum_size = Vector2(CARD_WIDTH - 4.0, 248.0)
 		portrait.texture       = portrait_tex
 		portrait.stretch_mode  = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 		portrait.expand_mode   = TextureRect.EXPAND_IGNORE_SIZE
-		portrait.texture_filter= CanvasItem.TEXTURE_FILTER_NEAREST
+		portrait.texture_filter= CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
 		vbox.add_child(portrait)
 	else:
 		var swatch := ColorRect.new()
