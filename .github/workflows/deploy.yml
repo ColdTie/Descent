@@ -35,10 +35,10 @@ jobs:
           mv templates/web* ~/.local/share/godot/export_templates/4.4.1.stable/
           rm -rf templates templates.tpz
 
-      - name: Regenerate sprites and portraits (Pillow)
+      - name: Fetch DCSS sprites and generate portraits (Pillow)
         run: |
           pip install Pillow --quiet
-          python3 tools/gen_sprites_v2.py
+          python3 tools/gen_sprites_v3.py
 
       - name: Import project assets
         run: |

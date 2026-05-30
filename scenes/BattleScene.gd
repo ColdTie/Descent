@@ -278,11 +278,11 @@ func _spawn_entity_node(c: Combatant) -> void:
 
 		var sprite := Sprite2D.new()
 		sprite.texture = sprite_tex
-		# HQ sprites rendered at 4× and downsampled — use LINEAR for smooth display
-		var sprite_scale: float = 1.22 if is_boss else 0.95
+		# Pixel-art sprites scaled with NEAREST — preserves sharp pixel boundaries
+		var sprite_scale: float = 1.28 if is_boss else 1.00
 		sprite.scale = Vector2(sprite_scale, sprite_scale)
-		sprite.position = Vector2(0.0, -16.0)
-		sprite.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
+		sprite.position = Vector2(0.0, -18.0)
+		sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 		root.add_child(sprite)
 	else:
 		# Fallback: colored hex + glyph (used before Godot imports the assets)
