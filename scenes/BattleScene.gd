@@ -225,6 +225,10 @@ func _draw_hex_grid() -> void:
 		border.default_color = Color(0.95, 0.42, 0.04) if is_lava else STONE_EDGE
 		poly.add_child(border)
 
+		# Stone cracks on floor tiles
+		if not is_lava:
+			_add_stone_texture(poly, hex)
+
 		# Lava shimmer glyph
 		if is_lava:
 			var lava_lbl := Label.new()
@@ -243,6 +247,40 @@ func _draw_hex_grid() -> void:
 		area.add_child(col)
 		area.input_event.connect(_on_hex_input.bind(hex))
 		_hex_layer.add_child(area)
+
+func _add_stone_texture(poly: Polygon2D, hex: Vector2i) -> void:
+	## Draw subtle procedural cracks on stone floor tiles — purely decorative.
+	var rng := RandomNumberGenerator.new()
+	rng.seed = hex.x * 1733 + hex.y * 9001 + GameState.run_seed
+	var num_cracks: int = rng.randi_range(1, 3)
+	for _i: int in range(num_cracks):
+		var angle: float = rng.randf_range(0.0, TAU)
+		var dist: float  = rng.randf_range(2.0, HEX_SIZE * 0.45)
+		var length: float = rng.randf_range(5.0, 14.0)
+		var sx: float = cos(angle) * dist
+		var sy: float = sin(angle) * dist
+		var crack := Line2D.new()
+		crack.add_point(Vector2(sx, sy))
+		crack.add_point(Vector2(
+			sx + cos(angle + rng.randf_range(-0.6, 0.6)) * length,
+			sy + sin(angle + rng.randf_range(-0.6, 0.6)) * length
+		))
+		crack.width = 0.7
+		crack.default_color = Color(0.05, 0.03, 0.08, rng.randf_range(0.35, 0.65))
+		poly.add_child(crack)
+	# Occasional small dark moss/shadow patch
+	if rng.randf() < 0.30:
+		var patch := Polygon2D.new()
+		var px: float = rng.randf_range(-12.0, 12.0)
+		var py: float = rng.randf_range(-12.0, 12.0)
+		var pr: float = rng.randf_range(4.0, 8.0)
+		var pts := PackedVector2Array()
+		for j: int in range(6):
+			var a: float = deg_to_rad(60.0 * float(j))
+			pts.append(Vector2(px + cos(a) * pr, py + sin(a) * pr))
+		patch.polygon = pts
+		patch.color = Color(0.03, 0.02, 0.06, rng.randf_range(0.15, 0.30))
+		poly.add_child(patch)
 
 func _start_lava_pulse(poly: Polygon2D) -> void:
 	## Pulse lava tiles between bright and dim orange
@@ -278,10 +316,10 @@ func _spawn_entity_node(c: Combatant) -> void:
 
 		var sprite := Sprite2D.new()
 		sprite.texture = sprite_tex
-		# Pixel-art sprites scaled with NEAREST — preserves sharp pixel boundaries
-		var sprite_scale: float = 1.28 if is_boss else 1.00
+		# 128×128 HQ sprites — NEAREST gives crisp pixel edges
+		var sprite_scale: float = 1.10 if is_boss else 0.85
 		sprite.scale = Vector2(sprite_scale, sprite_scale)
-		sprite.position = Vector2(0.0, -18.0)
+		sprite.position = Vector2(0.0, -22.0)
 		sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 		root.add_child(sprite)
 	else:

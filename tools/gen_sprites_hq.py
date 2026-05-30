@@ -1,18 +1,21 @@
 #!/usr/bin/env python3
 """High-quality sprite generator — 4× super-sampling + glow effects.
 
-Renders at 384×384 then downsamples to 96×96 via LANCZOS for smooth,
+Renders at 512×512 then downsamples to 128×128 via LANCZOS for smooth,
 anti-aliased edges. Eyes and magic elements get Gaussian glow layers.
+Also generates 200×190 class portraits for ClassSelect.
 """
 
 import os
+import sys
 from PIL import Image, ImageDraw, ImageFilter
 
-BASE = 96
+BASE = 128
 SCALE = 4
-R = BASE * SCALE   # 384 render canvas
+R = BASE * SCALE   # 512 render canvas
 
-OUTPUT = os.path.join(os.path.dirname(__file__), "..", "assets", "sprites")
+OUTPUT   = os.path.join(os.path.dirname(__file__), "..", "assets", "sprites")
+PORTRAIT_OUTPUT = os.path.join(os.path.dirname(__file__), "..", "assets", "portraits")
 
 
 # ── Coordinate helpers ──────────────────────────────────────────────────────
@@ -1238,6 +1241,61 @@ def enemy_boss_abyss_keeper() -> Image.Image:
     return img
 
 
+# ── PORTRAITS ─────────────────────────────────────────────────────────────────
+
+PORTRAIT_CONFIG: dict = {
+    "brawler":  ("hero_brawler",  (44, 22, 28), (72, 36, 18), (220, 100, 30)),
+    "rogue":    ("hero_rogue",    (14,  6, 24), (32, 16, 50), (138,  96, 218)),
+    "arcanist": ("hero_arcanist", (16,  6, 36), (26, 10, 58), (168, 110, 255)),
+}
+
+
+def make_portrait(sprite_img: Image.Image,
+                  bg_top: tuple, bg_bot: tuple, accent: tuple) -> Image.Image:
+    """Generate a 200×190 portrait card from a 128×128 sprite."""
+    PW, PH = 200, 190
+    cr, cg, cb = accent[:3]
+
+    # Gradient background
+    canvas = Image.new("RGBA", (PW, PH), (0, 0, 0, 255))
+    d = ImageDraw.Draw(canvas)
+    for y in range(PH):
+        t = y / PH
+        rv = int(bg_top[0] * (1 - t) + bg_bot[0] * t)
+        gv = int(bg_top[1] * (1 - t) + bg_bot[1] * t)
+        bv = int(bg_top[2] * (1 - t) + bg_bot[2] * t)
+        d.line([(0, y), (PW, y)], fill=(rv, gv, bv, 255))
+
+    # Soft radial glow behind the sprite
+    glow = Image.new("RGBA", (PW, PH), (0, 0, 0, 0))
+    gd = ImageDraw.Draw(glow)
+    for i in range(5, 0, -1):
+        r2 = 60 * i // 3
+        al = min(255, 55 * i // 5)
+        cx, cy = PW // 2, PH // 2 - 10
+        gd.ellipse([cx - r2, cy - r2, cx + r2, cy + r2], fill=(cr, cg, cb, al))
+    canvas = Image.alpha_composite(canvas, glow.filter(ImageFilter.GaussianBlur(20)))
+
+    # Scale sprite to 160×160 and center
+    sprite_size = 160
+    scaled = sprite_img.resize((sprite_size, sprite_size), Image.LANCZOS)
+    sx = (PW - sprite_size) // 2
+    sy = max(0, (PH - sprite_size) // 2 - 8)
+    canvas.paste(scaled, (sx, sy), scaled)
+
+    # Accent strip at bottom
+    d = ImageDraw.Draw(canvas)
+    d.rectangle([0, PH - 13, PW, PH], fill=(cr // 2, cg // 2, cb // 2, 255))
+    d.rectangle([0, PH - 13, PW, PH - 11], fill=(cr, cg, cb, 255))
+
+    # Single-pixel class-color border on three sides
+    d.rectangle([0, 0, PW - 1, 0], fill=(cr, cg, cb, 180))
+    d.rectangle([0, 0, 0, PH - 1], fill=(cr, cg, cb, 180))
+    d.rectangle([PW - 1, 0, PW - 1, PH - 1], fill=(cr, cg, cb, 180))
+
+    return canvas
+
+
 # ── SPRITE REGISTRY ───────────────────────────────────────────────────────────
 
 SPRITES = {
@@ -1252,12 +1310,29 @@ SPRITES = {
     "enemy_boss_dungeon_lord":  enemy_boss_dungeon_lord,
     "enemy_boss_warden":        enemy_boss_warden,
     "enemy_boss_abyss_keeper":  enemy_boss_abyss_keeper,
-    "enemy_boss":               enemy_boss_dungeon_lord,   # legacy alias
+    "enemy_boss":               enemy_boss_dungeon_lord,
 }
 
 if __name__ == "__main__":
-    print(f"Generating HQ sprites → {OUTPUT}/")
+    os.makedirs(OUTPUT, exist_ok=True)
+    os.makedirs(PORTRAIT_OUTPUT, exist_ok=True)
+
+    print(f"=== Battle Sprites (128×128, 4× supersampled) → {OUTPUT}/")
     for name, fn in SPRITES.items():
+        sys.stdout.write(f"  {name:<35} ")
+        sys.stdout.flush()
         img = fn()
         save(img, name)
-    print("Done — all sprites rendered at 4× and downsampled via LANCZOS.")
+
+    print(f"\n=== Class Portraits (200×190) → {PORTRAIT_OUTPUT}/")
+    for cls_id, (sprite_key, bg_top, bg_bot, accent) in PORTRAIT_CONFIG.items():
+        sys.stdout.write(f"  {cls_id:<12} ")
+        sys.stdout.flush()
+        sprite_img = SPRITES[sprite_key]()
+        sprite_final = finalize(sprite_img)
+        portrait = make_portrait(sprite_final, bg_top, bg_bot, accent)
+        path = os.path.join(PORTRAIT_OUTPUT, f"{cls_id}.png")
+        portrait.save(path)
+        print(f"✓  {os.path.getsize(path):>7,} bytes")
+
+    print("\nDone — all assets generated.")
