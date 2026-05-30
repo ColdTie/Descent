@@ -24,19 +24,20 @@ func _on_system_line(text: String, _dur: float) -> void:
 # ── Background torch-flicker decoration ───────────────────────────────────────
 
 func _draw_bg_decoration() -> void:
-	# Subtle vignette corners
+	# Subtle vignette corners — MOUSE_FILTER_IGNORE so they don't eat clicks
 	for cfg: Array in [
 		[0, 0, 420, 720],      # left
 		[860, 0, 420, 720],    # right
 	]:
 		var cr := ColorRect.new()
-		cr.position  = Vector2(cfg[0], cfg[1])
-		cr.size      = Vector2(cfg[2], cfg[3])
-		cr.color     = Color(0.0, 0.0, 0.0, 0.35)
-		cr.z_index   = -1
+		cr.position     = Vector2(cfg[0], cfg[1])
+		cr.size         = Vector2(cfg[2], cfg[3])
+		cr.color        = Color(0.0, 0.0, 0.0, 0.35)
+		cr.mouse_filter = MOUSE_FILTER_IGNORE
 		add_child(cr)
+		move_child(cr, 0)   # push behind the VBox
 
-	# Three torch-glows behind the card row
+	# Three class-color column tints
 	var glow_colors: Array[Color] = [
 		Color(0.7, 0.15, 0.05, 0.14),   # brawler red
 		Color(0.12, 0.72, 0.28, 0.10),  # rogue green
@@ -45,11 +46,12 @@ func _draw_bg_decoration() -> void:
 	var glow_xs: Array[float] = [320.0, 640.0, 960.0]
 	for i: int in range(3):
 		var cr2 := ColorRect.new()
-		cr2.size    = Vector2(320.0, 720.0)
-		cr2.position = Vector2(glow_xs[i] - 160.0, 0.0)
-		cr2.color   = glow_colors[i]
-		cr2.z_index = -1
+		cr2.size         = Vector2(320.0, 720.0)
+		cr2.position     = Vector2(glow_xs[i] - 160.0, 0.0)
+		cr2.color        = glow_colors[i]
+		cr2.mouse_filter = MOUSE_FILTER_IGNORE
 		add_child(cr2)
+		move_child(cr2, 0)   # push behind the VBox
 
 # ── Class cards ────────────────────────────────────────────────────────────────
 
@@ -98,13 +100,15 @@ func _make_class_card(class_id: String) -> PanelContainer:
 	else:
 		var swatch := ColorRect.new()
 		swatch.custom_minimum_size = Vector2(CARD_WIDTH - 4.0, 120.0)
-		swatch.color = cls_color.darkened(0.3)
+		swatch.color        = cls_color.darkened(0.3)
+		swatch.mouse_filter = MOUSE_FILTER_IGNORE
 		vbox.add_child(swatch)
 
-	# Class color strip
+	# Class color strip — ignore mouse so it doesn't block the card's button
 	var strip := ColorRect.new()
 	strip.custom_minimum_size = Vector2(CARD_WIDTH - 4.0, 3.0)
-	strip.color = cls_color
+	strip.color        = cls_color
+	strip.mouse_filter = MOUSE_FILTER_IGNORE
 	vbox.add_child(strip)
 
 	# ── Class name ──────────────────────────────────────────────────────────
