@@ -2,8 +2,8 @@ extends Control
 ## Class selection screen — the front end of each run.
 ## Run 6: portrait images from assets/portraits/, styled cards with class colors.
 
-const CARD_WIDTH:  float = 230.0
-const CARD_HEIGHT: float = 390.0
+const CARD_WIDTH:  float = 240.0
+const CARD_HEIGHT: float = 420.0
 
 var _selected_class: String = ""
 
@@ -87,15 +87,12 @@ func _make_class_card(class_id: String) -> PanelContainer:
 	)
 	if portrait_tex != null:
 		var portrait := TextureRect.new()
-		portrait.custom_minimum_size = Vector2(CARD_WIDTH - 4.0, 228.0)
+		# 200×220 DCSS pixel-art portraits — keep pixel aspect, use NEAREST filter
+		portrait.custom_minimum_size = Vector2(CARD_WIDTH - 4.0, 248.0)
 		portrait.texture       = portrait_tex
 		portrait.stretch_mode  = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 		portrait.expand_mode   = TextureRect.EXPAND_IGNORE_SIZE
-		portrait.texture_filter= CanvasItem.TEXTURE_FILTER_LINEAR
-		# Tint the background of the portrait slot dark
-		var ptbg := StyleBoxFlat.new()
-		ptbg.bg_color = Color(0.04, 0.03, 0.06)
-		portrait.add_theme_stylebox_override("panel", ptbg)
+		portrait.texture_filter= CanvasItem.TEXTURE_FILTER_NEAREST
 		vbox.add_child(portrait)
 	else:
 		var swatch := ColorRect.new()

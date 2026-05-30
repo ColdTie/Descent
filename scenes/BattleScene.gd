@@ -134,6 +134,20 @@ func _build_encounter() -> void:
 	_engine.hero_moved.connect(_on_hero_moved)
 	_engine.setup(_all_combatants)
 
+## ─── Idle Animation ───────────────────────────────────────────────────────────
+
+func _start_idle_bob(sprite: Sprite2D, is_hero: bool) -> void:
+	## Slow breathing bob: hero moves gently, enemies bounce more assertively.
+	var base_y: float  = -24.0
+	var amp:    float  = 2.0 if is_hero else 3.5
+	var period: float  = 1.8 if is_hero else 1.2
+	var tw: Tween = create_tween()
+	tw.set_loops()
+	tw.tween_property(sprite, "position:y", base_y - amp, period * 0.5) \
+		.set_ease(Tween.EASE_IN_OUT).set_trans(Tween.TRANS_SINE)
+	tw.tween_property(sprite, "position:y", base_y + amp * 0.4, period * 0.5) \
+		.set_ease(Tween.EASE_IN_OUT).set_trans(Tween.TRANS_SINE)
+
 ## ─── Cave Atmosphere ──────────────────────────────────────────────────────────
 
 func _draw_cave_background() -> void:
@@ -300,30 +314,41 @@ func _spawn_entity_node(c: Combatant) -> void:
 	var root := Node2D.new()
 	root.position = HexGrid.hex_to_pixel(c.position, HEX_SIZE)
 
-	# Sprite — PNG loads without Godot editor import, works in headless/web export.
 	var sprite_path: String = _get_sprite_path(c)
 	var sprite_tex: Texture2D = null
 	if ResourceLoader.exists(sprite_path):
 		sprite_tex = load(sprite_path) as Texture2D
 	var is_boss: bool = c.sprite_key.begins_with("boss")
+
 	if sprite_tex != null:
-		# Drop shadow ellipse drawn first (behind sprite)
+		# Dark disc behind sprite so it reads against any hex colour
+		var disc := Polygon2D.new()
+		disc.polygon = _make_hex_pts(HEX_SIZE * (0.68 if is_boss else 0.58))
+		disc.color = Color(0.0, 0.0, 0.0, 0.50)
+		disc.position = Vector2(0.0, -10.0)
+		root.add_child(disc)
+
+		# Drop shadow
 		var shadow := Polygon2D.new()
-		shadow.polygon = _make_hex_pts(HEX_SIZE * 0.48)
-		shadow.color = Color(0.0, 0.0, 0.0, 0.55)
-		shadow.position = Vector2(0.0, HEX_SIZE * 0.30)
+		shadow.polygon = _make_hex_pts(HEX_SIZE * (0.52 if is_boss else 0.42))
+		shadow.color = Color(0.0, 0.0, 0.0, 0.45)
+		shadow.position = Vector2(0.0, HEX_SIZE * 0.28)
 		root.add_child(shadow)
 
 		var sprite := Sprite2D.new()
 		sprite.texture = sprite_tex
-		# 128×128 HQ sprites — NEAREST gives crisp pixel edges
-		var sprite_scale: float = 1.10 if is_boss else 0.85
+		# NEAREST for crisp pixel-art look; 128×128 DCSS CC0 sprites scaled 4×
+		var sprite_scale: float = 1.20 if is_boss else 0.95
 		sprite.scale = Vector2(sprite_scale, sprite_scale)
-		sprite.position = Vector2(0.0, -22.0)
+		sprite.position = Vector2(0.0, -24.0)
 		sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 		root.add_child(sprite)
+
+		# Idle breathing bob (enemies bounce a bit faster than hero)
+		var is_hero: bool = c.faction == Combatant.Faction.HERO
+		_start_idle_bob(sprite, is_hero)
 	else:
-		# Fallback: colored hex + glyph (used before Godot imports the assets)
+		# Fallback: coloured hex + glyph
 		var body := Polygon2D.new()
 		var body_size: float = HEX_SIZE * (0.55 if is_boss else 0.42)
 		body.polygon = _make_hex_pts(body_size)
@@ -344,27 +369,43 @@ func _spawn_entity_node(c: Combatant) -> void:
 		lbl.position = Vector2(-12.0, -12.0)
 		root.add_child(lbl)
 
-	# HP bar — taller and with a visible dark border
+	# Enemy name tag (small, above HP bar)
+	if c.faction == Combatant.Faction.ENEMY:
+		var name_tag := Label.new()
+		name_tag.text = c.display_name
+		name_tag.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		name_tag.add_theme_font_size_override("font_size", 8)
+		var tag_color: Color = Color(1.0, 0.62, 0.95) if is_boss else Color(0.78, 0.58, 0.58)
+		name_tag.add_theme_color_override("font_color", tag_color)
+		name_tag.custom_minimum_size = Vector2(60.0, 0.0)
+		name_tag.position = Vector2(-30.0, HEX_SIZE * 0.48)
+		root.add_child(name_tag)
+
+	# HP bar — wide border + background + coloured fill
+	var HP_W: float = 46.0
+	var HP_H: float = 8.0
+	var hp_y: float = HEX_SIZE * 0.58
+
 	var hp_border := ColorRect.new()
-	hp_border.size = Vector2(42.0, 9.0)
-	hp_border.position = Vector2(-21.0, HEX_SIZE * 0.50)
-	hp_border.color = Color(0.06, 0.04, 0.08)
+	hp_border.size = Vector2(HP_W + 2.0, HP_H + 2.0)
+	hp_border.position = Vector2(-(HP_W + 2.0) * 0.5, hp_y)
+	hp_border.color = Color(0.05, 0.03, 0.07)
 	root.add_child(hp_border)
 
 	var hp_bg := ColorRect.new()
-	hp_bg.size = Vector2(40.0, 7.0)
-	hp_bg.position = Vector2(-20.0, HEX_SIZE * 0.50 + 1.0)
-	hp_bg.color = Color(0.30, 0.05, 0.05)
+	hp_bg.size = Vector2(HP_W, HP_H)
+	hp_bg.position = Vector2(-HP_W * 0.5, hp_y + 1.0)
+	hp_bg.color = Color(0.28, 0.04, 0.04)
 	root.add_child(hp_bg)
 
 	var hp_bar := ColorRect.new()
 	hp_bar.name = "HPBar"
-	hp_bar.size = Vector2(40.0, 7.0)
-	hp_bar.position = Vector2(-20.0, HEX_SIZE * 0.50 + 1.0)
+	hp_bar.size = Vector2(HP_W, HP_H)
+	hp_bar.position = Vector2(-HP_W * 0.5, hp_y + 1.0)
 	hp_bar.color = Color(0.18, 0.88, 0.22)
 	root.add_child(hp_bar)
 
-	# Status icons area
+	# Status icons
 	var status_lbl := Label.new()
 	status_lbl.name = "StatusLabel"
 	status_lbl.add_theme_font_size_override("font_size", 11)
@@ -1036,7 +1077,7 @@ func _update_hp_bar(c: Combatant) -> void:
 	if hp_bar == null:
 		return
 	var ratio: float = float(c.hp) / float(max(1, c.max_hp))
-	hp_bar.size.x = 40.0 * clampf(ratio, 0.0, 1.0)
+	hp_bar.size.x = 46.0 * clampf(ratio, 0.0, 1.0)
 	# Green → yellow → red gradient as HP drops
 	hp_bar.color = Color(1.0 - ratio * 0.78, 0.18 + ratio * 0.70, 0.08)
 
@@ -1079,13 +1120,17 @@ func _sync_hero_alpha() -> void:
 		tw.tween_property(hnode, "modulate:a", target_alpha, 0.25)
 
 func _hit_flash(c: Combatant) -> void:
-	## Brief white flash on a hit — gives combat a punchy feel.
+	## White brightness flare + squish-scale pulse for punchy combat feel.
 	var node: Node2D = _entity_nodes.get(c.id)
 	if node == null:
 		return
 	var tw: Tween = create_tween()
-	tw.tween_property(node, "modulate", Color(2.5, 2.5, 2.5, 1.0), 0.05)
-	tw.tween_property(node, "modulate", Color(1.0, 1.0, 1.0, 1.0), 0.12)
+	tw.tween_property(node, "modulate", Color(2.8, 2.8, 2.8, 1.0), 0.04)
+	tw.tween_property(node, "modulate", Color(1.0, 1.0, 1.0, 1.0), 0.14)
+	# Squish-and-recover for tactile weight
+	var tw2: Tween = create_tween()
+	tw2.tween_property(node, "scale", Vector2(1.10, 0.88), 0.06)
+	tw2.tween_property(node, "scale", Vector2(1.0,  1.0),  0.12)
 
 func _show_damage_number(c: Combatant, damage: int, color: Color = Color(1.0, 0.25, 0.1)) -> void:
 	var node: Node2D = _entity_nodes.get(c.id)

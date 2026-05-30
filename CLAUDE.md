@@ -35,7 +35,7 @@ DESCENT is a turn-based tactical dungeon crawler in the spirit of **Dungeon Craw
 - **Architecture rule**: `BattleEngine._calculate_damage()` returns RAW damage (no armor). `Combatant.take_damage(amount, ignore_armor=false)` applies armor. Don't double-apply armor in both places.
 - `Combatant.take_damage(amount, ignore_armor)` — the `ignore_armor` parameter bypasses the `armor` field reduction (for backstab, env damage, etc.)
 
-## Current State (Run 6 — Visual Overhaul)
+## Current State (Run 8 — Better Sprites + Combat Polish)
 ### Implemented ✅
 **Run 1 (Bootstrap):**
 - `GameRng`, `GameState`, `SystemVoice` autoloads
@@ -112,6 +112,22 @@ DESCENT is a turn-based tactical dungeon crawler in the spirit of **Dungeon Craw
 - **`BattleScene.gd`** — `TEXTURE_FILTER_NEAREST` (was LINEAR) for pixel-perfect rendering; sprite scale 1.00/1.28 (was 0.95/1.22)
 - **`deploy.yml`** — runs `gen_sprites_v3.py` instead of `gen_sprites_v2.py`
 - **Attribution**: Sprites © Dungeon Crawl: Stone Soup contributors, CC0 1.0 Universal
+
+**Run 8 (Visual Overhaul — Better Pixel Art Sprites + Combat Polish):**
+- **`tools/gen_sprites_v4.py`** — Improved DCSS sprite pipeline:
+  - 4× NEAREST scale (32→128px, was 96px) — crisper pixel art at 33% larger display
+  - 2px dark pixel-art outline on all battle sprites for hex-grid contrast
+  - Better sprite selections: `hell_knight` (brawler), `sonja` (rogue), `executioner` (demon), `gloorx_vloq` (Abyss Keeper)
+  - Taller portraits (200×220 vs 200×190) with stronger radial glow
+- **`BattleScene.gd` combat polish:**
+  - `_start_idle_bob()` — each entity sprite gently breathes/bobs (hero: 1.8s period; enemies: 1.2s)
+  - Dark disc backdrop behind sprites (semi-transparent) for readability against any hex colour
+  - Enemy name tag displayed above HP bar
+  - Larger HP bar (46px wide, was 40px) with updated `_update_hp_bar`
+  - `_hit_flash()` — squish-and-recover scale pulse (`1.10×0.88`) in addition to white flare
+  - Sprite scale 0.95/1.20 (was 0.85/1.10)
+- **`ClassSelect.gd`** — Cards enlarged (240×420, was 230×390); portrait area 248px tall; NEAREST filter for pixel-art sprites
+- **`deploy.yml`** — runs `gen_sprites_v4.py` instead of `gen_sprites_hq.py`
 
 ### Next Priorities (Run 5) (was Run 4)
 1. **Sounds** — Even a minimal audio pass: hit, kill, move, ability sounds (use Godot's AudioStreamGenerator or import simple beeps)
