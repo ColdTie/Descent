@@ -373,6 +373,41 @@ const LINES: Dictionary = {
 		"Hit confirmed. The dungeon's morale is improving. Yours should not be.",
 	],
 
+	# ── Boss enrage (phase 2 trigger) ────────────────────────────────────────
+	"boss_enraged": [
+		"Boss-tier entity has entered an enraged state. This is your fault. Tactically speaking.",
+		"Phase two. The dungeon kept something in reserve. Of course it did.",
+		"The boss is enraged. Speed up. The floor just became significantly less forgiving.",
+		"Warning: boss combat profile has escalated. You had a window. The window has closed.",
+		"Enrage threshold crossed. The dungeon considers this the good part. You should not.",
+		"Second phase active. What you were doing before is no longer sufficient. Adjust immediately.",
+		"The boss is angry now. Not that it wasn't before. The difference is measurable. In your HP.",
+		"Enraged. Faster. Stronger. The dungeon doesn't negotiate. Neither does it warn. Except now.",
+	],
+
+	# ── Rogue Shadow Step ability ─────────────────────────────────────────────
+	"shadow_step": [
+		"Shadow Step executed. You closed the distance before they knew you were there.",
+		"Blink. Strike. The dungeon calls this a range exploit. You call it winning.",
+		"Teleported. Stabbed. Efficient sequence. The dungeon logs both.",
+		"You crossed three hexes in zero time. The enemy had opinions about this. Those opinions are now irrelevant.",
+		"Shadow Step confirmed. The physics of the dungeon are, at best, negotiable.",
+		"You arrived. Then you attacked. The order of operations was not to the enemy's benefit.",
+	],
+
+	# ── Enemy ability unlocks (late-floor flavor) ─────────────────────────────
+	"enemy_bone_volley": [
+		"The skeleton has adapted. It now throws pieces of itself at you. The dungeon finds this efficient.",
+		"Bone Volley detected. Skeletons on this floor have developed range. Adjust accordingly.",
+		"Ranged skeleton. The dungeon upgraded its inventory. This is inconvenient. That was the point.",
+	],
+
+	"enemy_hellfire": [
+		"Hellfire deployed. The demon has stopped pretending it fights fair.",
+		"Demonic AoE detected. The floor is now categorically on fire. Prioritize the demon.",
+		"The demon is using Hellfire. The dungeon considers this a personal touch.",
+	],
+
 	# ── Win screen (cleared all 18 floors) ────────────────────────────────────
 	"win": [
 		"Floor 18 cleared. The System is surprised. Don't let it go to your head.",

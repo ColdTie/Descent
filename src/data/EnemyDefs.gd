@@ -128,6 +128,7 @@ static func make_boss(floor_num: int, position: Vector2i, rng: RandomNumberGener
 	c.abilities = typed_abilities
 	c.xp_reward = boss_def.get("xp_reward", 150)
 	c.sprite_key = boss_def.get("sprite_key", "boss_dungeon_lord")
+	c.is_boss = true
 	return c
 
 static func get_enemies_for_floor(floor_num: int) -> Array[Dictionary]:
@@ -161,6 +162,12 @@ static func make_combatant(enemy_def: Dictionary, position: Vector2i, rng: Rando
 	var typed_abilities: Array[String] = []
 	for a: String in raw_abilities:
 		typed_abilities.append(a)
+	# Conditional ability unlocks based on floor depth
+	var enemy_id: String = enemy_def.get("id", "")
+	if enemy_id == "skeleton" and floor_num >= 10 and not typed_abilities.has("bone_volley"):
+		typed_abilities.append("bone_volley")
+	if enemy_id == "demon_grunt" and floor_num >= 13 and not typed_abilities.has("hellfire_aoe"):
+		typed_abilities.append("hellfire_aoe")
 	c.abilities = typed_abilities
 	c.xp_reward = enemy_def.get("xp_reward", 20)
 	c.sprite_key = enemy_def.get("sprite_key", "imp")

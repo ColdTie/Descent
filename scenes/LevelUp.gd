@@ -15,7 +15,7 @@ var _chosen: String = ""
 # Abilities each class can unlock (abilities NOT in their starting kit)
 const CLASS_UNLOCKS: Dictionary = {
 	"brawler":  ["shield_bash"],
-	"rogue":    ["power_strike", "frost_nova"],
+	"rogue":    ["shadow_step", "frost_nova"],
 	"arcanist": ["backstab", "taunt"],
 }
 

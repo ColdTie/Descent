@@ -245,6 +245,38 @@ def make_taunt():
     d.rectangle([CX - 2, CY + 6,  CX + 2, CY + 10], fill=(255, 215, 215, 255))
     return img
 
+def make_shadow_step():
+    """Deep violet teleport blink — afterimage ring with dark sparks."""
+    img = canvas()
+    d   = ImageDraw.Draw(img)
+    px  = img.load()
+    # Outer ring of the blink — deep violet
+    for r_i in range(29, 18, -1):
+        alpha = int(130 * (r_i - 18) / 11)
+        d.ellipse([CX - r_i, CY - r_i, CX + r_i, CY + r_i], fill=(80, 0, 140, alpha))
+    # Inner ring — bright magenta
+    for r_i in range(18, 10, -1):
+        alpha = int(210 * (r_i - 10) / 8)
+        d.ellipse([CX - r_i, CY - r_i, CX + r_i, CY + r_i], fill=(160, 0, 220, alpha))
+    # 6 sharp dark-violet rays outward
+    for ray in range(6):
+        angle = math.radians(ray * 60 + 15)
+        for t_i in range(1, 27):
+            t = t_i / 26.0
+            x = int(CX + t * 27 * math.cos(angle))
+            y = int(CY + t * 27 * math.sin(angle))
+            if 0 <= x < W and 0 <= y < H:
+                alpha = int(240 * (1 - t))
+                px[x, y] = (120, 0, 200, alpha)
+    # Bright white-violet core
+    for r_i in range(8, 0, -1):
+        t = 1 - r_i / 8
+        d.ellipse([CX - r_i, CY - r_i, CX + r_i, CY + r_i],
+                  fill=(200, 80, 255, int(255 * (0.5 + 0.5 * t))))
+    d.ellipse([CX - 3, CY - 3, CX + 3, CY + 3], fill=(255, 240, 255, 255))
+    sparks(img, CX, CY, 14, 14, 28, (200, 60, 255, 220), seed=99)
+    return img.filter(ImageFilter.GaussianBlur(0.7))
+
 def make_lava_heat():
     """Orange upward flame wisps for lava heat damage."""
     img = canvas()
@@ -274,16 +306,17 @@ def make_lava_heat():
 # ── main ─────────────────────────────────────────────────────────────────────
 
 EFFECTS = [
-    ("fx_fireball.png",    make_fireball),
-    ("fx_frost.png",       make_frost),
-    ("fx_impact.png",      make_impact),
-    ("fx_backstab.png",    make_backstab),
+    ("fx_fireball.png",     make_fireball),
+    ("fx_frost.png",        make_frost),
+    ("fx_impact.png",       make_impact),
+    ("fx_backstab.png",     make_backstab),
     ("fx_power_strike.png", make_power_strike),
-    ("fx_heal.png",        make_heal),
-    ("fx_poison.png",      make_poison),
-    ("fx_vanish.png",      make_vanish),
-    ("fx_taunt.png",       make_taunt),
-    ("fx_lava_heat.png",   make_lava_heat),
+    ("fx_heal.png",         make_heal),
+    ("fx_poison.png",       make_poison),
+    ("fx_vanish.png",       make_vanish),
+    ("fx_taunt.png",        make_taunt),
+    ("fx_lava_heat.png",    make_lava_heat),
+    ("fx_shadow_step.png",  make_shadow_step),
 ]
 
 def main():

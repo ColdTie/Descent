@@ -17,6 +17,8 @@ var abilities: Array[String] = []
 var xp_reward: int = 0
 var sprite_key: String = ""  # references which placeholder sprite to use
 var attack_bonus: int = 0    # flat bonus added to all outgoing damage
+var is_boss: bool = false
+var is_enraged: bool = false
 
 func _init(p_id: String, p_name: String, p_faction: Faction, p_hp: int, p_speed: int = 10) -> void:
 	id = p_id

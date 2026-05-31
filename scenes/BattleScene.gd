@@ -50,6 +50,7 @@ var _enemies_killed: int = 0
 var _first_kill_done: bool = false   # for first_kill quip
 var _boss: Combatant = null
 var _boss_hp_fill: ColorRect = null
+var _boss_glow_tween: Tween = null
 var _donut: Combatant = null
 var _donut_hp_label: Label = null
 var _hero_dead: bool = false
@@ -193,6 +194,7 @@ func _build_encounter() -> void:
 	_engine.combatant_died.connect(_on_combatant_died)
 	_engine.status_ticked.connect(_on_status_ticked)
 	_engine.hero_moved.connect(_on_hero_moved)
+	_engine.boss_enraged.connect(_on_boss_enraged)
 	_engine.setup(_all_combatants)
 
 ## ─── Effect VFX ───────────────────────────────────────────────────────────────
@@ -207,10 +209,13 @@ func _load_effect_textures() -> void:
 		"taunt":          "res://assets/effects/fx_taunt.png",
 		"vanish":         "res://assets/effects/fx_vanish.png",
 		"shield_bash":    "res://assets/effects/fx_impact.png",
+		"shadow_step":    "res://assets/effects/fx_shadow_step.png",
 		"lava_heat":      "res://assets/effects/fx_lava_heat.png",
 		"enemy_claw":     "res://assets/effects/fx_impact.png",
 		"enemy_bite":     "res://assets/effects/fx_backstab.png",
 		"enemy_fireball": "res://assets/effects/fx_fireball.png",
+		"bone_volley":    "res://assets/effects/fx_impact.png",
+		"hellfire_aoe":   "res://assets/effects/fx_fireball.png",
 	}
 	for id: String in fx_map:
 		var path: String = fx_map[id]
@@ -449,12 +454,13 @@ func _spawn_entity_node(c: Combatant) -> void:
 
 		# Boss glow pulses like a heartbeat
 		if is_boss:
-			var tw_g: Tween = create_tween()
-			tw_g.set_loops()
-			tw_g.tween_property(glow_poly, "color",
+			glow_poly.name = "GlowRing"
+			_boss_glow_tween = create_tween()
+			_boss_glow_tween.set_loops()
+			_boss_glow_tween.tween_property(glow_poly, "color",
 				Color(0.55, 0.0, 0.78, 0.68), 1.1) \
 				.set_ease(Tween.EASE_IN_OUT).set_trans(Tween.TRANS_SINE)
-			tw_g.tween_property(glow_poly, "color",
+			_boss_glow_tween.tween_property(glow_poly, "color",
 				Color(0.55, 0.0, 0.78, 0.28), 1.4) \
 				.set_ease(Tween.EASE_IN_OUT).set_trans(Tween.TRANS_SINE)
 
@@ -771,7 +777,11 @@ func _update_boss_hp_bar() -> void:
 		return
 	var ratio: float = float(_boss.hp) / float(max(1, _boss.max_hp))
 	_boss_hp_fill.size.x = 400.0 * clampf(ratio, 0.0, 1.0)
-	_boss_hp_fill.color = Color(0.72 - ratio * 0.22, 0.10 + ratio * 0.08, 0.82 - ratio * 0.42)
+	if _boss.is_enraged:
+		# Enraged phase: crimson-orange gradient
+		_boss_hp_fill.color = Color(1.0, 0.25 + ratio * 0.15, 0.04)
+	else:
+		_boss_hp_fill.color = Color(0.72 - ratio * 0.22, 0.10 + ratio * 0.08, 0.82 - ratio * 0.42)
 
 ## ─── Ability Bar ──────────────────────────────────────────────────────────────
 
@@ -989,6 +999,26 @@ func _do_hero_move(hex: Vector2i) -> void:
 	_engine.end_turn()
 	_next_turn()
 
+func _find_teleport_hex_near(target: Combatant) -> Vector2i:
+	## Find the closest empty passable hex adjacent to target (for Shadow Step).
+	var best: Vector2i = _hero.position
+	var best_dist: int = HexGrid.hex_distance(_hero.position, target.position)
+	for n: Vector2i in HexGrid.neighbors(target.position):
+		if not _map.is_passable(n):
+			continue
+		var occupied: bool = false
+		for c: Combatant in _all_combatants:
+			if c.is_alive() and c.position == n:
+				occupied = true
+				break
+		if occupied:
+			continue
+		var d: int = HexGrid.hex_distance(_hero.position, n)
+		if d < best_dist:
+			best_dist = d
+			best = n
+	return best
+
 func _do_hero_attack(target: Combatant) -> void:
 	# Check cooldown/charges before attacking
 	var abl_obj: Ability = _hero_ability_objs.get(_selected_ability)
@@ -999,12 +1029,31 @@ func _do_hero_attack(target: Combatant) -> void:
 	var abl_data: Dictionary = Abilities.get_ability(_selected_ability)
 	_player_turn = false
 	_clear_highlights()
+
+	# Shadow Step: teleport adjacent to target before striking
+	if abl_data.get("teleport_to_target", false):
+		var from_hex: Vector2i = _hero.position
+		var dest: Vector2i = _find_teleport_hex_near(target)
+		if dest != from_hex:
+			_play_ability_effect(from_hex, "shadow_step")
+			_hero.position = dest
+			var hero_node: Node2D = _entity_nodes.get(_hero.id)
+			if hero_node != null:
+				var tw: Tween = create_tween()
+				tw.set_ease(Tween.EASE_OUT)
+				tw.set_trans(Tween.TRANS_BACK)
+				tw.tween_property(hero_node, "position", HexGrid.hex_to_pixel(dest, HEX_SIZE), 0.18)
+				await tw.finished
+			_play_ability_effect(dest, "shadow_step")
+			SystemVoice.speak("shadow_step")
+
 	_play_ability_effect(target.position, _selected_ability)
 	_engine.perform_attack(_hero, target, _selected_ability)
 	match _selected_ability:
-		"backstab":    SystemVoice.speak("ability_backstab")
-		"shield_bash": SystemVoice.speak("shield_bash")
-		_:             SystemVoice.speak("hit")
+		"backstab":     SystemVoice.speak("ability_backstab")
+		"shield_bash":  SystemVoice.speak("shield_bash")
+		"shadow_step":  pass  # quip already played above during teleport
+		_:              SystemVoice.speak("hit")
 
 	# Apply on-hit status effects (poison_blade, etc.)
 	if target.is_alive() and abl_data.get("applies_poisoned", false):
@@ -1326,6 +1375,28 @@ func _on_hero_moved(_combatant: Combatant, _from_hex: Vector2i, to_hex: Vector2i
 		tw.set_ease(Tween.EASE_OUT)
 		tw.set_trans(Tween.TRANS_QUART)
 		tw.tween_property(node, "position", HexGrid.hex_to_pixel(to_hex, HEX_SIZE), 0.22)
+
+func _on_boss_enraged(boss: Combatant) -> void:
+	## Boss phase 2 trigger: swap glow to crimson-orange, play hit flash, quip.
+	var node: Node2D = _entity_nodes.get(boss.id)
+	if node != null:
+		var glow: Polygon2D = node.get_node_or_null("GlowRing") as Polygon2D
+		if glow != null and _boss_glow_tween != null:
+			_boss_glow_tween.kill()
+		if glow != null:
+			glow.color = Color(1.0, 0.12, 0.06, 0.75)
+			_boss_glow_tween = create_tween()
+			_boss_glow_tween.set_loops()
+			_boss_glow_tween.tween_property(glow, "color",
+				Color(1.0, 0.35, 0.04, 0.85), 0.6) \
+				.set_ease(Tween.EASE_IN_OUT).set_trans(Tween.TRANS_SINE)
+			_boss_glow_tween.tween_property(glow, "color",
+				Color(0.9, 0.08, 0.04, 0.35), 0.8) \
+				.set_ease(Tween.EASE_IN_OUT).set_trans(Tween.TRANS_SINE)
+	_hit_flash(boss)
+	_update_boss_hp_bar()
+	var quip: String = SystemVoice.pick("boss_enraged")
+	_show_system_banner("⚠ ENRAGED: %s — %s" % [boss.display_name, quip], 4.0)
 
 func _on_battle_ended(hero_won: bool, xp_earned: int) -> void:
 	_player_turn = false

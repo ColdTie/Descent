@@ -9,6 +9,7 @@ signal combatant_died(combatant: Combatant)
 signal battle_ended(hero_won: bool, xp_earned: int)
 signal status_ticked(combatant: Combatant, damage: int)
 signal hero_moved(combatant: Combatant, from_hex: Vector2i, to_hex: Vector2i)
+signal boss_enraged(boss: Combatant)
 
 var combatants: Array[Combatant] = []
 var turn_order: Array[Combatant] = []
@@ -92,7 +93,19 @@ func perform_attack(attacker: Combatant, target: Combatant, ability_id: String =
 	action_taken.emit(attacker, target, actual, ability_id)
 	if not target.is_alive():
 		_on_combatant_died(target)
+	else:
+		_check_boss_enrage(target)
 	return actual
+
+func _check_boss_enrage(c: Combatant) -> void:
+	if not c.is_boss or c.is_enraged:
+		return
+	var hp_ratio: float = float(c.hp) / float(max(1, c.max_hp))
+	if hp_ratio < 0.30:
+		c.is_enraged = true
+		c.speed += 4
+		c.attack_bonus += 4
+		boss_enraged.emit(c)
 
 func perform_aoe_attack(attacker: Combatant, targets: Array[Combatant], ability_id: String) -> Array[int]:
 	## Attack all targets with ability_id, returning list of damage values dealt.
@@ -176,9 +189,7 @@ func enemy_ai_action(enemy: Combatant, map: DungeonMap = null) -> void:
 			# Goblins try to flank: move if not adjacent, then attack
 			var dist: int = HexGrid.hex_distance(enemy.position, target.position)
 			if dist > 1 and map != null:
-				# Move one step toward hero
 				_move_toward(enemy, target.position, map)
-			# Attack if now adjacent
 			if HexGrid.hex_distance(enemy.position, target.position) <= 1:
 				var ability_id: String = enemy.abilities[rng.randi_range(0, enemy.abilities.size() - 1)]
 				perform_attack(enemy, target, ability_id)
@@ -189,6 +200,35 @@ func enemy_ai_action(enemy: Combatant, map: DungeonMap = null) -> void:
 				_move_toward(enemy, target.position, map)
 			if HexGrid.hex_distance(enemy.position, target.position) <= 1:
 				perform_attack(enemy, target, "enemy_claw")
+		"skeleton":
+			# Skeletons with bone_volley prefer ranged; otherwise close and claw
+			if enemy.abilities.has("bone_volley") and HexGrid.is_in_range(enemy.position, target.position, 3):
+				perform_attack(enemy, target, "bone_volley")
+			elif HexGrid.hex_distance(enemy.position, target.position) > 1 and map != null:
+				_move_toward(enemy, target.position, map)
+				if HexGrid.hex_distance(enemy.position, target.position) <= 1:
+					perform_attack(enemy, target, "enemy_claw")
+			else:
+				perform_attack(enemy, target, "enemy_claw")
+		"demon":
+			# Demons with hellfire prefer AoE if any hero is within range 2;
+			# otherwise advance and attack
+			if enemy.abilities.has("hellfire_aoe"):
+				var in_range_heroes: Array[Combatant] = []
+				for h: Combatant in visible_heroes:
+					if HexGrid.is_in_range(enemy.position, h.position, 2):
+						in_range_heroes.append(h)
+				if not in_range_heroes.is_empty():
+					perform_aoe_attack(enemy, in_range_heroes, "hellfire_aoe")
+					return
+			var ddist: int = HexGrid.hex_distance(enemy.position, target.position)
+			if ddist > 1 and map != null:
+				_move_toward(enemy, target.position, map)
+			if HexGrid.hex_distance(enemy.position, target.position) <= 1:
+				var ability_id: String = enemy.abilities[rng.randi_range(0, enemy.abilities.size() - 1)]
+				perform_attack(enemy, target, ability_id)
+			elif enemy.abilities.has("enemy_fireball") and HexGrid.is_in_range(enemy.position, target.position, 3):
+				perform_attack(enemy, target, "enemy_fireball")
 		_:
 			# Default: attack hero with random ability
 			var ability_id: String = "basic_attack"
