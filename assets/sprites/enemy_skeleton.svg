@@ -1,139 +1,130 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96">
-  <!-- Soul aura — cold blue -->
-  <circle cx="48" cy="48" r="40" fill="#0010A0" opacity="0.07"/>
-  <!-- Ground shadow -->
-  <ellipse cx="48" cy="93" rx="16" ry="4" fill="#000" opacity="0.25"/>
+<defs>
+  <linearGradient id="bn" x1="20%" y1="0%" x2="80%" y2="100%">
+    <stop offset="0%" stop-color="#E0D8C0"/><stop offset="45%" stop-color="#C8C0A0"/><stop offset="100%" stop-color="#907C60"/>
+  </linearGradient>
+  <linearGradient id="ar" x1="15%" y1="0%" x2="85%" y2="100%">
+    <stop offset="0%" stop-color="#5A4830"/><stop offset="50%" stop-color="#3A3020"/><stop offset="100%" stop-color="#1A1408"/>
+  </linearGradient>
+  <linearGradient id="sw" x1="0%" y1="0%" x2="0%" y2="100%">
+    <stop offset="0%" stop-color="#D8D8E8"/><stop offset="40%" stop-color="#A8A8C0"/><stop offset="100%" stop-color="#505068"/>
+  </linearGradient>
+  <radialGradient id="ey" cx="50%" cy="40%">
+    <stop offset="0%" stop-color="#60FF80"/><stop offset="50%" stop-color="#20A040"/><stop offset="100%" stop-color="#004010"/>
+  </radialGradient>
+</defs>
 
-  <!-- SWORD — raised high, right side -->
-  <!-- Blade -->
-  <rect x="64" y="4" width="5" height="46" rx="2" fill="#B8B8CC"/>
-  <rect x="65" y="6" width="2" height="42" rx="1" fill="#D8D8F0" opacity="0.6"/>
-  <!-- Blood stain on blade -->
-  <rect x="64" y="34" width="5" height="8" rx="1" fill="#880000" opacity="0.35"/>
-  <!-- Crossguard -->
-  <rect x="57" y="36" width="19" height="5" rx="2" fill="#8A7028"/>
-  <rect x="59" y="37" width="15" height="3" rx="1" fill="#A08838" opacity="0.5"/>
-  <!-- Grip + Pommel -->
-  <rect x="64" y="40" width="5" height="10" rx="2" fill="#4A3018"/>
-  <rect x="65" y="49" width="3" height="3" fill="#6A4820" opacity="0.6"/>
-  <circle cx="66.5" cy="50" r="4" fill="#8A7028"/>
-  <circle cx="66.5" cy="50" r="2" fill="#A08838"/>
+<!-- Soul aura cold blue -->
+<circle cx="48" cy="48" r="40" fill="#0010A0" opacity="0.07"/>
+<ellipse cx="48" cy="93" rx="16" ry="4" fill="#000" opacity="0.25"/>
 
-  <!-- FOOT BONES -->
-  <rect x="26" y="84" width="8" height="8" rx="2" fill="#C8C0A0"/>
-  <rect x="36" y="86" width="5" height="6" rx="1" fill="#B8B0A0"/>
-  <rect x="54" y="84" width="8" height="8" rx="2" fill="#C8C0A0"/>
-  <rect x="47" y="86" width="5" height="6" rx="1" fill="#B8B0A0"/>
+<!-- SWORD raised right hand -->
+<rect x="72" y="4" width="6" height="60" rx="2" fill="url(#sw)" transform="rotate(10,75,34)"/>
+<rect x="73.5" y="6" width="2.5" height="56" rx="1" fill="#E0E0F0" opacity="0.55" transform="rotate(10,75,34)"/>
+<rect x="68" y="52" width="16" height="5" rx="2" fill="#8A7030" transform="rotate(10,76,54)"/>
+<circle cx="74" cy="62" r="4" fill="#7A6028" transform="rotate(10,75,62)"/>
 
-  <!-- LEGS — tibia + fibula visible -->
-  <rect x="29" y="62" width="8" height="24" rx="3" fill="#D8D0B8"/>
-  <rect x="30.5" y="62" width="2.5" height="24" rx="1" fill="#EDE8D8" opacity="0.5"/>
-  <rect x="59" y="62" width="8" height="24" rx="3" fill="#D8D0B8"/>
-  <rect x="60.5" y="62" width="2.5" height="24" rx="1" fill="#EDE8D8" opacity="0.5"/>
-  <!-- Knee joint ball -->
-  <circle cx="33" cy="64" r="5" fill="#C8C0A0"/>
-  <circle cx="33" cy="64" r="3" fill="#D8D0B8"/>
-  <circle cx="63" cy="64" r="5" fill="#C8C0A0"/>
-  <circle cx="63" cy="64" r="3" fill="#D8D0B8"/>
+<!-- RUSTY ARMOR pieces -->
+<!-- Left shoulder plate -->
+<ellipse cx="24" cy="38" rx="10" ry="7" fill="url(#ar)"/>
+<ellipse cx="24" cy="38" rx="7" ry="5" fill="#4A3A22" opacity="0.5"/>
+<!-- Right shoulder plate -->
+<ellipse cx="72" cy="38" rx="10" ry="7" fill="url(#ar)"/>
+<ellipse cx="72" cy="38" rx="7" ry="5" fill="#4A3A22" opacity="0.5"/>
 
-  <!-- PELVIS -->
-  <rect x="26" y="55" width="44" height="9" rx="4" fill="#C8C0A0"/>
-  <rect x="26" y="55" width="44" height="3" rx="2" fill="#D8D0B8" opacity="0.5"/>
-  <!-- Pelvis openings -->
-  <ellipse cx="35" cy="60" rx="6" ry="3.5" fill="#0A0808" opacity="0.5"/>
-  <ellipse cx="61" cy="60" rx="6" ry="3.5" fill="#0A0808" opacity="0.5"/>
+<!-- TORSO (mostly bones showing) -->
+<path d="M28,36 C26,38 25,50 26,66 L70,66 C71,50 70,38 68,36 Z" fill="url(#bn)" opacity="0.6"/>
+<!-- Ribs visible -->
+<rect x="34" y="40" width="28" height="3" rx="1.5" fill="#D0C8A8"/>
+<rect x="34" y="46" width="28" height="3" rx="1.5" fill="#D0C8A8"/>
+<rect x="35" y="52" width="26" height="3" rx="1.5" fill="#D0C8A8"/>
+<rect x="36" y="58" width="24" height="3" rx="1.5" fill="#D0C8A8"/>
+<!-- Sternum -->
+<rect x="45" y="38" width="6" height="28" rx="3" fill="#E0D8C0"/>
+<rect x="46" y="40" width="4" height="24" rx="2" fill="#C8C0A0" opacity="0.5"/>
+<!-- Chest armor piece -->
+<path d="M28,36 L34,44 L62,44 L68,36 Z" fill="url(#ar)" opacity="0.7"/>
+<path d="M34,44 L36,38 L60,38 L62,44 Z" fill="#5A4828" opacity="0.5"/>
 
-  <!-- SPINE -->
-  <rect x="45" y="30" width="6" height="26" rx="3" fill="#C0B89A"/>
-  <!-- Vertebra discs -->
-  <rect x="43" y="32" width="10" height="2.5" rx="1" fill="#D0C8B0" opacity="0.6"/>
-  <rect x="43" y="37" width="10" height="2.5" rx="1" fill="#D0C8B0" opacity="0.6"/>
-  <rect x="43" y="42" width="10" height="2.5" rx="1" fill="#D0C8B0" opacity="0.6"/>
-  <rect x="43" y="47" width="10" height="2.5" rx="1" fill="#D0C8B0" opacity="0.6"/>
-  <rect x="43" y="52" width="10" height="2.5" rx="1" fill="#D0C8B0" opacity="0.6"/>
+<!-- PELVIS bone -->
+<path d="M26,62 Q28,72 48,70 Q68,72 70,62 Z" fill="url(#bn)"/>
+<path d="M26,62 Q36,68 48,66 Q60,68 70,62" stroke="#C0B890" stroke-width="1.5" fill="none"/>
 
-  <!-- RIBCAGE -->
-  <!-- Sternum -->
-  <rect x="44" y="28" width="8" height="28" rx="3" fill="#B8B098"/>
-  <!-- Ribs left (5 pairs) -->
-  <path d="M45,30 Q30,32 28,36" stroke="#D4CCA8" stroke-width="3" fill="none" stroke-linecap="round"/>
-  <path d="M45,35 Q28,37 26,42" stroke="#D4CCA8" stroke-width="3" fill="none" stroke-linecap="round"/>
-  <path d="M45,40 Q28,42 27,47" stroke="#D4CCA8" stroke-width="3" fill="none" stroke-linecap="round"/>
-  <path d="M45,45 Q30,47 28,52" stroke="#D4CCA8" stroke-width="3" fill="none" stroke-linecap="round"/>
-  <path d="M45,50 Q32,52 30,56" stroke="#C4BC98" stroke-width="2.5" fill="none" stroke-linecap="round"/>
-  <!-- Ribs right -->
-  <path d="M52,30 Q67,32 68,36" stroke="#D4CCA8" stroke-width="3" fill="none" stroke-linecap="round"/>
-  <path d="M52,35 Q68,37 70,42" stroke="#D4CCA8" stroke-width="3" fill="none" stroke-linecap="round"/>
-  <path d="M52,40 Q68,42 69,47" stroke="#D4CCA8" stroke-width="3" fill="none" stroke-linecap="round"/>
-  <path d="M52,45 Q66,47 68,52" stroke="#D4CCA8" stroke-width="3" fill="none" stroke-linecap="round"/>
-  <path d="M52,50 Q64,52 66,56" stroke="#C4BC98" stroke-width="2.5" fill="none" stroke-linecap="round"/>
-  <!-- Dark chest cavity interior -->
-  <rect x="32" y="28" width="14" height="26" rx="3" fill="#080808" opacity="0.35"/>
-  <rect x="50" y="28" width="14" height="26" rx="3" fill="#080808" opacity="0.35"/>
-  <!-- Soul glow inside ribcage -->
-  <circle cx="48" cy="42" r="5" fill="#2030C8" opacity="0.2"/>
+<!-- LEGS bones with armor greaves -->
+<rect x="28" y="64" width="14" height="26" rx="5" fill="url(#bn)"/>
+<rect x="54" y="64" width="14" height="26" rx="5" fill="url(#bn)"/>
+<!-- Greave armor left -->
+<rect x="26" y="72" width="18" height="14" rx="3" fill="url(#ar)"/>
+<rect x="27" y="73" width="6" height="12" rx="2" fill="#5A4828" opacity="0.4"/>
+<!-- Greave armor right -->
+<rect x="52" y="72" width="18" height="14" rx="3" fill="url(#ar)"/>
+<rect x="53" y="73" width="6" height="12" rx="2" fill="#5A4828" opacity="0.4"/>
 
-  <!-- SHOULDER BLADES -->
-  <rect x="16" y="26" width="14" height="6" rx="3" fill="#C8C0A0"/>
-  <rect x="66" y="26" width="14" height="6" rx="3" fill="#C8C0A0"/>
+<!-- FOOT bones -->
+<ellipse cx="35" cy="91" rx="11" ry="5" fill="url(#bn)"/>
+<ellipse cx="61" cy="91" rx="11" ry="5" fill="url(#bn)"/>
+<!-- Toe bones -->
+<rect x="26" y="89" width="5" height="3" rx="1.5" fill="#D8D0B8"/>
+<rect x="32" y="90" width="5" height="3" rx="1.5" fill="#D8D0B8"/>
+<rect x="38" y="90" width="5" height="3" rx="1.5" fill="#D8D0B8"/>
+<rect x="52" y="89" width="5" height="3" rx="1.5" fill="#D8D0B8"/>
+<rect x="58" y="90" width="5" height="3" rx="1.5" fill="#D8D0B8"/>
+<rect x="64" y="90" width="5" height="3" rx="1.5" fill="#D8D0B8"/>
 
-  <!-- LEFT ARM (defense position) — radius/ulna -->
-  <rect x="18" y="30" width="8" height="24" rx="3" fill="#CCC4A4"/>
-  <rect x="19.5" y="30" width="2.5" height="24" rx="1" fill="#DED8C0" opacity="0.5"/>
-  <!-- Elbow joint -->
-  <circle cx="22" cy="32" r="4" fill="#BCBC9A"/>
-  <circle cx="22" cy="32" r="2.5" fill="#CCC4A4"/>
-  <!-- Left hand bones -->
-  <ellipse cx="22" cy="57" rx="6" ry="5" fill="#C0B89A"/>
-  <rect x="17" y="56" width="3" height="7" rx="1.5" fill="#B8B098"/>
-  <rect x="21" y="56" width="3" height="7" rx="1.5" fill="#B8B098"/>
-  <rect x="25" y="56" width="3" height="7" rx="1.5" fill="#B8B098"/>
+<!-- ARMS bone with armor gauntlets -->
+<rect x="10" y="32" width="18" height="28" rx="7" fill="url(#bn)"/>
+<rect x="68" y="28" width="18" height="28" rx="7" fill="url(#bn)"/>
+<!-- Left gauntlet -->
+<rect x="8" y="54" width="20" height="12" rx="4" fill="url(#ar)"/>
+<rect x="9" y="55" width="7" height="10" rx="3" fill="#5A4828" opacity="0.4"/>
+<!-- Right gauntlet -->
+<rect x="68" y="50" width="20" height="12" rx="4" fill="url(#ar)"/>
+<rect x="69" y="51" width="7" height="10" rx="3" fill="#5A4828" opacity="0.4"/>
 
-  <!-- RIGHT ARM (sword arm) -->
-  <rect x="70" y="30" width="8" height="24" rx="3" fill="#CCC4A4"/>
-  <rect x="71.5" y="30" width="2.5" height="24" rx="1" fill="#DED8C0" opacity="0.5"/>
-  <circle cx="74" cy="32" r="4" fill="#BCBC9A"/>
-  <circle cx="74" cy="32" r="2.5" fill="#CCC4A4"/>
+<!-- NECK vertebrae -->
+<rect x="41" y="22" width="14" height="14" rx="4" fill="url(#bn)"/>
+<rect x="44" y="24" width="8" height="3" rx="1.5" fill="#C8C0A0"/>
+<rect x="44" y="29" width="8" height="3" rx="1.5" fill="#C8C0A0"/>
 
-  <!-- NECK VERTEBRA -->
-  <rect x="43" y="22" width="10" height="8" rx="3" fill="#C8C0A0"/>
-  <rect x="43" y="22" width="10" height="3" rx="2" fill="#D8D0B8" opacity="0.5"/>
+<!-- SKULL HEAD -->
+<ellipse cx="48" cy="13" rx="20" ry="18" fill="url(#bn)"/>
+<!-- Skull shading -->
+<ellipse cx="58" cy="14" rx="10" ry="12" fill="#B0A880" opacity="0.25"/>
+<ellipse cx="40" cy="9" rx="8" ry="7" fill="#F0E8D0" opacity="0.2"/>
+<!-- Skull cheek bones -->
+<ellipse cx="30" cy="16" rx="7" ry="5" fill="url(#bn)"/>
+<ellipse cx="66" cy="16" rx="7" ry="5" fill="url(#bn)"/>
 
-  <!-- SKULL -->
-  <ellipse cx="48" cy="14" rx="17" ry="15" fill="#E0D8B8"/>
-  <ellipse cx="48" cy="14" rx="15" ry="13" fill="#EDE8D0"/>
-  <!-- Skull top dome highlight -->
-  <ellipse cx="46" cy="9" rx="10" ry="7" fill="#F5F0E0" opacity="0.4"/>
+<!-- GLOWING EYE SOCKETS -->
+<ellipse cx="38" cy="14" rx="9" ry="8" fill="#080808"/>
+<ellipse cx="38" cy="14" rx="7" ry="6.5" fill="#001A08"/>
+<ellipse cx="38" cy="14" rx="5" ry="5" fill="url(#ey)"/>
+<circle cx="38" cy="14" r="2.5" fill="#40FF60"/>
+<circle cx="38" cy="14" r="1.2" fill="#A0FFB0"/>
+<circle cx="36.5" cy="12.5" r="0.8" fill="white" opacity="0.9"/>
+<!-- Eye glow -->
+<ellipse cx="38" cy="14" rx="8" ry="7" fill="#20FF40" opacity="0.12"/>
 
-  <!-- JAW -->
-  <rect x="34" y="23" width="28" height="10" rx="4" fill="#D8D0B0"/>
-  <rect x="36" y="29" width="24" height="5" rx="2" fill="#C8C0A0"/>
+<ellipse cx="58" cy="14" rx="9" ry="8" fill="#080808"/>
+<ellipse cx="58" cy="14" rx="7" ry="6.5" fill="#001A08"/>
+<ellipse cx="58" cy="14" rx="5" ry="5" fill="url(#ey)"/>
+<circle cx="58" cy="14" r="2.5" fill="#40FF60"/>
+<circle cx="58" cy="14" r="1.2" fill="#A0FFB0"/>
+<circle cx="56.5" cy="12.5" r="0.8" fill="white" opacity="0.9"/>
+<ellipse cx="58" cy="14" rx="8" ry="7" fill="#20FF40" opacity="0.12"/>
 
-  <!-- DEEP EYE SOCKETS -->
-  <ellipse cx="37" cy="13" rx="7" ry="8" fill="#060408"/>
-  <ellipse cx="59" cy="13" rx="7" ry="8" fill="#060408"/>
-  <!-- SOUL FIRE — bright blue -->
-  <circle cx="37" cy="13" r="4" fill="#1020C0" opacity="0.9"/>
-  <circle cx="37" cy="13" r="2.5" fill="#2040E0"/>
-  <circle cx="37" cy="13" r="1.5" fill="#4060FF"/>
-  <circle cx="37" cy="13" r="0.8" fill="#90B0FF"/>
-  <!-- Glow aura -->
-  <circle cx="37" cy="13" r="8" fill="#2040C0" opacity="0.12"/>
+<!-- NOSE CAVITY -->
+<path d="M45,22 L48,26 L51,22" fill="#2A2010" opacity="0.8"/>
 
-  <circle cx="59" cy="13" r="4" fill="#1020C0" opacity="0.9"/>
-  <circle cx="59" cy="13" r="2.5" fill="#2040E0"/>
-  <circle cx="59" cy="13" r="1.5" fill="#4060FF"/>
-  <circle cx="59" cy="13" r="0.8" fill="#90B0FF"/>
-  <circle cx="59" cy="13" r="8" fill="#2040C0" opacity="0.12"/>
+<!-- TEETH grin -->
+<path d="M32,28 Q48,34 64,28" fill="#1A1408" opacity="0.7"/>
+<rect x="36" y="28" width="4" height="5" rx="1" fill="#E8E0C0"/>
+<rect x="41" y="29" width="4" height="4" rx="1" fill="#E0D8C0"/>
+<rect x="46" y="29" width="4" height="4" rx="1" fill="#E0D8C0"/>
+<rect x="51" y="29" width="4" height="4" rx="1" fill="#E0D8C0"/>
+<rect x="56" y="28" width="4" height="5" rx="1" fill="#E8E0C0"/>
 
-  <!-- NASAL CAVITY -->
-  <path d="M45,19 L48,16 L51,19 L50,22 L46,22 Z" fill="#060408"/>
-
-  <!-- TEETH -->
-  <rect x="35" y="26" width="3" height="5" rx="1" fill="#D0C8A8"/>
-  <rect x="39.5" y="26" width="3" height="5" rx="1" fill="#D0C8A8"/>
-  <rect x="44" y="26" width="3" height="5" rx="1" fill="#D0C8A8"/>
-  <rect x="48.5" y="26" width="3" height="5" rx="1" fill="#D0C8A8"/>
-  <rect x="53" y="26" width="3" height="5" rx="1" fill="#D0C8A8"/>
-  <rect x="57.5" y="26" width="3" height="5" rx="1" fill="#D0C8A8"/>
+<!-- HELMET pieces (partial) -->
+<path d="M30,4 C28,8 26,14 28,18" stroke="url(#ar)" stroke-width="5" fill="none" stroke-linecap="round"/>
+<path d="M66,4 C68,8 70,14 68,18" stroke="url(#ar)" stroke-width="5" fill="none" stroke-linecap="round"/>
 </svg>

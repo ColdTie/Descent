@@ -1,136 +1,138 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96">
-  <!-- Void ambient glow — deep purple -->
-  <circle cx="48" cy="48" r="48" fill="#200050" opacity="0.25"/>
-  <circle cx="48" cy="48" r="32" fill="#380090" opacity="0.12"/>
-  <!-- Ground shadow — void shimmer -->
-  <ellipse cx="48" cy="93" rx="28" ry="5" fill="#100030" opacity="0.5"/>
+<defs>
+  <radialGradient id="vd" cx="50%" cy="50%">
+    <stop offset="0%" stop-color="#4A0090"/><stop offset="50%" stop-color="#200050"/><stop offset="100%" stop-color="#060010"/>
+  </radialGradient>
+  <linearGradient id="tn" x1="15%" y1="0%" x2="85%" y2="100%">
+    <stop offset="0%" stop-color="#5A0098"/><stop offset="45%" stop-color="#380060"/><stop offset="100%" stop-color="#140020"/>
+  </linearGradient>
+  <radialGradient id="e1" cx="40%" cy="35%">
+    <stop offset="0%" stop-color="#FF40FF"/><stop offset="50%" stop-color="#A000C0"/><stop offset="100%" stop-color="#200030"/>
+  </radialGradient>
+  <radialGradient id="e2" cx="40%" cy="35%">
+    <stop offset="0%" stop-color="#40FFFF"/><stop offset="50%" stop-color="#0080A0"/><stop offset="100%" stop-color="#001020"/>
+  </radialGradient>
+  <radialGradient id="e3" cx="40%" cy="35%">
+    <stop offset="0%" stop-color="#FF8000"/><stop offset="50%" stop-color="#A04000"/><stop offset="100%" stop-color="#200000"/>
+  </radialGradient>
+  <radialGradient id="au" cx="50%" cy="50%">
+    <stop offset="0%" stop-color="#8000FF" stop-opacity="0.5"/><stop offset="50%" stop-color="#400080" stop-opacity="0.3"/><stop offset="100%" stop-color="#100020" stop-opacity="0"/>
+  </radialGradient>
+</defs>
 
-  <!-- VOID TENDRILS — writhing shadows from body -->
-  <!-- Tendrils far left -->
-  <path d="M20,60 Q4,50 2,34 Q0,20 8,18" stroke="#8800CC" stroke-width="3" fill="none" stroke-linecap="round" opacity="0.75"/>
-  <path d="M18,66 Q0,58 2,42" stroke="#6600AA" stroke-width="2" fill="none" stroke-linecap="round" opacity="0.6"/>
-  <path d="M22,72 Q6,66 4,52 Q2,38 10,36" stroke="#7700BB" stroke-width="2.5" fill="none" stroke-linecap="round" opacity="0.65"/>
-  <!-- Tendril tips glow left -->
-  <circle cx="8" cy="18" r="3" fill="#AA00FF" opacity="0.7"/>
-  <circle cx="2" cy="42" r="2" fill="#8800DD" opacity="0.6"/>
-  <circle cx="10" cy="36" r="2.5" fill="#9900EE" opacity="0.65"/>
+<!-- Void ambient glow deep purple -->
+<circle cx="48" cy="48" r="48" fill="#200050" opacity="0.25"/>
+<circle cx="48" cy="48" r="32" fill="#380090" opacity="0.12"/>
+<!-- Ground shadow void shimmer -->
+<ellipse cx="48" cy="93" rx="26" ry="5" fill="#100020" opacity="0.7"/>
+<!-- Outer aura rings -->
+<circle cx="48" cy="40" r="44" fill="url(#au)"/>
+<circle cx="48" cy="40" r="36" stroke="#6000C0" stroke-width="1.5" fill="none" opacity="0.35"/>
+<circle cx="48" cy="40" r="28" stroke="#8000E0" stroke-width="1" fill="none" opacity="0.25"/>
 
-  <!-- Tendrils far right -->
-  <path d="M76,60 Q92,50 94,34 Q96,20 88,18" stroke="#8800CC" stroke-width="3" fill="none" stroke-linecap="round" opacity="0.75"/>
-  <path d="M78,66 Q96,58 94,42" stroke="#6600AA" stroke-width="2" fill="none" stroke-linecap="round" opacity="0.6"/>
-  <path d="M74,72 Q90,66 92,52 Q94,38 86,36" stroke="#7700BB" stroke-width="2.5" fill="none" stroke-linecap="round" opacity="0.65"/>
-  <!-- Tendril tips glow right -->
-  <circle cx="88" cy="18" r="3" fill="#AA00FF" opacity="0.7"/>
-  <circle cx="94" cy="42" r="2" fill="#8800DD" opacity="0.6"/>
-  <circle cx="86" cy="36" r="2.5" fill="#9900EE" opacity="0.65"/>
+<!-- TENTACLES (background, spreading wide) -->
+<!-- Far left tentacle -->
+<path d="M18,58 C-4,52 -8,38 -2,28 C4,20 12,26 14,38 C16,48 14,58 18,58" fill="url(#tn)"/>
+<path d="M18,58 C2,50 0,36 4,28 C8,22 12,26 14,38" stroke="#7000C0" stroke-width="1.5" fill="none" opacity="0.4"/>
+<!-- Left tentacle -->
+<path d="M22,62 C6,56 0,40 4,26 C8,14 16,22 16,38 C16,50 18,62 22,62" fill="url(#tn)"/>
+<!-- Inner left -->
+<path d="M28,68 C12,64 6,46 12,32 C16,22 22,30 22,46 C22,58 26,68 28,68" fill="url(#tn)"/>
+<!-- Right tentacles mirror -->
+<path d="M78,58 C100,52 104,38 98,28 C92,20 84,26 82,38 C80,48 82,58 78,58" fill="url(#tn)"/>
+<path d="M78,58 C94,50 96,36 92,28 C88,22 84,26 82,38" stroke="#7000C0" stroke-width="1.5" fill="none" opacity="0.4"/>
+<path d="M74,62 C90,56 96,40 92,26 C88,14 80,22 80,38 C80,50 78,62 74,62" fill="url(#tn)"/>
+<path d="M68,68 C84,64 90,46 84,32 C80,22 74,30 74,46 C74,58 70,68 68,68" fill="url(#tn)"/>
 
-  <!-- VOID LOWER BODY — shadow mass, no legs (floats) -->
-  <ellipse cx="48" cy="80" rx="30" ry="18" fill="#0E0020" opacity="0.9"/>
-  <ellipse cx="48" cy="80" rx="24" ry="14" fill="#160030"/>
-  <!-- Void wisps from bottom -->
-  <path d="M32,88 Q28,96 24,94" stroke="#5500AA" stroke-width="2" fill="none" opacity="0.5"/>
-  <path d="M48,90 Q44,96 40,94" stroke="#5500AA" stroke-width="2" fill="none" opacity="0.5"/>
-  <path d="M64,88 Q68,96 72,94" stroke="#5500AA" stroke-width="2" fill="none" opacity="0.5"/>
+<!-- LOWER TENTACLES cascading down -->
+<path d="M32,82 C24,88 18,96 22,96 C26,96 30,90 34,84" fill="url(#tn)"/>
+<path d="M40,86 C36,92 34,96 38,96 C42,96 42,90 44,86" fill="url(#tn)"/>
+<path d="M56,86 C60,92 62,96 58,96 C54,96 54,90 52,86" fill="url(#tn)"/>
+<path d="M64,82 C72,88 78,96 74,96 C70,96 66,90 62,84" fill="url(#tn)"/>
+<!-- Sucker dots on tentacles -->
+<circle cx="15" cy="40" r="2" fill="#8000D0" opacity="0.6"/>
+<circle cx="14" cy="50" r="1.5" fill="#8000D0" opacity="0.6"/>
+<circle cx="82" cy="40" r="2" fill="#8000D0" opacity="0.6"/>
+<circle cx="82" cy="50" r="1.5" fill="#8000D0" opacity="0.6"/>
 
-  <!-- VOID ARMS — shadow form, twisted -->
-  <path d="M22,50 Q8,44 6,56 Q4,66 14,66" stroke="#1A0040" stroke-width="10" fill="none" stroke-linecap="round"/>
-  <path d="M22,50 Q8,44 6,56 Q4,66 14,66" stroke="#4A00A0" stroke-width="5" fill="none" stroke-linecap="round" opacity="0.5"/>
-  <!-- Left void hand — tendrils -->
-  <path d="M12,64 Q6,60 4,68" stroke="#7700BB" stroke-width="2.5" fill="none" stroke-linecap="round"/>
-  <path d="M14,66 Q8,64 8,72" stroke="#7700BB" stroke-width="2.5" fill="none" stroke-linecap="round"/>
-  <path d="M16,66 Q12,70 10,76" stroke="#7700BB" stroke-width="2" fill="none" stroke-linecap="round"/>
-  <circle cx="5" cy="68" r="2" fill="#AA00FF" opacity="0.65"/>
-  <circle cx="8" cy="72" r="2" fill="#9900EE" opacity="0.6"/>
+<!-- BODY central mass -->
+<ellipse cx="48" cy="52" rx="32" ry="28" fill="url(#vd)"/>
+<ellipse cx="48" cy="52" rx="28" ry="24" fill="#300068" opacity="0.5"/>
+<!-- Body void cracks/veins -->
+<path d="M28,44 C32,48 36,56 30,62" stroke="#C040FF" stroke-width="1.5" fill="none" opacity="0.5"/>
+<path d="M68,44 C64,48 60,56 66,62" stroke="#C040FF" stroke-width="1.5" fill="none" opacity="0.5"/>
+<path d="M40,38 C42,46 44,58 38,66" stroke="#8000C0" stroke-width="1" fill="none" opacity="0.4"/>
+<path d="M56,38 C54,46 52,58 58,66" stroke="#8000C0" stroke-width="1" fill="none" opacity="0.4"/>
+<!-- Rune markings on body -->
+<path d="M36,48 L34,56 L42,52 Z" stroke="#C060FF" stroke-width="1.2" fill="none" opacity="0.6"/>
+<path d="M60,48 L62,56 L54,52 Z" stroke="#C060FF" stroke-width="1.2" fill="none" opacity="0.6"/>
+<circle cx="48" cy="60" r="5" stroke="#A040FF" stroke-width="1.2" fill="none" opacity="0.5"/>
 
-  <path d="M74,50 Q88,44 90,56 Q92,66 82,66" stroke="#1A0040" stroke-width="10" fill="none" stroke-linecap="round"/>
-  <path d="M74,50 Q88,44 90,56 Q92,66 82,66" stroke="#4A00A0" stroke-width="5" fill="none" stroke-linecap="round" opacity="0.5"/>
-  <path d="M84,64 Q90,60 92,68" stroke="#7700BB" stroke-width="2.5" fill="none" stroke-linecap="round"/>
-  <path d="M82,66 Q88,64 88,72" stroke="#7700BB" stroke-width="2.5" fill="none" stroke-linecap="round"/>
-  <path d="M80,66 Q84,70 86,76" stroke="#7700BB" stroke-width="2" fill="none" stroke-linecap="round"/>
-  <circle cx="91" cy="68" r="2" fill="#AA00FF" opacity="0.65"/>
-  <circle cx="88" cy="72" r="2" fill="#9900EE" opacity="0.6"/>
+<!-- HEAD large floating orb of darkness -->
+<ellipse cx="48" cy="20" rx="28" ry="24" fill="url(#vd)"/>
+<ellipse cx="38" cy="12" rx="14" ry="12" fill="#5A00A0" opacity="0.25"/>
+<ellipse cx="60" cy="24" rx="12" ry="14" fill="#1A0040" opacity="0.3"/>
 
-  <!-- MAIN VOID BODY — cloak of darkness -->
-  <ellipse cx="48" cy="52" rx="30" ry="34" fill="#0C0020" opacity="0.95"/>
-  <ellipse cx="48" cy="52" rx="24" ry="28" fill="#140030"/>
-  <ellipse cx="44" cy="46" rx="14" ry="18" fill="#1A0040" opacity="0.4"/>
-  <!-- Void energy swirls -->
-  <path d="M32,44 Q36,52 32,60" stroke="#5500AA" stroke-width="2" fill="none" opacity="0.5"/>
-  <path d="M64,44 Q60,52 64,60" stroke="#5500AA" stroke-width="2" fill="none" opacity="0.5"/>
-  <path d="M36,66 Q48,70 60,66" stroke="#4400AA" stroke-width="1.5" fill="none" opacity="0.4"/>
-  <!-- Purple void energy orbs on body -->
-  <circle cx="36" cy="54" r="3.5" fill="#6600BB" opacity="0.6"/>
-  <circle cx="60" cy="54" r="3.5" fill="#6600BB" opacity="0.6"/>
-  <circle cx="48" cy="64" r="4" fill="#7700CC" opacity="0.55"/>
-  <circle cx="36" cy="54" r="1.5" fill="#CC44FF" opacity="0.5"/>
-  <circle cx="60" cy="54" r="1.5" fill="#CC44FF" opacity="0.5"/>
-  <circle cx="48" cy="64" r="1.8" fill="#BB33FF" opacity="0.5"/>
+<!-- MAIN EYE (center top, large) -->
+<ellipse cx="48" cy="12" rx="14" ry="11" fill="#0A0018"/>
+<ellipse cx="48" cy="12" rx="11" ry="8.5" fill="#200040"/>
+<ellipse cx="48" cy="12" rx="8" ry="6.5" fill="url(#e1)"/>
+<ellipse cx="48" cy="12" rx="5" ry="4" fill="#E000E0"/>
+<circle cx="48" cy="12" r="2.5" fill="#FF80FF"/>
+<circle cx="48" cy="12" r="1.2" fill="white"/>
+<circle cx="46" cy="10" r="1.3" fill="white" opacity="0.95"/>
+<!-- Main eye glow -->
+<ellipse cx="48" cy="12" rx="16" ry="13" fill="#C000C0" opacity="0.18"/>
 
-  <!-- SKULL FACE — visible within the shadow mass -->
-  <ellipse cx="48" cy="28" rx="18" ry="16" fill="#D8D0B8"/>
-  <!-- Skull dome -->
-  <ellipse cx="48" cy="22" rx="16" ry="14" fill="#EDE8D0"/>
-  <ellipse cx="46" cy="17" rx="10" ry="8" fill="#F5F0E0" opacity="0.35"/>
-  <!-- Jaw -->
-  <rect x="34" y="36" width="28" height="9" rx="4" fill="#CCCAA0"/>
-  <rect x="36" y="41" width="24" height="5" rx="2.5" fill="#BCBA90"/>
-  <!-- Skull shading -->
-  <ellipse cx="55" cy="26" rx="8" ry="10" fill="#A0A080" opacity="0.2"/>
-  <!-- Shadow over skull (void overlay) -->
-  <ellipse cx="48" cy="26" rx="20" ry="18" fill="#0C0020" opacity="0.3"/>
+<!-- LEFT SECONDARY EYE -->
+<ellipse cx="28" cy="22" rx="10" ry="8" fill="#080014"/>
+<ellipse cx="28" cy="22" rx="7.5" ry="6" fill="#100028"/>
+<ellipse cx="28" cy="22" rx="5.5" ry="4.5" fill="url(#e2)"/>
+<circle cx="28" cy="22" r="2.8" fill="#00D0D0"/>
+<circle cx="28" cy="22" r="1.4" fill="#80FFFF"/>
+<circle cx="26.5" cy="20.5" r="1" fill="white" opacity="0.9"/>
+<ellipse cx="28" cy="22" rx="12" ry="9" fill="#00A0A0" opacity="0.15"/>
 
-  <!-- DEEP VOID EYE SOCKETS — purple energy blazing -->
-  <ellipse cx="37" cy="25" rx="8" ry="9" fill="#060408"/>
-  <ellipse cx="59" cy="25" rx="8" ry="9" fill="#060408"/>
-  <!-- Void energy in sockets — layered glow -->
-  <circle cx="37" cy="25" r="5" fill="#4400A0" opacity="0.9"/>
-  <circle cx="37" cy="25" r="3.5" fill="#6600CC"/>
-  <circle cx="37" cy="25" r="2.2" fill="#8800EE"/>
-  <circle cx="37" cy="25" r="1.2" fill="#AA00FF"/>
-  <circle cx="37" cy="25" r="0.6" fill="#DD88FF"/>
-  <circle cx="36" cy="24" r="0.8" fill="#FFF" opacity="0.6"/>
-  <!-- Eye glow aura -->
-  <circle cx="37" cy="25" r="10" fill="#6600CC" opacity="0.15"/>
+<!-- RIGHT SECONDARY EYE -->
+<ellipse cx="68" cy="22" rx="10" ry="8" fill="#080014"/>
+<ellipse cx="68" cy="22" rx="7.5" ry="6" fill="#100028"/>
+<ellipse cx="68" cy="22" rx="5.5" ry="4.5" fill="url(#e3)"/>
+<circle cx="68" cy="22" r="2.8" fill="#FF8020"/>
+<circle cx="68" cy="22" r="1.4" fill="#FFB060"/>
+<circle cx="66.5" cy="20.5" r="1" fill="white" opacity="0.9"/>
+<ellipse cx="68" cy="22" rx="12" ry="9" fill="#C06000" opacity="0.15"/>
 
-  <circle cx="59" cy="25" r="5" fill="#4400A0" opacity="0.9"/>
-  <circle cx="59" cy="25" r="3.5" fill="#6600CC"/>
-  <circle cx="59" cy="25" r="2.2" fill="#8800EE"/>
-  <circle cx="59" cy="25" r="1.2" fill="#AA00FF"/>
-  <circle cx="59" cy="25" r="0.6" fill="#DD88FF"/>
-  <circle cx="58" cy="24" r="0.8" fill="#FFF" opacity="0.6"/>
-  <circle cx="59" cy="25" r="10" fill="#6600CC" opacity="0.15"/>
+<!-- SMALLER EYES scattered -->
+<ellipse cx="36" cy="30" rx="6" ry="5" fill="#060012"/>
+<ellipse cx="36" cy="30" rx="4" ry="3.5" fill="url(#e1)"/>
+<circle cx="36" cy="30" r="1.8" fill="#D020D0"/>
+<circle cx="35" cy="29" r="0.8" fill="white" opacity="0.85"/>
 
-  <!-- NASAL CAVITY -->
-  <path d="M45,32 L48,29 L51,32 L50,35 L46,35 Z" fill="#060408"/>
+<ellipse cx="60" cy="30" rx="6" ry="5" fill="#060012"/>
+<ellipse cx="60" cy="30" rx="4" ry="3.5" fill="url(#e2)"/>
+<circle cx="60" cy="30" r="1.8" fill="#00B0C0"/>
+<circle cx="59" cy="29" r="0.8" fill="white" opacity="0.85"/>
 
-  <!-- TEETH — long, yellowed -->
-  <rect x="35" y="38" width="3.5" height="6" rx="1.2" fill="#C8C0A0"/>
-  <rect x="40" y="38" width="3.5" height="6" rx="1.2" fill="#C8C0A0"/>
-  <rect x="45" y="38" width="3.5" height="6" rx="1.2" fill="#C8C0A0"/>
-  <rect x="50" y="38" width="3.5" height="6" rx="1.2" fill="#C8C0A0"/>
-  <rect x="55" y="38" width="3.5" height="6" rx="1.2" fill="#C8C0A0"/>
+<ellipse cx="42" cy="34" rx="5" ry="4" fill="#060012"/>
+<ellipse cx="42" cy="34" rx="3.5" ry="3" fill="url(#e3)"/>
+<circle cx="42" cy="34" r="1.5" fill="#E06000"/>
+<circle cx="41" cy="33" r="0.7" fill="white" opacity="0.8"/>
 
-  <!-- BONE CROWN — ancient and cracked -->
-  <rect x="28" y="4" width="40" height="8" rx="3" fill="#A09A80"/>
-  <rect x="28" y="4" width="40" height="3" rx="2" fill="#B0AA90" opacity="0.5"/>
-  <!-- Crown spikes — irregular bone spikes -->
-  <polygon points="32,4 29,0 35,4" fill="#C0B890"/>
-  <polygon points="40,4 37,0 43,4" fill="#C0B890"/>
-  <polygon points="48,2 44,0 52,0" fill="#D4CC9C"/>
-  <polygon points="48,4 44,0 52,0" fill="#D4CC9C"/>
-  <polygon points="56,4 53,0 59,4" fill="#C0B890"/>
-  <polygon points="64,4 61,0 67,4" fill="#C0B890"/>
-  <!-- Void gems on crown — pulsing purple -->
-  <circle cx="32" cy="5" r="2.5" fill="#8800EE" opacity="0.9"/>
-  <circle cx="32" cy="5" r="1.2" fill="#DD44FF"/>
-  <circle cx="48" cy="3" r="3.5" fill="#AA00FF" opacity="0.95"/>
-  <circle cx="48" cy="3" r="1.8" fill="#EE88FF"/>
-  <circle cx="48" cy="3" r="0.8" fill="#FFF" opacity="0.7"/>
-  <circle cx="64" cy="5" r="2.5" fill="#8800EE" opacity="0.9"/>
-  <circle cx="64" cy="5" r="1.2" fill="#DD44FF"/>
-  <!-- Crown void energy glow -->
-  <circle cx="48" cy="3" r="8" fill="#AA00FF" opacity="0.12"/>
-  <!-- Crown cracks -->
-  <path d="M36,4 L38,12" stroke="#6A6448" stroke-width="0.8" fill="none" opacity="0.5"/>
-  <path d="M58,4 L56,12" stroke="#6A6448" stroke-width="0.8" fill="none" opacity="0.5"/>
+<ellipse cx="54" cy="34" rx="5" ry="4" fill="#060012"/>
+<ellipse cx="54" cy="34" rx="3.5" ry="3" fill="url(#e1)"/>
+<circle cx="54" cy="34" r="1.5" fill="#C020C0"/>
+<circle cx="53" cy="33" r="0.7" fill="white" opacity="0.8"/>
+
+<!-- MOUTH void tear (horizontal) -->
+<path d="M30,38 Q48,44 66,38" fill="#040008"/>
+<path d="M32,38 Q48,43 64,38" fill="#200040" opacity="0.5"/>
+<!-- Void teeth (downward points) -->
+<path d="M34,38 L32,43" stroke="#6000B0" stroke-width="1.5" fill="none"/>
+<path d="M40,39 L38,44" stroke="#6000B0" stroke-width="1.5" fill="none"/>
+<path d="M46,39 L46,45" stroke="#6000B0" stroke-width="1.5" fill="none"/>
+<path d="M52,39 L52,44" stroke="#6000B0" stroke-width="1.5" fill="none"/>
+<path d="M58,39 L60,44" stroke="#6000B0" stroke-width="1.5" fill="none"/>
+<path d="M64,38 L66,43" stroke="#6000B0" stroke-width="1.5" fill="none"/>
+<!-- Void glow from mouth -->
+<path d="M30,38 Q48,44 66,38" fill="#8000FF" opacity="0.12"/>
 </svg>

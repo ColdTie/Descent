@@ -1,106 +1,104 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96">
-  <!-- Ground shadow -->
-  <ellipse cx="48" cy="93" rx="18" ry="4" fill="#000" opacity="0.28"/>
+<defs>
+  <linearGradient id="sk" x1="25%" y1="0%" x2="75%" y2="100%">
+    <stop offset="0%" stop-color="#C08858"/><stop offset="45%" stop-color="#986040"/><stop offset="100%" stop-color="#6A3818"/>
+  </linearGradient>
+  <linearGradient id="cu" x1="15%" y1="0%" x2="85%" y2="100%">
+    <stop offset="0%" stop-color="#301845"/><stop offset="50%" stop-color="#1A0E2C"/><stop offset="100%" stop-color="#0A0612"/>
+  </linearGradient>
+  <linearGradient id="lt" x1="15%" y1="0%" x2="85%" y2="100%">
+    <stop offset="0%" stop-color="#28203A"/><stop offset="50%" stop-color="#160E22"/><stop offset="100%" stop-color="#0A0612"/>
+  </linearGradient>
+  <linearGradient id="dg" x1="0%" y1="0%" x2="0%" y2="100%">
+    <stop offset="0%" stop-color="#D8D8E8"/><stop offset="40%" stop-color="#A8A8C0"/><stop offset="100%" stop-color="#505070"/>
+  </linearGradient>
+  <linearGradient id="bt" x1="20%" y1="0%" x2="80%" y2="100%">
+    <stop offset="0%" stop-color="#1A1020"/><stop offset="100%" stop-color="#060410"/>
+  </linearGradient>
+  <radialGradient id="ey" cx="38%" cy="35%">
+    <stop offset="0%" stop-color="#8020E0"/><stop offset="60%" stop-color="#3A0080"/><stop offset="100%" stop-color="#0A0020"/>
+  </radialGradient>
+</defs>
 
-  <!-- BOOTS — slim, pointed -->
-  <rect x="30" y="82" width="14" height="10" rx="3" fill="#0C0816"/>
-  <rect x="44" y="82" width="5" height="7" rx="2" fill="#0C0816"/>
-  <rect x="52" y="82" width="14" height="10" rx="3" fill="#0C0816"/>
-  <rect x="30" y="82" width="14" height="3" fill="#18102A" opacity="0.5"/>
+<ellipse cx="48" cy="93" rx="21" ry="4" fill="#000" opacity="0.35"/>
 
-  <!-- LEGS — slim dark trousers -->
-  <rect x="31" y="57" width="12" height="27" rx="4" fill="#12091E"/>
-  <rect x="53" y="57" width="12" height="27" rx="4" fill="#12091E"/>
-  <rect x="31" y="57" width="4" height="27" rx="3" fill="#1E1030" opacity="0.5"/>
+<!-- BOOTS slim pointed -->
+<path d="M24,81 Q22,92 25,92 L42,92 L42,81 Z" fill="url(#bt)"/>
+<path d="M72,81 Q74,92 71,92 L54,92 L54,81 Z" fill="url(#bt)"/>
+<rect x="25" y="82" width="7" height="2" rx="1" fill="#2A1A38" opacity="0.55"/>
+<rect x="57" y="82" width="7" height="2" rx="1" fill="#2A1A38" opacity="0.55"/>
 
-  <!-- BELT + POUCHES -->
-  <rect x="27" y="53" width="42" height="6" rx="2" fill="#3E280A"/>
-  <rect x="43" y="52" width="10" height="8" rx="2" fill="#5A3C12"/>
-  <!-- Pouch left -->
-  <rect x="28" y="54" width="8" height="7" rx="2" fill="#301A06"/>
-  <!-- Pouch right -->
-  <rect x="60" y="54" width="8" height="7" rx="2" fill="#301A06"/>
+<!-- LEGS leather -->
+<rect x="24" y="57" width="18" height="26" rx="4" fill="url(#lt)"/>
+<rect x="54" y="57" width="18" height="26" rx="4" fill="url(#lt)"/>
+<rect x="25" y="59" width="4" height="21" rx="2" fill="#2C1A3C" opacity="0.4"/>
+<rect x="55" y="59" width="4" height="21" rx="2" fill="#2C1A3C" opacity="0.4"/>
 
-  <!-- CLOAK sides — dramatic -->
-  <path d="M27,30 L10,38 L8,62 L22,58 L27,44 Z" fill="#0E081A" opacity="0.9"/>
-  <path d="M69,30 L86,38 L88,62 L74,58 L69,44 Z" fill="#0E081A" opacity="0.9"/>
-  <!-- Cloak inner highlight -->
-  <path d="M27,30 L13,38 L11,56 L22,53 Z" fill="#180E2A" opacity="0.5"/>
-  <path d="M69,30 L83,38 L85,56 L74,53 Z" fill="#180E2A" opacity="0.5"/>
+<!-- BELT with dagger sheaths -->
+<rect x="20" y="53" width="56" height="6" rx="2" fill="#1A0E24"/>
+<rect x="43" y="52" width="10" height="8" rx="1" fill="#3A2058"/>
+<rect x="44" y="53" width="8" height="6" rx="1" fill="#6040A0"/>
+<rect x="22" y="47" width="4" height="18" rx="2" fill="#120A1C"/>
+<rect x="70" y="49" width="4" height="16" rx="2" fill="#120A1C"/>
 
-  <!-- TORSO — fitted leather -->
-  <rect x="27" y="28" width="42" height="27" rx="5" fill="#1A1028"/>
-  <rect x="27" y="28" width="42" height="4" rx="3" fill="#261640" opacity="0.5"/>
-  <!-- Leather chest panel -->
-  <rect x="31" y="32" width="34" height="20" rx="3" fill="#160C22"/>
-  <!-- Center buckle strip -->
-  <rect x="45" y="30" width="6" height="24" rx="2" fill="#1E1232" opacity="0.6"/>
-  <!-- Shoulder pads -->
-  <rect x="25" y="27" width="10" height="7" rx="3" fill="#22163A"/>
-  <rect x="61" y="27" width="10" height="7" rx="3" fill="#22163A"/>
+<!-- TORSO leather armor -->
+<path d="M21,30 C19,32 18,42 18,55 L78,55 C78,42 77,32 75,30 Z" fill="url(#lt)"/>
+<path d="M28,30 L48,52 L68,30" stroke="#28183A" stroke-width="3" fill="none" opacity="0.65"/>
+<path d="M28,50 L48,28 L68,50" stroke="#28183A" stroke-width="3" fill="none" opacity="0.65"/>
+<ellipse cx="48" cy="40" rx="6" ry="5" fill="#3A2058"/>
+<ellipse cx="48" cy="40" rx="4" ry="3.5" fill="#6040A0"/>
 
-  <!-- DAGGER LEFT (held low, ready) -->
-  <rect x="7" y="42" width="4" height="28" rx="1.5" fill="#B8BAC8"/>
-  <rect x="7.5" y="43" width="1.5" height="26" fill="#DCDFF0" opacity="0.55"/>
-  <rect x="4" y="39" width="11" height="5" rx="1.5" fill="#6A4C18"/>
-  <rect x="8" y="67" width="4" height="5" rx="1.5" fill="#7A5C20"/>
-  <!-- Poison glint tip -->
-  <ellipse cx="9" cy="43" rx="2" ry="1.5" fill="#40C030" opacity="0.5"/>
+<!-- ARMS -->
+<rect x="8" y="28" width="15" height="22" rx="7" fill="url(#lt)"/>
+<rect x="73" y="28" width="15" height="22" rx="7" fill="url(#lt)"/>
+<!-- Bracers -->
+<rect x="7" y="38" width="17" height="8" rx="3" fill="#3A2858"/>
+<rect x="8" y="39" width="15" height="6" rx="2" fill="#4A3870"/>
+<rect x="72" y="38" width="17" height="8" rx="3" fill="#3A2858"/>
+<rect x="73" y="39" width="15" height="6" rx="2" fill="#4A3870"/>
 
-  <!-- DAGGER RIGHT (raised) -->
-  <rect x="85" y="30" width="4" height="28" rx="1.5" fill="#B8BAC8"/>
-  <rect x="85.5" y="31" width="1.5" height="26" fill="#DCDFF0" opacity="0.55"/>
-  <rect x="82" y="56" width="11" height="5" rx="1.5" fill="#6A4C18"/>
-  <rect x="84" y="57" width="4" height="5" rx="1.5" fill="#7A5C20"/>
-  <ellipse cx="87" cy="31" rx="2" ry="1.5" fill="#40C030" opacity="0.5"/>
+<!-- DAGGERS in hands -->
+<rect x="3" y="46" width="4" height="24" rx="1.5" fill="url(#dg)"/>
+<rect x="4" y="47" width="1.5" height="20" rx="0.5" fill="#E8E8F8" opacity="0.55"/>
+<rect x="0.5" y="45" width="10" height="3" rx="1" fill="#7A5020"/>
+<circle cx="3" cy="70" r="3" fill="#5A3818"/>
 
-  <!-- ARMS — leather sleeves -->
-  <rect x="9" y="28" width="19" height="22" rx="7" fill="#1A1028"/>
-  <rect x="68" y="22" width="19" height="22" rx="7" fill="#1A1028"/>
-  <!-- Wrist wraps -->
-  <rect x="9" y="47" width="16" height="4" rx="2" fill="#3A2810"/>
-  <rect x="71" y="41" width="16" height="4" rx="2" fill="#3A2810"/>
+<rect x="89" y="44" width="4" height="24" rx="1.5" fill="url(#dg)"/>
+<rect x="90" y="45" width="1.5" height="20" rx="0.5" fill="#E8E8F8" opacity="0.55"/>
+<rect x="86" y="43" width="10" height="3" rx="1" fill="#7A5020"/>
+<circle cx="91" cy="68" r="3" fill="#5A3818"/>
 
-  <!-- HANDS — dark leather gloves -->
-  <ellipse cx="15" cy="53" rx="6" ry="5" fill="#251408"/>
-  <ellipse cx="83" cy="48" rx="6" ry="5" fill="#251408"/>
+<!-- NECK -->
+<rect x="40" y="20" width="16" height="13" rx="5" fill="url(#sk)"/>
 
-  <!-- NECK -->
-  <rect x="42" y="20" width="12" height="10" rx="3" fill="#5E3820" opacity="0.8"/>
+<!-- HOOD outer (dark) -->
+<path d="M22,27 C20,18 28,4 48,4 C68,4 76,18 74,27 Z" fill="url(#cu)"/>
+<path d="M30,27 C28,18 34,8 48,6 C62,8 68,18 66,27 Z" fill="#140A1E" opacity="0.5"/>
 
-  <!-- HOOD body -->
-  <ellipse cx="48" cy="14" rx="22" ry="20" fill="#14092A"/>
-  <!-- Hood top peak -->
-  <ellipse cx="48" cy="4" rx="18" ry="8" fill="#0C0618"/>
-  <!-- Hood side drapes framing face -->
-  <rect x="24" y="5" width="10" height="22" rx="5" fill="#0C0618"/>
-  <rect x="62" y="5" width="10" height="22" rx="5" fill="#0C0618"/>
+<!-- FACE visible in hood -->
+<ellipse cx="48" cy="19" rx="16" ry="15" fill="url(#sk)"/>
+<!-- Hood shadow across forehead -->
+<path d="M28,12 C32,8 48,6 64,12" fill="#1A0E28" opacity="0.45"/>
 
-  <!-- FACE — in shadow, barely visible -->
-  <ellipse cx="48" cy="17" rx="13" ry="12" fill="#7A4828"/>
-  <!-- Strong brow shadow -->
-  <ellipse cx="48" cy="10" rx="14" ry="7" fill="#0C0618" opacity="0.75"/>
-  <!-- Chin shadow -->
-  <ellipse cx="48" cy="26" rx="9" ry="4" fill="#3A1A08" opacity="0.4"/>
+<!-- EYES piercing -->
+<ellipse cx="41" cy="18" rx="5" ry="4.5" fill="#0A0412"/>
+<ellipse cx="41" cy="18" rx="3.5" ry="3" fill="#220850"/>
+<circle cx="41" cy="18" r="2.3" fill="url(#ey)"/>
+<circle cx="41" cy="18" r="1.2" fill="#040008"/>
+<circle cx="39.8" cy="16.8" r="0.9" fill="white" opacity="0.85"/>
 
-  <!-- TEAL GLOWING EYES — the defining feature -->
-  <!-- Left eye -->
-  <ellipse cx="41" cy="16" rx="5.5" ry="4" fill="#001810" opacity="0.95"/>
-  <ellipse cx="41" cy="16" rx="4.5" ry="3.2" fill="#008878"/>
-  <ellipse cx="41" cy="16" rx="3" ry="2.2" fill="#00C8B0"/>
-  <circle cx="41" cy="16" r="1.8" fill="#80FFF0"/>
-  <circle cx="40.2" cy="15.2" r="0.9" fill="#FFF" opacity="0.8"/>
-  <!-- Eye glow aura -->
-  <ellipse cx="41" cy="16" rx="8" ry="6" fill="#00D4BC" opacity="0.12"/>
+<ellipse cx="55" cy="18" rx="5" ry="4.5" fill="#0A0412"/>
+<ellipse cx="55" cy="18" rx="3.5" ry="3" fill="#220850"/>
+<circle cx="55" cy="18" r="2.3" fill="url(#ey)"/>
+<circle cx="55" cy="18" r="1.2" fill="#040008"/>
+<circle cx="53.8" cy="16.8" r="0.9" fill="white" opacity="0.85"/>
 
-  <!-- Right eye -->
-  <ellipse cx="55" cy="16" rx="5.5" ry="4" fill="#001810" opacity="0.95"/>
-  <ellipse cx="55" cy="16" rx="4.5" ry="3.2" fill="#008878"/>
-  <ellipse cx="55" cy="16" rx="3" ry="2.2" fill="#00C8B0"/>
-  <circle cx="55" cy="16" r="1.8" fill="#80FFF0"/>
-  <circle cx="54.2" cy="15.2" r="0.9" fill="#FFF" opacity="0.8"/>
-  <ellipse cx="55" cy="16" rx="8" ry="6" fill="#00D4BC" opacity="0.12"/>
+<!-- NOSE -->
+<path d="M46,22 C47,24.5 49,24.5 50,22" stroke="#784020" stroke-width="1.3" fill="none"/>
 
-  <!-- Smirk barely visible -->
-  <path d="M43,23 Q48,26 53,23" stroke="#3A1808" stroke-width="1.5" fill="none" opacity="0.65"/>
+<!-- SMIRK -->
+<path d="M42,27 C46,30.5 54,30 56,27" stroke="#601808" stroke-width="1.8" fill="none"/>
+
+<!-- Hood highlight edge -->
+<path d="M26,10 C30,5 40,3 48,3" stroke="#402060" stroke-width="1.5" opacity="0.45" fill="none"/>
 </svg>
