@@ -142,6 +142,23 @@ DESCENT is a turn-based tactical dungeon crawler in the spirit of **Dungeon Craw
   - Shield bash → `shield_bash` quip pool; pushed into lava → `pushed_into_lava` quip pool
 - **New SystemVoice categories**: `shield_bash` (7 lines), `pushed_into_lava` (6 lines), `surrounded` (8 lines), `took_hit_comment` (6 lines).
 
+**Run 13 (DCSS Pixel Art Sprites + Ability VFX System):**
+- **DCSS CC0 pixel art sprites** — replaced all custom SVG art with authentic dungeon-crawler pixel art sourced from Dungeon Crawl: Stone Soup (CC0 1.0). All 12 battle sprites + 3 class portraits regenerated at 192×192 via `tools/gen_sprites_v6.py` (4× NEAREST upscale from 32×32 originals). Sprite attributon: DCSS contributors, CC0 Universal.
+- **Ability VFX system** (`BattleScene.gd`): `_load_effect_textures()` pre-loads 64×64 pixel-art effect sprites for every ability; `_play_ability_effect(hex, ability_id)` spawns a brief pop-scale-fade animation at any hex. Effects fire on: all hero ability uses (attack, aoe, self-target), all enemy attacks via `action_taken` signal, and lava heat.
+- **`tools/gen_effects.py`** — generates 10 ability VFX PNGs in `assets/effects/`:
+  - `fx_fireball`: orange-red radial flame with sparks
+  - `fx_frost`: six-arm snowflake crystal with branching
+  - `fx_impact`: white-orange 8-ray starburst (basic attacks, shield bash)
+  - `fx_backstab`: dark-red diagonal slash X
+  - `fx_power_strike`: golden 6-ray starburst
+  - `fx_heal`: green cross with sparkles
+  - `fx_poison`: green bubbles with shine highlights
+  - `fx_vanish`: purple smoke wisps
+  - `fx_taunt`: red shield with exclamation
+  - `fx_lava_heat`: orange upward flame columns
+- **NEAREST texture filter** — `BattleScene.gd` sprite and effect `texture_filter` updated to `TEXTURE_FILTER_NEAREST` for crispy pixel-perfect rendering; `ClassSelect.gd` portrait filter also updated.
+- **deploy.yml** — removes `cairosvg`/`libcairo2` dependency; now runs `gen_sprites_v6.py` + `gen_effects.py` (Pillow only).
+
 **Run 11b (SVG Sprite Pipeline + Glow Aura Visual Overhaul):**
 - **Sprite pipeline switched back to custom SVG art** (`gen_sprites_v5.py`): sprites are 5–9× richer (14–33 KB each vs 2–4 KB DCSS). All 15 characters rendered at 192×192 via cairosvg.
 - **`BattleScene.gd` display improvements:**
