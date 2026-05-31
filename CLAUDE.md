@@ -129,6 +129,25 @@ DESCENT is a turn-based tactical dungeon crawler in the spirit of **Dungeon Craw
 - **`ClassSelect.gd`** — Cards enlarged (240×420, was 230×390); portrait area 248px tall; NEAREST filter for pixel-art sprites
 - **`deploy.yml`** — runs `gen_sprites_v4.py` instead of `gen_sprites_hq.py`
 
+**Run 11b (SVG Sprite Pipeline + Glow Aura Visual Overhaul):**
+- **Sprite pipeline switched back to custom SVG art** (`gen_sprites_v5.py`): sprites are 5–9× richer (14–33 KB each vs 2–4 KB DCSS). All 15 characters rendered at 192×192 via cairosvg.
+- **`BattleScene.gd` display improvements:**
+  - `TEXTURE_FILTER_LINEAR_WITH_MIPMAPS` (replaces NEAREST — SVG art needs anti-aliasing)
+  - Sprite scale 0.78 / 0.95 (was 0.72 / 0.90)
+  - **Colored glow polygon** behind each entity: class color for hero, blood-red for enemies, void-purple for bosses
+  - **Boss glow pulses** with breathing sine-wave tween (0.28–0.68 alpha, ~2.5 s cycle)
+  - Draw order: ground shadow → glow ring → dark disc → sprite
+- **`ClassSelect.gd`** — portrait filter updated to `LINEAR_WITH_MIPMAPS`
+- **`deploy.yml`** — `pip install Pillow cairosvg`, runs `gen_sprites_v5.py`
+
+**Run 11a (DCSS Pixel Art + Full UI Panel Overhaul):**
+- **UI visual overhaul** — all interstitial screens redesigned with stone-dungeon `PanelContainer` style (dark bg, gold border, drop shadows):
+  - `VictoryScreen`: floor progress bar, "CLEARED!" with drop shadow, stat cards with borders
+  - `LevelUp`: upgrade cards with category icon + type-colored border, brightens on hover/selection
+  - `LootScreen`: item cards with type-based color coding (heal/stat/utility)
+  - `WinScreen`: gold-bordered panel, "YOU WIN" drop shadow title, styled stat cards
+- Sprites: DCSS CC0 pixel art (superseded in Run 11b by custom SVG art)
+
 **Run 10 (Gradient SVG Sprite Overhaul):**
 - **Full visual redesign** of all 11 characters (3 heroes + 5 enemies + 3 bosses):
   - All SVGs rewritten with `linearGradient`/`radialGradient` fills for 3D depth and lighting
@@ -150,13 +169,12 @@ DESCENT is a turn-based tactical dungeon crawler in the spirit of **Dungeon Craw
 - **`ClassSelect.gd`** — portrait filter changed to `LINEAR_WITH_MIPMAPS` to match
 - **`deploy.yml`** — installs `libcairo2` + `cairosvg`, runs `gen_sprites_v5.py`
 
-### Next Priorities (Run 5) (was Run 4)
-1. **Sounds** — Even a minimal audio pass: hit, kill, move, ability sounds (use Godot's AudioStreamGenerator or import simple beeps)
-2. **Class abilities tab on upgrade screen** — the Level-up screen currently only shows stat upgrades; add a "NEW ABILITY" option so hero can unlock fireball/backstab/etc. mid-run
-3. **Pushback mechanic** — the Brawler class should have a "Shield Bash" that pushes enemies toward lava; makes lava truly tactical
-4. **Multi-floor run feel** — currently each floor starts fresh; heroes should FEEL stronger on floor 5 vs floor 1 — the scaling helps enemies but hero stat upgrades should visibly compound
-5. **The System mid-battle commentary** — trigger quips on: hero surviving below 20% HP, first kill of run, using backstab successfully, hero standing adjacent to lava, enemies surrounding hero
-6. **HP regeneration between floors** — currently hero HP is frozen between floors unless they take healing loot; add small passive regen (5-10 HP) between floors as a quality-of-life change
+### Next Priorities (Run 12+)
+1. **Sounds** — Even a minimal audio pass: hit, kill, move, ability sounds (use Godot's AudioStreamGenerator or import simple .ogg files)
+2. **Class abilities tab on upgrade screen** — LevelUp screen only shows stat upgrades; add a "NEW ABILITY" card so hero can unlock fireball/backstab/etc. mid-run
+3. **Pushback mechanic** — Brawler "Shield Bash" that pushes enemies toward lava; makes lava truly tactical
+4. **The System mid-battle commentary** — trigger quips on: hero surviving below 20% HP, first kill of run, backstab, standing adjacent to lava, enemies surrounding hero
+5. **More floor variety** — Different tile themes per floor tier (stone/obsidian/abyss for floors 1-6/7-12/13-18)
 7. **Minimap / floor preview** — small indicator showing which floor you're on out of N (generate run length at run start)
 
 ## File Map
