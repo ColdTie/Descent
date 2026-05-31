@@ -35,7 +35,7 @@ DESCENT is a turn-based tactical dungeon crawler in the spirit of **Dungeon Craw
 - **Architecture rule**: `BattleEngine._calculate_damage()` returns RAW damage (no armor). `Combatant.take_damage(amount, ignore_armor=false)` applies armor. Don't double-apply armor in both places.
 - `Combatant.take_damage(amount, ignore_armor)` — the `ignore_armor` parameter bypasses the `armor` field reduction (for backstab, env damage, etc.)
 
-## Current State (Run 8 — Better Sprites + Combat Polish)
+## Current State (Run 10 — Gradient SVG Sprite Overhaul)
 ### Implemented ✅
 **Run 1 (Bootstrap):**
 - `GameRng`, `GameState`, `SystemVoice` autoloads
@@ -128,6 +128,17 @@ DESCENT is a turn-based tactical dungeon crawler in the spirit of **Dungeon Craw
   - Sprite scale 0.95/1.20 (was 0.85/1.10)
 - **`ClassSelect.gd`** — Cards enlarged (240×420, was 230×390); portrait area 248px tall; NEAREST filter for pixel-art sprites
 - **`deploy.yml`** — runs `gen_sprites_v4.py` instead of `gen_sprites_hq.py`
+
+**Run 10 (Gradient SVG Sprite Overhaul):**
+- **Full visual redesign** of all 11 characters (3 heroes + 5 enemies + 3 bosses):
+  - All SVGs rewritten with `linearGradient`/`radialGradient` fills for 3D depth and lighting
+  - Complex `<path>` elements replace basic rects/ellipses for organic silhouettes
+  - Layered shading: highlight layer + mid-tone fill + shadow layer per body part
+  - Hero sprites: Brawler (guard stance, scar, gradient skin), Rogue (cowl, daggers, glowing eyes), Arcanist (hat, rune emblem, staff orb, magic aura)
+  - Enemy sprites: Imp (leathery bat wings, slit pupils, spade tail), Goblin (riveted helmet, tusk, shield), Skeleton (exposed ribs, glowing green sockets), Demon (lava-vein wings, fire crown, white-blazing eyes), Golem (lava fissures, glowing mouth)
+  - Boss sprites: Dungeon Lord (crown-helm with gemstones, twin swords, crimson eye glow), Warden (tower shield with star emblem, spiked mace + chain, knuckle spikes), Abyss Keeper (5 distinct multi-colour eyes, tentacles with suckers, void-tear mouth)
+- All 11 SVGs regenerated to 192×192 RGBA PNGs via cairosvg pipeline (unchanged)
+- Class portraits also regenerated from updated hero SVGs
 
 **Run 9 (Custom SVG Sprite Pipeline):**
 - **`tools/gen_sprites_v5.py`** — Renders the bespoke SVG character art (stored in `assets/sprites/*.svg`) to 192×192 anti-aliased PNGs using `cairosvg`. Replaces the DCSS pixel-art download pipeline entirely for all 11 characters.
