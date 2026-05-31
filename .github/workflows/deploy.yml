@@ -35,11 +35,10 @@ jobs:
           mv templates/web* ~/.local/share/godot/export_templates/4.4.1.stable/
           rm -rf templates templates.tpz
 
-      - name: Generate sprites and portraits (custom SVG art, v5)
+      - name: Generate sprites and portraits (DCSS CC0 pixel art, v6)
         run: |
-          sudo apt-get install -y libcairo2 libpango1.0-0 libgdk-pixbuf2.0-0 libffi-dev --quiet
-          pip install Pillow cairosvg --quiet
-          python3 tools/gen_sprites_v5.py
+          pip install Pillow --quiet
+          python3 tools/gen_sprites_v6.py
 
       - name: Import project assets
         run: |

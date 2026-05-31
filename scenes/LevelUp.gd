@@ -1,81 +1,126 @@
 extends Control
 ## Level-up upgrade screen. Shown when hero gains a level.
-## Presents 3 upgrade choices; hero picks one then continues.
+## Run 11: stone panel, styled upgrade cards with category icons and colored borders.
 
 signal upgrade_chosen(upgrade_id: String)
 
-@onready var _title_label: Label = $VBox/TitleLabel
-@onready var _subtitle_label: Label = $VBox/SubtitleLabel
-@onready var _cards_container: HBoxContainer = $VBox/Cards
-@onready var _system_label: Label = $VBox/SystemLabel
-@onready var _continue_button: Button = $VBox/ContinueButton
+@onready var _title_label:    Label        = $VBox/TitleLabel
+@onready var _subtitle_label: Label        = $VBox/SubtitleLabel
+@onready var _cards_container:HBoxContainer= $VBox/Cards
+@onready var _system_label:   Label        = $VBox/SystemLabel
+@onready var _continue_button:Button       = $VBox/ContinueButton
 
 var _chosen: String = ""
 
-# Upgrade pool: each entry has id, name, desc, and an apply() callable-compatible dict
 const UPGRADES: Array[Dictionary] = [
-	{"id": "atk_up", "name": "Savage Strike", "desc": "+8 Attack. Your strikes land harder. The dungeon is unimpressed."},
-	{"id": "spd_up", "name": "Quick Reflexes", "desc": "+4 Speed. Act before they do. Simple math."},
-	{"id": "hp_up", "name": "Iron Constitution", "desc": "+30 Max HP and heal 30. Your body becomes slightly less breakable."},
-	{"id": "def_up", "name": "Thick Skin", "desc": "+4 Armor. You've learned to absorb punishment. Professionally."},
-	{"id": "xp_bonus", "name": "Combat Instincts", "desc": "Next floor grants +50% XP. The System upgrades your XP farm."},
-	{"id": "heal_big", "name": "Second Wind", "desc": "Restore 50 HP now. The dungeon sighs and patches you up."},
+	{"id": "atk_up",   "name": "Savage Strike",    "icon": "⚔",
+	 "color": Color(0.90, 0.28, 0.16),
+	 "desc": "+8 Attack. Your strikes land harder. The dungeon is unimpressed."},
+	{"id": "spd_up",   "name": "Quick Reflexes",   "icon": "⚡",
+	 "color": Color(0.95, 0.80, 0.10),
+	 "desc": "+4 Speed. Act before they do. Simple math."},
+	{"id": "hp_up",    "name": "Iron Constitution","icon": "❤",
+	 "color": Color(0.18, 0.88, 0.28),
+	 "desc": "+30 Max HP and heal 30. Your body becomes slightly less breakable."},
+	{"id": "def_up",   "name": "Thick Skin",       "icon": "🛡",
+	 "color": Color(0.38, 0.62, 1.00),
+	 "desc": "+4 Armor. You've learned to absorb punishment. Professionally."},
+	{"id": "xp_bonus", "name": "Combat Instincts", "icon": "✦",
+	 "color": Color(0.55, 0.38, 0.90),
+	 "desc": "Next floor grants +50% XP. The System upgrades your XP farm."},
+	{"id": "heal_big", "name": "Second Wind",      "icon": "✚",
+	 "color": Color(0.20, 0.92, 0.42),
+	 "desc": "Restore 50 HP now. The dungeon sighs and patches you up."},
 ]
 
 func _ready() -> void:
-	_title_label.text = "LEVEL %d" % GameState.hero_level
-	_subtitle_label.text = "Choose an upgrade. Or don't. Actually, please do."
+	_title_label.text = "LEVEL  %d" % GameState.hero_level
+	_subtitle_label.text = "Choose an upgrade, Hero. The dungeon waits."
 	_continue_button.visible = false
 	_continue_button.pressed.connect(_on_continue)
 	SystemVoice.speak("level_up")
-	SystemVoice.line_spoken.connect(func(text: String, _d: float) -> void: _system_label.text = text)
+	SystemVoice.line_spoken.connect(func(text: String, _d: float) -> void:
+		_system_label.text = text)
 	_generate_choices()
 
 func _generate_choices() -> void:
 	var pool: Array[Dictionary] = UPGRADES.duplicate()
 	GameRng.shuffle(pool)
-	var choices: Array[Dictionary] = pool.slice(0, min(3, pool.size()))
-	for item: Dictionary in choices:
+	for item: Dictionary in pool.slice(0, min(3, pool.size())):
 		_cards_container.add_child(_make_card(item))
 
 func _make_card(item: Dictionary) -> PanelContainer:
+	var col: Color = item.get("color", Color(0.9, 0.7, 0.1))
+
 	var panel := PanelContainer.new()
-	panel.custom_minimum_size = Vector2(240.0, 200.0)
+	panel.custom_minimum_size = Vector2(270.0, 220.0)
+	var ps := StyleBoxFlat.new()
+	ps.bg_color     = Color(0.07, 0.05, 0.11, 0.97)
+	ps.border_color = col.darkened(0.30)
+	ps.set_border_width_all(2)
+	ps.set_corner_radius_all(5)
+	ps.set_content_margin_all(16.0)
+	ps.shadow_color = Color(0.0, 0.0, 0.0, 0.65)
+	ps.shadow_size  = 6
+	panel.add_theme_stylebox_override("panel", ps)
+
 	var vbox := VBoxContainer.new()
+	vbox.add_theme_constant_override("separation", 8)
 	panel.add_child(vbox)
+
+	# Icon + name row
+	var header_row := HBoxContainer.new()
+	header_row.alignment = BoxContainer.ALIGNMENT_CENTER
+	header_row.add_theme_constant_override("separation", 8)
+	vbox.add_child(header_row)
+
+	var icon_lbl := Label.new()
+	icon_lbl.text = item.get("icon", "✦")
+	icon_lbl.add_theme_font_size_override("font_size", 28)
+	icon_lbl.add_theme_color_override("font_color", col)
+	header_row.add_child(icon_lbl)
 
 	var name_lbl := Label.new()
 	name_lbl.text = item["name"]
-	name_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	name_lbl.add_theme_font_size_override("font_size", 20)
-	name_lbl.add_theme_color_override("font_color", Color(0.9, 0.7, 0.1))
-	vbox.add_child(name_lbl)
+	name_lbl.add_theme_font_size_override("font_size", 18)
+	name_lbl.add_theme_color_override("font_color", col.lightened(0.18))
+	header_row.add_child(name_lbl)
 
-	var sep := HSeparator.new()
-	vbox.add_child(sep)
+	# Thin color divider
+	var div := ColorRect.new()
+	div.custom_minimum_size = Vector2(236.0, 1.0)
+	div.color = col.darkened(0.42)
+	div.mouse_filter = MOUSE_FILTER_IGNORE
+	vbox.add_child(div)
 
 	var desc_lbl := Label.new()
 	desc_lbl.text = item["desc"]
 	desc_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	desc_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	desc_lbl.add_theme_color_override("font_color", Color(0.85, 0.85, 0.85))
+	desc_lbl.add_theme_color_override("font_color", Color(0.82, 0.80, 0.70))
 	desc_lbl.add_theme_font_size_override("font_size", 12)
-	desc_lbl.custom_minimum_size = Vector2(220.0, 0.0)
+	desc_lbl.custom_minimum_size = Vector2(238.0, 0.0)
 	vbox.add_child(desc_lbl)
 
 	var btn := Button.new()
 	btn.text = "TAKE IT"
-	btn.pressed.connect(_on_upgrade_selected.bind(item["id"], item, panel))
+	btn.add_theme_font_size_override("font_size", 14)
+	btn.add_theme_color_override("font_color", col)
+	btn.pressed.connect(_on_upgrade_selected.bind(item["id"], item, panel, ps))
 	vbox.add_child(btn)
 
 	return panel
 
-func _on_upgrade_selected(upgrade_id: String, item: Dictionary, panel: PanelContainer) -> void:
+func _on_upgrade_selected(upgrade_id: String, item: Dictionary,
+		panel: PanelContainer, ps: StyleBoxFlat) -> void:
 	_chosen = upgrade_id
 	_apply_upgrade(item)
 	for child: Node in _cards_container.get_children():
-		child.modulate = Color(0.45, 0.45, 0.45)
+		child.modulate = Color(0.42, 0.42, 0.42)
 	panel.modulate = Color(1.0, 1.0, 1.0)
+	# Brighten the chosen card's border
+	ps.border_color = item.get("color", Color(0.9, 0.7, 0.1))
+	ps.set_border_width_all(3)
 	_continue_button.visible = true
 
 func _apply_upgrade(item: Dictionary) -> void:
@@ -103,7 +148,7 @@ func _apply_upgrade(item: Dictionary) -> void:
 			GameState.hero_base_stats["defense"] = GameState.hero_base_stats.get("defense", 0) + 4
 			SystemVoice.speak_direct(["Armor increased. Pain is now less painful.",
 				"Defense up. The dungeon's attacks will hurt slightly less. Slightly.",
-				"More armor. The dungeon recalculates required hits to kill you. It does not look pleased.",
+				"More armor. The dungeon recalculates required hits to kill you.",
 			][randi() % 3])
 		"xp_bonus":
 			GameState.hero_base_stats["xp_bonus"] = GameState.hero_base_stats.get("xp_bonus", 0) + 50
