@@ -50,6 +50,9 @@ var _enemies_killed: int = 0
 var _first_kill_done: bool = false   # for first_kill quip
 var _boss: Combatant = null
 var _boss_hp_fill: ColorRect = null
+var _donut: Combatant = null
+var _donut_hp_label: Label = null
+var _hero_dead: bool = false
 
 @onready var _hex_layer: Node2D = $HexLayer
 @onready var _entity_layer: Node2D = $EntityLayer
@@ -72,6 +75,8 @@ func _ready() -> void:
 	_draw_entities()
 	_build_ability_bar()
 	_build_boss_hp_bar()
+	_build_donut_hp_label()
+	_build_inferno_map()
 	_update_hero_hp_label()
 	SystemVoice.speak("floor_enter", [GameState.floor_num])
 	await get_tree().create_timer(0.4).timeout
@@ -162,8 +167,24 @@ func _build_encounter() -> void:
 		var e: Combatant = EnemyDefs.make_combatant(def, _map.spawn_points[i], _battle_rng, GameState.floor_num)
 		_enemies.append(e)
 
+	# Build Donut companion — she joins every run
+	_donut = Combatant.new("donut", "Donut", Combatant.Faction.HERO, 50, 12)
+	_donut.armor = 0
+	_donut.attack_bonus = 3
+	var donut_abilities: Array[String] = ["basic_attack"]
+	_donut.abilities = donut_abilities
+	_donut.sprite_key = "companion_donut"
+	_donut.xp_reward = 0
+	var donut_start: Vector2i = _map.hero_start
+	for n: Vector2i in HexGrid.neighbors(_map.hero_start):
+		if _map.is_passable(n):
+			donut_start = n
+			break
+	_donut.position = donut_start
+
 	_all_combatants.clear()
 	_all_combatants.append(_hero)
+	_all_combatants.append(_donut)
 	for e: Combatant in _enemies:
 		_all_combatants.append(e)
 	_engine = BattleEngine.new(_battle_rng)
@@ -410,12 +431,14 @@ func _spawn_entity_node(c: Combatant) -> void:
 		shadow.position = Vector2(0.0, HEX_SIZE * 0.28)
 		root.add_child(shadow)
 
-		# Colored glow ring — class color for hero, blood-red for enemies, void-purple for bosses
+		# Colored glow ring — class color for hero, gold for Donut, blood-red for enemies, void-purple for bosses
 		var glow_poly := Polygon2D.new()
 		glow_poly.polygon = _make_hex_pts(HEX_SIZE * (0.84 if is_boss else 0.72))
 		glow_poly.position = Vector2(0.0, -12.0)
 		if is_boss:
 			glow_poly.color = Color(0.55, 0.0, 0.78, 0.42)
+		elif c.sprite_key == "companion_donut":
+			glow_poly.color = Color(0.95, 0.72, 0.10, 0.42)
 		elif c.faction == Combatant.Faction.HERO:
 			var gc := _hero_class_color()
 			gc.a = 0.38
@@ -444,8 +467,8 @@ func _spawn_entity_node(c: Combatant) -> void:
 
 		var sprite := Sprite2D.new()
 		sprite.texture = sprite_tex
-		# SVG art rendered at 192×192 — LINEAR_WITH_MIPMAPS for smooth anti-aliased edges
-		var sprite_scale: float = 0.95 if is_boss else 0.78
+		# 30% smaller than original sizes for better battlefield readability
+		var sprite_scale: float = 0.67 if is_boss else 0.55
 		sprite.scale = Vector2(sprite_scale, sprite_scale)
 		sprite.position = Vector2(0.0, -24.0)
 		sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
@@ -528,13 +551,15 @@ func _hero_class_color() -> Color:
 	return cls_data.get("icon_color", HERO_COLOR)
 
 func _get_sprite_path(c: Combatant) -> String:
+	if c.sprite_key == "companion_donut":
+		return "res://assets/sprites/companion_donut.png"
 	var base: String = "hero_%s" % GameState.hero_class if c.faction == Combatant.Faction.HERO \
 		else "enemy_%s" % c.sprite_key
-	# PNGs load reliably in headless/web export without editor import step.
-	# SVGs require the Godot editor import pass which silently fails in CI.
 	return "res://assets/sprites/%s.png" % base
 
 func _entity_glyph(c: Combatant) -> String:
+	if c.sprite_key == "companion_donut":
+		return "🐱"
 	if c.faction == Combatant.Faction.HERO:
 		match GameState.hero_class:
 			"brawler": return "⚔"
@@ -600,6 +625,146 @@ func _build_boss_hp_bar() -> void:
 	_boss_hp_fill.size = Vector2(bar_w, 14.0)
 	_boss_hp_fill.color = Color(0.72, 0.10, 0.82)
 	ui.add_child(_boss_hp_fill)
+
+## ─── Donut Companion ──────────────────────────────────────────────────────────
+
+func _build_donut_hp_label() -> void:
+	var lbl := Label.new()
+	lbl.name = "DonutHPLabel"
+	lbl.text = "🐱 Donut  50 / 50"
+	lbl.position = Vector2(16.0, 86.0)
+	lbl.add_theme_font_size_override("font_size", 13)
+	lbl.add_theme_color_override("font_color", Color(0.95, 0.72, 0.10))
+	$UILayer.add_child(lbl)
+	_donut_hp_label = lbl
+
+func _update_donut_hp_label() -> void:
+	if _donut_hp_label == null or _donut == null:
+		return
+	if not _donut.is_alive():
+		_donut_hp_label.text = "🐱 Donut  KO"
+		_donut_hp_label.add_theme_color_override("font_color", Color(0.45, 0.35, 0.35))
+	else:
+		_donut_hp_label.text = "🐱 Donut  %d / %d" % [_donut.hp, _donut.max_hp]
+		var ratio: float = float(_donut.hp) / float(max(1, _donut.max_hp))
+		_donut_hp_label.add_theme_color_override("font_color",
+			Color(1.0 - ratio * 0.5, 0.52 + ratio * 0.20, 0.05))
+
+func _resolve_donut_turn() -> void:
+	if not _donut.is_alive() or _engine.battle_over or _hero_dead:
+		_engine.end_turn()
+		await get_tree().create_timer(0.15).timeout
+		_next_turn()
+		return
+
+	var nearest: Combatant = _get_nearest_enemy_to(_donut.position)
+	if nearest != null:
+		var dist: int = HexGrid.hex_distance(_donut.position, nearest.position)
+		if dist <= 1:
+			_play_ability_effect(nearest.position, "basic_attack")
+			_engine.perform_attack(_donut, nearest, "basic_attack")
+			_update_all_hp_bars()
+			_update_donut_hp_label()
+		else:
+			_engine.move_toward(_donut, nearest.position, _map)
+			_sync_entity_positions()
+
+	await get_tree().create_timer(0.40).timeout
+	if not _engine.battle_over and not _hero_dead:
+		_engine.end_turn()
+		_next_turn()
+
+func _get_nearest_enemy_to(pos: Vector2i) -> Combatant:
+	var nearest: Combatant = null
+	var best_dist: int = 999
+	for e: Combatant in _enemies:
+		if e.is_alive():
+			var d: int = HexGrid.hex_distance(pos, e.position)
+			if d < best_dist:
+				best_dist = d
+				nearest = e
+	return nearest
+
+## ─── Inferno Map ──────────────────────────────────────────────────────────────
+
+func _build_inferno_map() -> void:
+	## Bottom-right panel: Dante's Inferno-style cross-section of 18 floors.
+	## Funnel shape — widest at top (Floor 1), narrowing to the abyss.
+	var ui: CanvasLayer = $UILayer
+	var MAP_W: float = 152.0
+	var PANEL_X: float = 1280.0 - MAP_W - 4.0
+	var PANEL_Y: float = 630.0
+	var PANEL_H: float = 88.0
+	var TITLE_H: float = 11.0
+	var FLOOR_H: float = (PANEL_H - TITLE_H) / 18.0
+
+	# Dark background
+	var bg := ColorRect.new()
+	bg.position = Vector2(PANEL_X, PANEL_Y)
+	bg.size = Vector2(MAP_W, PANEL_H)
+	bg.color = Color(0.03, 0.01, 0.07, 0.96)
+	bg.z_index = 5
+	bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	ui.add_child(bg)
+
+	# Title
+	var title := Label.new()
+	title.text = "DESCENT"
+	title.add_theme_font_size_override("font_size", 8)
+	title.add_theme_color_override("font_color", Color(0.48, 0.36, 0.08))
+	title.position = Vector2(PANEL_X, PANEL_Y + 1.0)
+	title.custom_minimum_size = Vector2(MAP_W, TITLE_H)
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title.z_index = 6
+	title.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	ui.add_child(title)
+
+	for i: int in range(18):
+		var floor_n: int = i + 1
+		var taper: float = 1.0 - float(i) / 17.0 * 0.44
+		var fw: float = MAP_W * taper
+		var fx: float = PANEL_X + (MAP_W - fw) * 0.5
+		var fy: float = PANEL_Y + TITLE_H + float(i) * FLOOR_H
+
+		var slice_col: Color
+		if floor_n < GameState.floor_num:
+			slice_col = Color(0.30, 0.21, 0.05, 0.90)
+		elif floor_n == GameState.floor_num:
+			slice_col = Color(0.90, 0.70, 0.10, 1.0)
+		else:
+			var fade: float = float(floor_n - GameState.floor_num) / 18.0
+			slice_col = Color(0.09, 0.04, 0.14 + fade * 0.08, 0.85)
+
+		var slice := ColorRect.new()
+		slice.position = Vector2(fx, fy)
+		slice.size = Vector2(fw, max(1.0, FLOOR_H - 0.8))
+		slice.color = slice_col
+		slice.z_index = 6
+		slice.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		ui.add_child(slice)
+
+		# Thin separator line
+		var sep := ColorRect.new()
+		sep.position = Vector2(PANEL_X, fy + FLOOR_H - 0.6)
+		sep.size = Vector2(MAP_W, 0.8)
+		sep.color = Color(0.0, 0.0, 0.0, 0.45)
+		sep.z_index = 7
+		sep.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		ui.add_child(sep)
+
+		# Label on current floor only
+		if floor_n == GameState.floor_num:
+			var fn_lbl := Label.new()
+			fn_lbl.text = "▶ %d" % floor_n
+			fn_lbl.add_theme_font_size_override("font_size", 7)
+			fn_lbl.add_theme_color_override("font_color", Color(0.05, 0.03, 0.0, 1.0))
+			fn_lbl.position = Vector2(fx, fy)
+			fn_lbl.custom_minimum_size = Vector2(fw, FLOOR_H)
+			fn_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+			fn_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+			fn_lbl.z_index = 8
+			fn_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			ui.add_child(fn_lbl)
 
 func _update_boss_hp_bar() -> void:
 	if _boss == null or _boss_hp_fill == null:
@@ -679,7 +844,19 @@ func _next_turn() -> void:
 	if active == null:
 		return
 
+	if _hero_dead:
+		return
+
 	if active.faction == Combatant.Faction.HERO:
+		# Donut auto-resolves her turn
+		if active.id == "donut":
+			_turn_indicator.text = "Donut's Turn"
+			_turn_indicator.add_theme_color_override("font_color", Color(0.95, 0.72, 0.10))
+			await get_tree().create_timer(0.35).timeout
+			if not _engine.battle_over and not _hero_dead:
+				await _resolve_donut_turn()
+			return
+
 		# Tick ability cooldowns at the start of each hero turn
 		for id: String in _hero_ability_objs:
 			_hero_ability_objs[id].tick_cooldown()
@@ -1106,11 +1283,31 @@ func _on_combatant_died(c: Combatant) -> void:
 			SystemVoice.speak("boss_killed")
 		else:
 			SystemVoice.speak("kill")
+		# Delay grey-out so the hit-flash tween finishes first
+		_grey_out_entity_delayed(c.id)
+	elif c.id == "donut":
+		# Donut knocked out — run continues
+		SystemVoice.speak_direct("Donut is down. The princess is displeased. Extremely.")
+		_grey_out_entity_delayed(c.id)
 	else:
-		# Hero died — start death overlay after a moment
+		# Player hero died — end the battle immediately regardless of Donut's state
+		if _hero_dead:
+			return
+		_hero_dead = true
+		var node: Node2D = _entity_nodes.get(c.id)
+		if node != null:
+			node.modulate = DEAD_MODULATE
+		if not _engine.battle_over:
+			_engine.battle_over = true
+			_engine.hero_won = false
+			_engine.battle_ended.emit(false, 0)
 		await get_tree().create_timer(0.5).timeout
 		_show_death_overlay()
-	var node: Node2D = _entity_nodes.get(c.id)
+
+func _grey_out_entity_delayed(entity_id: String) -> void:
+	## Wait for hit-flash tween to finish, then apply death grey.
+	await get_tree().create_timer(0.22).timeout
+	var node: Node2D = _entity_nodes.get(entity_id)
 	if node != null:
 		node.modulate = DEAD_MODULATE
 
@@ -1241,6 +1438,7 @@ func _update_all_hp_bars() -> void:
 		_update_hp_bar(c)
 		_update_status_label(c)
 	_update_boss_hp_bar()
+	_update_donut_hp_label()
 	_sync_hero_alpha()
 
 func _update_hp_bar(c: Combatant) -> void:

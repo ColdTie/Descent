@@ -24,7 +24,9 @@ func _init(p_id: String, p_name: String) -> void:
 	display_name = p_name
 
 func can_use() -> bool:
-	return (current_charges > 0 or cooldown_remaining == 0)
+	if max_charges == -1:
+		return true  # unlimited
+	return current_charges > 0
 
 func use() -> bool:
 	if not can_use():

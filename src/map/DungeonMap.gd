@@ -23,15 +23,21 @@ func generate(p_floor: int, rng: RandomNumberGenerator) -> void:
 		tile_types[h] = "floor"
 		passable[h] = true
 	
-	# Place some lava tiles (10-15% of tiles)
-	var lava_count: int = rng.randi_range(int(all_hexes.size() * 0.10), int(all_hexes.size() * 0.15))
-	var shuffled: Array[Vector2i] = all_hexes.duplicate()
-	_shuffle_vec2i(shuffled, rng)
-	for i: int in range(lava_count):
-		var h: Vector2i = shuffled[i]
-		if h != Vector2i.ZERO:  # never lava on center
-			tile_types[h] = "lava"
-			passable[h] = false
+	# Place lava tiles only outside the inner safe zone (radius > 2).
+	# Reduced density (5-8%) prevents start-of-floor heat damage near the hero spawn.
+	var lava_candidates: Array[Vector2i] = []
+	for h: Vector2i in all_hexes:
+		if HexGrid.hex_distance(h, Vector2i.ZERO) > 2:
+			lava_candidates.append(h)
+	_shuffle_vec2i(lava_candidates, rng)
+	var lava_count: int = rng.randi_range(
+		int(lava_candidates.size() * 0.05),
+		int(lava_candidates.size() * 0.08)
+	)
+	for i: int in range(min(lava_count, lava_candidates.size())):
+		var h: Vector2i = lava_candidates[i]
+		tile_types[h] = "lava"
+		passable[h] = false
 
 	# Hero starts at center
 	hero_start = Vector2i.ZERO

@@ -156,7 +156,14 @@ func enemy_ai_action(enemy: Combatant, map: DungeonMap = null) -> void:
 			visible_heroes.append(c)
 	if visible_heroes.is_empty():
 		return  # all heroes vanished — enemy idles
+	# Target the nearest visible hero
 	var target: Combatant = visible_heroes[0]
+	var best_target_dist: int = HexGrid.hex_distance(enemy.position, target.position)
+	for h: Combatant in visible_heroes:
+		var d: int = HexGrid.hex_distance(enemy.position, h.position)
+		if d < best_target_dist:
+			best_target_dist = d
+			target = h
 
 	match enemy.sprite_key:
 		"golem":
@@ -224,6 +231,8 @@ func _remove_dead_from_order() -> void:
 	turn_order = new_order
 
 func _check_battle_end() -> bool:
+	if battle_over:
+		return true  # already ended externally (e.g. player hero died with companion still alive)
 	var living_heroes: int = combatants.filter(
 		func(c: Combatant) -> bool: return c.faction == Combatant.Faction.HERO and c.is_alive()
 	).size()
@@ -279,6 +288,12 @@ func _push_direction(from_pos: Vector2i, to_pos: Vector2i) -> Vector2i:
 			best_dot = dot
 			best_dir = d
 	return best_dir
+
+func move_toward(mover: Combatant, goal: Vector2i, map: DungeonMap) -> bool:
+	## Public wrapper: move mover one step toward goal. Returns true if moved.
+	var old_pos: Vector2i = mover.position
+	_move_toward(mover, goal, map)
+	return mover.position != old_pos
 
 func move_combatant(combatant: Combatant, to_hex: Vector2i) -> bool:
 	## Move combatant to target hex. Returns true if successful.

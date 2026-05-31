@@ -40,6 +40,7 @@ jobs:
           pip install Pillow --quiet
           python3 tools/gen_sprites_v6.py
           python3 tools/gen_effects.py
+          python3 tools/gen_donut.py
 
       - name: Import project assets
         run: |

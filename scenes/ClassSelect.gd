@@ -141,8 +141,11 @@ func _make_class_card(class_id: String) -> PanelContainer:
 
 	# ── Abilities ───────────────────────────────────────────────────────────
 	var abilities: Array = cls.get("abilities", [])
+	var abl_names: Array[String] = []
+	for abl_id: String in abilities:
+		abl_names.append(Abilities.get_ability(abl_id).get("display_name", abl_id))
 	var abl_lbl := Label.new()
-	abl_lbl.text = "✦ " + "   ✦ ".join(abilities)
+	abl_lbl.text = "✦ " + "   ✦ ".join(abl_names)
 	abl_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	abl_lbl.add_theme_font_size_override("font_size", 10)
 	abl_lbl.add_theme_color_override("font_color", cls_color.lightened(0.25))
