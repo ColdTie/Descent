@@ -321,27 +321,52 @@ func _spawn_entity_node(c: Combatant) -> void:
 	var is_boss: bool = c.sprite_key.begins_with("boss")
 
 	if sprite_tex != null:
-		# Dark disc behind sprite so it reads against any hex colour
-		var disc := Polygon2D.new()
-		disc.polygon = _make_hex_pts(HEX_SIZE * (0.68 if is_boss else 0.58))
-		disc.color = Color(0.0, 0.0, 0.0, 0.50)
-		disc.position = Vector2(0.0, -10.0)
-		root.add_child(disc)
-
-		# Drop shadow
+		# Ground shadow (drawn first — appears visually behind all other layers)
 		var shadow := Polygon2D.new()
-		shadow.polygon = _make_hex_pts(HEX_SIZE * (0.52 if is_boss else 0.42))
-		shadow.color = Color(0.0, 0.0, 0.0, 0.45)
+		shadow.polygon = _make_hex_pts(HEX_SIZE * (0.54 if is_boss else 0.44))
+		shadow.color = Color(0.0, 0.0, 0.0, 0.50)
 		shadow.position = Vector2(0.0, HEX_SIZE * 0.28)
 		root.add_child(shadow)
 
+		# Colored glow ring — class color for hero, blood-red for enemies, void-purple for bosses
+		var glow_poly := Polygon2D.new()
+		glow_poly.polygon = _make_hex_pts(HEX_SIZE * (0.84 if is_boss else 0.72))
+		glow_poly.position = Vector2(0.0, -12.0)
+		if is_boss:
+			glow_poly.color = Color(0.55, 0.0, 0.78, 0.42)
+		elif c.faction == Combatant.Faction.HERO:
+			var gc := _hero_class_color()
+			gc.a = 0.38
+			glow_poly.color = gc
+		else:
+			glow_poly.color = Color(0.78, 0.06, 0.04, 0.28)
+		root.add_child(glow_poly)
+
+		# Boss glow pulses like a heartbeat
+		if is_boss:
+			var tw_g: Tween = create_tween()
+			tw_g.set_loops()
+			tw_g.tween_property(glow_poly, "color",
+				Color(0.55, 0.0, 0.78, 0.68), 1.1) \
+				.set_ease(Tween.EASE_IN_OUT).set_trans(Tween.TRANS_SINE)
+			tw_g.tween_property(glow_poly, "color",
+				Color(0.55, 0.0, 0.78, 0.28), 1.4) \
+				.set_ease(Tween.EASE_IN_OUT).set_trans(Tween.TRANS_SINE)
+
+		# Dark disc behind sprite body for readability against any hex colour
+		var disc := Polygon2D.new()
+		disc.polygon = _make_hex_pts(HEX_SIZE * (0.70 if is_boss else 0.60))
+		disc.color = Color(0.0, 0.0, 0.0, 0.52)
+		disc.position = Vector2(0.0, -10.0)
+		root.add_child(disc)
+
 		var sprite := Sprite2D.new()
 		sprite.texture = sprite_tex
-		# 192×192 canvas, pixel art content at 128px — NEAREST keeps crispy edges
-		var sprite_scale: float = 0.90 if is_boss else 0.72
+		# SVG art rendered at 192×192 — LINEAR_WITH_MIPMAPS for smooth anti-aliased edges
+		var sprite_scale: float = 0.95 if is_boss else 0.78
 		sprite.scale = Vector2(sprite_scale, sprite_scale)
 		sprite.position = Vector2(0.0, -24.0)
-		sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+		sprite.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
 		root.add_child(sprite)
 
 		# Idle breathing bob (enemies bounce a bit faster than hero)
