@@ -7,12 +7,6 @@ signal battle_complete(hero_won: bool, xp_earned: int, enemies_killed: int)
 const HEX_SIZE: float = 38.0
 const HERO_COLOR     := Color(0.25, 0.55, 1.0)
 const ENEMY_COLOR    := Color(0.9, 0.2, 0.15)
-const LAVA_COLOR     := Color(0.88, 0.36, 0.04)
-const LAVA_GLOW      := Color(1.0, 0.60, 0.08, 0.35)
-const FLOOR_COLOR    := Color(0.18, 0.15, 0.22)
-const FLOOR_ALT      := Color(0.14, 0.11, 0.17)
-const FLOOR_DARK     := Color(0.10, 0.08, 0.13)
-const STONE_EDGE     := Color(0.38, 0.30, 0.45)
 const SELECTED_CLR   := Color(1.0, 0.9, 0.2)
 const DEAD_MODULATE  := Color(0.35, 0.35, 0.35, 0.4)
 const MOVE_CLR       := Color(0.15, 0.85, 0.35, 0.45)
@@ -21,6 +15,15 @@ const AOE_CLR        := Color(0.9, 0.45, 0.05, 0.35)
 const SELF_CLR       := Color(0.6, 0.3, 0.9, 0.5)
 const FROST_CLR      := Color(0.25, 0.65, 1.0, 0.5)
 const LAVA_HEAT_CLR  := Color(1.0, 0.45, 0.0, 0.9)
+
+# Floor-theme colors — initialized in _setup_floor_theme() before drawing begins
+var LAVA_COLOR  := Color(0.88, 0.36, 0.04)
+var LAVA_GLOW   := Color(1.0, 0.60, 0.08, 0.35)
+var LAVA_BORDER := Color(0.95, 0.42, 0.04)
+var FLOOR_COLOR := Color(0.18, 0.15, 0.22)
+var FLOOR_ALT   := Color(0.14, 0.11, 0.17)
+var STONE_EDGE  := Color(0.38, 0.30, 0.45)
+var ATMO_COLOR  := Color(0.82, 0.76, 0.96)
 
 var _engine: BattleEngine
 var _map: DungeonMap
@@ -56,6 +59,7 @@ var _boss_hp_fill: ColorRect = null
 
 func _ready() -> void:
 	_floor_label.text = "Floor %d / %d" % [GameState.floor_num, GameState.TOTAL_FLOORS]
+	_setup_floor_theme()
 	SystemVoice.line_spoken.connect(_on_system_line)
 	_build_encounter()
 	_draw_cave_background()
@@ -68,6 +72,38 @@ func _ready() -> void:
 	SystemVoice.speak("floor_enter", [GameState.floor_num])
 	await get_tree().create_timer(0.4).timeout
 	_next_turn()
+
+## ─── Floor Theme ──────────────────────────────────────────────────────────────
+
+func _setup_floor_theme() -> void:
+	## Set tile and atmosphere colors based on floor tier.
+	## Tier 0 = Floors 1-6 (Stone), Tier 1 = 7-12 (Obsidian), Tier 2 = 13-18 (Abyss/Void).
+	var tier: int = (GameState.floor_num - 1) / 6
+	match tier:
+		1:  # Obsidian halls — cold blue-black stone, arcane blue-fire
+			FLOOR_COLOR  = Color(0.07, 0.09, 0.18)
+			FLOOR_ALT    = Color(0.04, 0.06, 0.13)
+			STONE_EDGE   = Color(0.20, 0.28, 0.55)
+			LAVA_COLOR   = Color(0.06, 0.28, 0.82)
+			LAVA_GLOW    = Color(0.15, 0.50, 1.0, 0.30)
+			LAVA_BORDER  = Color(0.18, 0.52, 1.0)
+			ATMO_COLOR   = Color(0.68, 0.76, 1.0)
+		2:  # The Abyss — near-black void with crackling void-purple energy
+			FLOOR_COLOR  = Color(0.04, 0.02, 0.08)
+			FLOOR_ALT    = Color(0.02, 0.01, 0.05)
+			STONE_EDGE   = Color(0.40, 0.10, 0.52)
+			LAVA_COLOR   = Color(0.52, 0.00, 0.72)
+			LAVA_GLOW    = Color(0.70, 0.05, 0.90, 0.28)
+			LAVA_BORDER  = Color(0.80, 0.10, 0.95)
+			ATMO_COLOR   = Color(0.70, 0.62, 0.96)
+		_:  # Default stone (floors 1-6)
+			FLOOR_COLOR  = Color(0.18, 0.15, 0.22)
+			FLOOR_ALT    = Color(0.14, 0.11, 0.17)
+			STONE_EDGE   = Color(0.38, 0.30, 0.45)
+			LAVA_COLOR   = Color(0.88, 0.36, 0.04)
+			LAVA_GLOW    = Color(1.0, 0.60, 0.08, 0.35)
+			LAVA_BORDER  = Color(0.95, 0.42, 0.04)
+			ATMO_COLOR   = Color(0.82, 0.76, 0.96)
 
 ## ─── Encounter Setup ──────────────────────────────────────────────────────────
 
@@ -151,9 +187,9 @@ func _start_idle_bob(sprite: Sprite2D, is_hero: bool) -> void:
 ## ─── Cave Atmosphere ──────────────────────────────────────────────────────────
 
 func _draw_cave_background() -> void:
-	# Stone-tinted atmosphere
+	# Atmosphere tint — color varies by floor tier
 	var cm := CanvasModulate.new()
-	cm.color = Color(0.82, 0.76, 0.96)
+	cm.color = ATMO_COLOR
 	add_child(cm)
 
 	# Vignette — four dark gradient strips around the viewport edges
@@ -236,7 +272,7 @@ func _draw_hex_grid() -> void:
 		bpts.append(bpts[0])
 		border.points = bpts
 		border.width = 1.6 if is_lava else 1.0
-		border.default_color = Color(0.95, 0.42, 0.04) if is_lava else STONE_EDGE
+		border.default_color = LAVA_BORDER if is_lava else STONE_EDGE
 		poly.add_child(border)
 
 		# Stone cracks on floor tiles
@@ -297,14 +333,15 @@ func _add_stone_texture(poly: Polygon2D, hex: Vector2i) -> void:
 		poly.add_child(patch)
 
 func _start_lava_pulse(poly: Polygon2D) -> void:
-	## Pulse lava tiles between bright and dim orange
+	## Pulse lava tiles between bright and dim — colors follow floor theme
+	var bright: Color = LAVA_COLOR.lightened(0.25)
+	var dim:    Color = LAVA_COLOR.darkened(0.38)
 	var tw: Tween = create_tween()
 	tw.set_loops()
-	# Stagger start so lava doesn't all pulse in sync
 	var delay: float = _battle_rng.randf_range(0.0, 1.5)
 	tw.tween_interval(delay)
-	tw.tween_property(poly, "color", Color(0.98, 0.55, 0.06), 0.7)
-	tw.tween_property(poly, "color", Color(0.60, 0.18, 0.01), 0.9)
+	tw.tween_property(poly, "color", bright, 0.7)
+	tw.tween_property(poly, "color", dim, 0.9)
 
 func _draw_entities() -> void:
 	for c: Combatant in _all_combatants:
@@ -634,6 +671,11 @@ func _next_turn() -> void:
 			_sync_entity_positions()
 			_update_all_hp_bars()
 			_engine.end_turn()
+			# Surrounded check: fire quip if 3+ enemies are now adjacent to hero
+			if not _engine.battle_over:
+				var adj_enemies: int = _count_adjacent_enemies()
+				if adj_enemies >= 3 and _battle_rng.randf() < 0.50:
+					SystemVoice.speak("surrounded")
 			await get_tree().create_timer(0.25).timeout
 			_next_turn()
 
@@ -731,22 +773,62 @@ func _do_hero_attack(target: Combatant) -> void:
 		SystemVoice.speak("ability_cooldown")
 		return
 
+	var abl_data: Dictionary = Abilities.get_ability(_selected_ability)
 	_player_turn = false
 	_clear_highlights()
 	_engine.perform_attack(_hero, target, _selected_ability)
-	if _selected_ability == "backstab":
-		SystemVoice.speak("ability_backstab")
-	else:
-		SystemVoice.speak("hit")
+	match _selected_ability:
+		"backstab":    SystemVoice.speak("ability_backstab")
+		"shield_bash": SystemVoice.speak("shield_bash")
+		_:             SystemVoice.speak("hit")
+
+	# Apply on-hit status effects (poison_blade, etc.)
+	if target.is_alive() and abl_data.get("applies_poisoned", false):
+		var dur: int = abl_data.get("poison_duration", 4)
+		target.apply_status(StatusEffect.poisoned(dur, 6))
+		_update_status_label(target)
+		SystemVoice.speak_direct(
+			"Poison applied. %s has %d turns to regret being adjacent to you." \
+			% [target.display_name, dur])
+
 	# Consume the charge
 	if abl_obj != null:
 		abl_obj.use()
 	_update_all_hp_bars()
 	_update_hero_hp_label()
 	_refresh_ability_bar()
-	_engine.end_turn()
-	await get_tree().create_timer(0.2).timeout
-	_next_turn()
+
+	# Handle pushback (shield_bash and any ability with pushback > 0)
+	var pushback: int = abl_data.get("pushback", 0)
+	if pushback > 0 and target.is_alive() and not _engine.battle_over:
+		var path: Array[Vector2i] = _engine.push_combatant(_hero, target, pushback, _map)
+		if not path.is_empty():
+			await _animate_push(target, path)
+			# If they landed on lava — big environmental hit
+			if not _engine.battle_over and _map.get_tile_type(path[-1]) == "lava":
+				var lava_dmg: int = _engine.apply_environment_damage(target, 28)
+				_show_damage_number(target, lava_dmg, LAVA_HEAT_CLR)
+				if target.is_alive():
+					_hit_flash(target)
+				_update_all_hp_bars()
+				SystemVoice.speak("pushed_into_lava")
+
+	if not _engine.battle_over:
+		_engine.end_turn()
+		await get_tree().create_timer(0.2).timeout
+		_next_turn()
+
+func _animate_push(c: Combatant, path: Array[Vector2i]) -> void:
+	## Slide entity node along each hex in path with a quick tween.
+	var node: Node2D = _entity_nodes.get(c.id)
+	if node == null:
+		return
+	for hex: Vector2i in path:
+		var tw: Tween = create_tween()
+		tw.set_ease(Tween.EASE_OUT)
+		tw.set_trans(Tween.TRANS_QUART)
+		tw.tween_property(node, "position", HexGrid.hex_to_pixel(hex, HEX_SIZE), 0.12)
+		await tw.finished
 
 func _do_hero_aoe_ability(center_hex: Vector2i) -> void:
 	## Handles fireball (damage AOE) and frost_nova (freeze AOE)
@@ -852,6 +934,14 @@ func _flash_hex_area(center: Vector2i, radius: int, color: Color) -> void:
 		tw.tween_property(flash, "modulate:a", 0.0, 0.45)
 		tw.tween_callback(flash.queue_free)
 
+func _count_adjacent_enemies() -> int:
+	## Count living enemies within hex distance 1 of the hero.
+	var count: int = 0
+	for e: Combatant in _enemies:
+		if e.is_alive() and HexGrid.hex_distance(_hero.position, e.position) <= 1:
+			count += 1
+	return count
+
 func _find_enemy_at(hex: Vector2i) -> Combatant:
 	for e: Combatant in _enemies:
 		if e.is_alive() and e.position == hex:
@@ -940,12 +1030,16 @@ func _clear_highlights() -> void:
 
 ## ─── Engine Signal Handlers ───────────────────────────────────────────────────
 
-func _on_action_taken(_attacker: Combatant, target: Combatant, damage: int, _ability_id: String) -> void:
+func _on_action_taken(attacker: Combatant, target: Combatant, damage: int, _ability_id: String) -> void:
 	_show_damage_number(target, damage)
 	_hit_flash(target)
 	_update_hp_bar(target)
 	_update_status_label(target)
 	_update_boss_hp_bar()
+	# Contextual player-hit commentary — fire ~40% of the time to avoid spam
+	if target.faction == Combatant.Faction.HERO and attacker.faction == Combatant.Faction.ENEMY:
+		if _battle_rng.randf() < 0.40:
+			SystemVoice.speak("took_hit_comment")
 
 func _on_combatant_died(c: Combatant) -> void:
 	if c.faction == Combatant.Faction.ENEMY:

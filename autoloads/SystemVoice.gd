@@ -330,6 +330,49 @@ const LINES: Dictionary = {
 		"Cleared. The dungeon sharpens its next floor in response. This is a compliment. Accept it.",
 	],
 
+	# ── Ability: shield_bash ──────────────────────────────────────────────────
+	"shield_bash": [
+		"Shield Bash. They went somewhere else entirely.",
+		"You launched them. Physics confirmed. Results pending.",
+		"Tactical repositioning of an enemy. Without asking their opinion.",
+		"The enemy is now somewhere it did not plan to be. This is your doing.",
+		"Bash confirmed. They traveled. Involuntarily.",
+		"Full contact. They've been reassigned to a different hex.",
+		"Shield impact: successful. Trajectory: not their choice.",
+	],
+
+	# ── Pushed into lava ──────────────────────────────────────────────────────
+	"pushed_into_lava": [
+		"Launched directly into lava. The dungeon finds this satisfying. The creature does not.",
+		"Physics and fire collaborate on a kill. Efficient.",
+		"They landed in lava. This was not their plan. It was yours. Well done.",
+		"Lava contact confirmed. The dungeon revises its deployment strategy.",
+		"Into the lava. The System approves of this outcome with unusual enthusiasm.",
+		"The lava was waiting. You provided the delivery. Functional teamwork.",
+	],
+
+	# ── Hero surrounded (3+ enemies adjacent) ────────────────────────────────
+	"surrounded": [
+		"You are surrounded. This is suboptimal. The dungeon's positioning is deliberate.",
+		"Multiple threats at close range. Tactically, you should not be here.",
+		"Surrounded. The dungeon considers this a personal success.",
+		"You are encircled. The System notes this with something that may be concern.",
+		"Three or more enemies at range zero. The dungeon calls this 'working as intended.'",
+		"Surrounded. Retreat was an option earlier. It is less of one now.",
+		"Threat envelope: all sides. The dungeon's personnel have you where they want you.",
+		"Encirclement confirmed. The System wishes you a statistically unlikely survival.",
+	],
+
+	# ── Hero takes damage (triggered in combat, not every hit) ────────────────
+	"took_hit_comment": [
+		"You took damage. The dungeon considers this progress.",
+		"HP reduced. You should be lower on the priority list now. You aren't.",
+		"That landed. The dungeon registers satisfaction. Deny it that.",
+		"Structural integrity declining. The monsters are cooperating today.",
+		"They hit you. This is one of the less ideal scenarios. Do better.",
+		"Hit confirmed. The dungeon's morale is improving. Yours should not be.",
+	],
+
 	# ── Win screen (cleared all 18 floors) ────────────────────────────────────
 	"win": [
 		"Floor 18 cleared. The System is surprised. Don't let it go to your head.",

@@ -35,7 +35,7 @@ DESCENT is a turn-based tactical dungeon crawler in the spirit of **Dungeon Craw
 - **Architecture rule**: `BattleEngine._calculate_damage()` returns RAW damage (no armor). `Combatant.take_damage(amount, ignore_armor=false)` applies armor. Don't double-apply armor in both places.
 - `Combatant.take_damage(amount, ignore_armor)` — the `ignore_armor` parameter bypasses the `armor` field reduction (for backstab, env damage, etc.)
 
-## Current State (Run 10 — Gradient SVG Sprite Overhaul)
+## Current State (Run 12 — Shield Bash + Ability Unlocks + Floor Themes)
 ### Implemented ✅
 **Run 1 (Bootstrap):**
 - `GameRng`, `GameState`, `SystemVoice` autoloads
@@ -129,6 +129,19 @@ DESCENT is a turn-based tactical dungeon crawler in the spirit of **Dungeon Craw
 - **`ClassSelect.gd`** — Cards enlarged (240×420, was 230×390); portrait area 248px tall; NEAREST filter for pixel-art sprites
 - **`deploy.yml`** — runs `gen_sprites_v4.py` instead of `gen_sprites_hq.py`
 
+**Run 12 (Shield Bash + Ability Unlocks + Floor Themes + Contextual Commentary):**
+- **Shield Bash ability** (`Abilities.gd`) — new Brawler ability: 18 damage, pushes enemy 2 hexes, 2 charges, 2-turn cooldown. If pushed into lava, takes 28 bonus env damage (armor-bypassed).
+- **Two more unlockable abilities** (`Abilities.gd`): `poison_blade` (Rogue/cross-class: 10 dmg + 6 dpt poison for 4 turns, 2 charges, range 1, ignore-armor tick), `arcane_surge` (Arcanist/cross-class: 50 dmg ignore armor, 1 charge, range 2).
+- **Push mechanic** (`BattleEngine.gd`): `push_combatant(pusher, pushed, distance, map)` + `_push_direction()` helper — returns traversed hex path for lava-contact detection.
+- **Push animation** (`BattleScene.gd`): `_animate_push()` coroutine slides entity node hex-by-hex via tweens; `_do_hero_attack` awaits it then deals lava contact damage if final hex is lava.
+- **Ability unlocks on LevelUp** (`LevelUp.gd`): `CLASS_UNLOCKS` dict (brawler→shield_bash; rogue→power_strike,frost_nova; arcanist→backstab,taunt). `_generate_choices()` checks hero class + existing abilities and injects a gold ✦ "Learn: X" card (~60% chance) in place of one stat card. `_apply_upgrade()` handles `type=="ability"` to add ability to `GameState.hero_abilities`.
+- **Floor tile themes** (`BattleScene.gd`): `_setup_floor_theme()` called in `_ready()` sets `FLOOR_COLOR`, `FLOOR_ALT`, `STONE_EDGE`, `LAVA_COLOR`, `LAVA_GLOW`, `LAVA_BORDER`, `ATMO_COLOR` based on floor tier: Stone (1-6) / Obsidian blue-black (7-12) / Void purple (13-18). Lava pulse tween and `CanvasModulate` both update to match.
+- **Contextual commentary** — 3 new triggers:
+  - Enemy hits hero → `took_hit_comment` (~40% chance)
+  - 3+ enemies adjacent to hero at end of enemy turn → `surrounded` (~50% chance)
+  - Shield bash → `shield_bash` quip pool; pushed into lava → `pushed_into_lava` quip pool
+- **New SystemVoice categories**: `shield_bash` (7 lines), `pushed_into_lava` (6 lines), `surrounded` (8 lines), `took_hit_comment` (6 lines).
+
 **Run 11b (SVG Sprite Pipeline + Glow Aura Visual Overhaul):**
 - **Sprite pipeline switched back to custom SVG art** (`gen_sprites_v5.py`): sprites are 5–9× richer (14–33 KB each vs 2–4 KB DCSS). All 15 characters rendered at 192×192 via cairosvg.
 - **`BattleScene.gd` display improvements:**
@@ -169,13 +182,13 @@ DESCENT is a turn-based tactical dungeon crawler in the spirit of **Dungeon Craw
 - **`ClassSelect.gd`** — portrait filter changed to `LINEAR_WITH_MIPMAPS` to match
 - **`deploy.yml`** — installs `libcairo2` + `cairosvg`, runs `gen_sprites_v5.py`
 
-### Next Priorities (Run 12+)
+### Next Priorities (Run 13+)
 1. **Sounds** — Even a minimal audio pass: hit, kill, move, ability sounds (use Godot's AudioStreamGenerator or import simple .ogg files)
-2. **Class abilities tab on upgrade screen** — LevelUp screen only shows stat upgrades; add a "NEW ABILITY" card so hero can unlock fireball/backstab/etc. mid-run
-3. **Pushback mechanic** — Brawler "Shield Bash" that pushes enemies toward lava; makes lava truly tactical
-4. **The System mid-battle commentary** — trigger quips on: hero surviving below 20% HP, first kill of run, backstab, standing adjacent to lava, enemies surrounding hero
-5. **More floor variety** — Different tile themes per floor tier (stone/obsidian/abyss for floors 1-6/7-12/13-18)
-7. **Minimap / floor preview** — small indicator showing which floor you're on out of N (generate run length at run start)
+2. **More class-specific abilities** — Rogue needs its own unique unlockable (e.g. a gap-closer); current cross-class unlocks are functional but feel odd.
+3. **Minimap / floor preview** — Small indicator showing which floor you're on out of 18, ideally a mini-tower showing cleared/current/upcoming floors.
+4. **More floor variety** — Unique map features per tier: Tier 1 cracks, Tier 2 arcane pools (freeze-on-entry?), Tier 3 void rifts (warp random enemies each turn).
+5. **Enemy abilities unlocks on higher floors** — Skeleton gains Bone Volley (ranged) after floor 10; Demon gains Hellfire AoE after floor 13.
+6. **Boss phase 2** — Each boss enters an enraged state when below 30% HP: speed +4, +2 damage, and special quip from SystemVoice.
 
 ## File Map
 ```

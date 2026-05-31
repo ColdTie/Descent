@@ -1,6 +1,6 @@
 extends Control
-## Level-up upgrade screen. Shown when hero gains a level.
-## Run 11: stone panel, styled upgrade cards with category icons and colored borders.
+## Level-up upgrade screen.
+## Run 12: added class-specific ability unlock cards alongside stat upgrades.
 
 signal upgrade_chosen(upgrade_id: String)
 
@@ -11,6 +11,13 @@ signal upgrade_chosen(upgrade_id: String)
 @onready var _continue_button:Button       = $VBox/ContinueButton
 
 var _chosen: String = ""
+
+# Abilities each class can unlock (abilities NOT in their starting kit)
+const CLASS_UNLOCKS: Dictionary = {
+	"brawler":  ["shield_bash"],
+	"rogue":    ["power_strike", "frost_nova"],
+	"arcanist": ["backstab", "taunt"],
+}
 
 const UPGRADES: Array[Dictionary] = [
 	{"id": "atk_up",   "name": "Savage Strike",    "icon": "⚔",
@@ -44,9 +51,37 @@ func _ready() -> void:
 	_generate_choices()
 
 func _generate_choices() -> void:
+	# Build the pool of available ability unlocks for this class/run state
+	var unlock_card: Dictionary = {}
+	var class_unlocks: Array = CLASS_UNLOCKS.get(GameState.hero_class, [])
+	for ability_id: String in class_unlocks:
+		if not GameState.hero_abilities.has(ability_id):
+			# Found an ability the hero can unlock — use the first one
+			var abl: Dictionary = Abilities.get_ability(ability_id)
+			unlock_card = {
+				"id": "ability_unlock_%s" % ability_id,
+				"type": "ability",
+				"ability_id": ability_id,
+				"name": "Learn: %s" % abl.get("display_name", ability_id),
+				"icon": "✦",
+				"color": Color(0.95, 0.72, 0.10),
+				"desc": abl.get("description", ""),
+			}
+			break
+
 	var pool: Array[Dictionary] = UPGRADES.duplicate()
 	GameRng.shuffle(pool)
-	for item: Dictionary in pool.slice(0, min(3, pool.size())):
+	var choices: Array[Dictionary] = []
+	# If there's an ability to unlock, replace one stat card with it (~60% chance per level-up)
+	if not unlock_card.is_empty() and GameRng.randf() < 0.60:
+		choices.append(unlock_card)
+		for item: Dictionary in pool.slice(0, 2):
+			choices.append(item)
+	else:
+		for item: Dictionary in pool.slice(0, 3):
+			choices.append(item)
+
+	for item: Dictionary in choices:
 		_cards_container.add_child(_make_card(item))
 
 func _make_card(item: Dictionary) -> PanelContainer:
@@ -124,6 +159,16 @@ func _on_upgrade_selected(upgrade_id: String, item: Dictionary,
 	_continue_button.visible = true
 
 func _apply_upgrade(item: Dictionary) -> void:
+	# Handle ability unlocks first
+	if item.get("type", "") == "ability":
+		var ability_id: String = item.get("ability_id", "")
+		if ability_id != "" and not GameState.hero_abilities.has(ability_id):
+			GameState.hero_abilities.append(ability_id)
+			var abl: Dictionary = Abilities.get_ability(ability_id)
+			SystemVoice.speak_direct(
+				"New ability acquired: %s. The dungeon updates its threat model." \
+				% abl.get("display_name", ability_id))
+		return
 	match item["id"]:
 		"atk_up":
 			GameState.hero_base_stats["attack"] = GameState.hero_base_stats.get("attack", 0) + 8

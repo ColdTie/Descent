@@ -249,6 +249,37 @@ func _check_battle_end() -> bool:
 func _on_combatant_died(c: Combatant) -> void:
 	combatant_died.emit(c)
 
+func push_combatant(pusher: Combatant, pushed: Combatant, distance: int, map: DungeonMap) -> Array[Vector2i]:
+	## Push 'pushed' away from 'pusher' by up to 'distance' hexes along the hex grid.
+	## Returns the list of hexes traversed (caller checks for lava/wall contact).
+	var dir: Vector2i = _push_direction(pusher.position, pushed.position)
+	var path: Array[Vector2i] = []
+	for _i: int in range(distance):
+		var next: Vector2i = pushed.position + dir
+		if not map.is_passable(next):
+			break
+		var occupied: bool = false
+		for c: Combatant in combatants:
+			if c.is_alive() and c != pushed and c.position == next:
+				occupied = true
+				break
+		if occupied:
+			break
+		pushed.position = next
+		path.append(next)
+	return path
+
+func _push_direction(from_pos: Vector2i, to_pos: Vector2i) -> Vector2i:
+	## Return the HexGrid direction pointing most directly from from_pos toward to_pos.
+	var best_dir: Vector2i = HexGrid.DIRECTIONS[0]
+	var best_dot: float = -INF
+	for d: Vector2i in HexGrid.DIRECTIONS:
+		var dot: float = float((to_pos.x - from_pos.x) * d.x + (to_pos.y - from_pos.y) * d.y)
+		if dot > best_dot:
+			best_dot = dot
+			best_dir = d
+	return best_dir
+
 func move_combatant(combatant: Combatant, to_hex: Vector2i) -> bool:
 	## Move combatant to target hex. Returns true if successful.
 	## Does NOT check passability — the caller (BattleScene) must validate the target.
