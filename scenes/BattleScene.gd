@@ -473,8 +473,13 @@ func _spawn_entity_node(c: Combatant) -> void:
 
 		var sprite := Sprite2D.new()
 		sprite.texture = sprite_tex
-		# 30% smaller than original sizes for better battlefield readability
-		var sprite_scale: float = 0.67 if is_boss else 0.55
+		# 30% smaller than original sizes for better battlefield readability.
+		# Donut (companion) renders much smaller — she's a cat, not a fighter.
+		var sprite_scale: float = 0.55
+		if is_boss:
+			sprite_scale = 0.67
+		elif c.sprite_key == "companion_donut":
+			sprite_scale = 0.22
 		sprite.scale = Vector2(sprite_scale, sprite_scale)
 		sprite.position = Vector2(0.0, -24.0)
 		sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
