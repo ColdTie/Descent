@@ -92,7 +92,7 @@ func _make_class_card(class_id: String) -> PanelContainer:
 		portrait.texture       = portrait_tex
 		portrait.stretch_mode  = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 		portrait.expand_mode   = TextureRect.EXPAND_IGNORE_SIZE
-		portrait.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
+		portrait.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 		vbox.add_child(portrait)
 	else:
 		var swatch := ColorRect.new()

@@ -40,6 +40,9 @@ var _highlight_hexes: Array[Vector2i] = []
 # Ability charge tracking: ability_id -> Ability object
 var _hero_ability_objs: Dictionary = {}
 
+# VFX: preloaded effect textures keyed by ability_id
+var _effect_textures: Dictionary = {}
+
 var _selected_ability: String = "basic_attack"
 var _player_turn: bool = false
 var _battle_rng: RandomNumberGenerator
@@ -62,6 +65,7 @@ func _ready() -> void:
 	_setup_floor_theme()
 	SystemVoice.line_spoken.connect(_on_system_line)
 	_build_encounter()
+	_load_effect_textures()
 	_draw_cave_background()
 	_draw_hex_grid()
 	_draw_stalagmites()
@@ -169,6 +173,47 @@ func _build_encounter() -> void:
 	_engine.status_ticked.connect(_on_status_ticked)
 	_engine.hero_moved.connect(_on_hero_moved)
 	_engine.setup(_all_combatants)
+
+## ─── Effect VFX ───────────────────────────────────────────────────────────────
+
+func _load_effect_textures() -> void:
+	var fx_map: Dictionary = {
+		"basic_attack":   "res://assets/effects/fx_impact.png",
+		"power_strike":   "res://assets/effects/fx_power_strike.png",
+		"backstab":       "res://assets/effects/fx_backstab.png",
+		"fireball":       "res://assets/effects/fx_fireball.png",
+		"frost_nova":     "res://assets/effects/fx_frost.png",
+		"taunt":          "res://assets/effects/fx_taunt.png",
+		"vanish":         "res://assets/effects/fx_vanish.png",
+		"shield_bash":    "res://assets/effects/fx_impact.png",
+		"lava_heat":      "res://assets/effects/fx_lava_heat.png",
+		"enemy_claw":     "res://assets/effects/fx_impact.png",
+		"enemy_bite":     "res://assets/effects/fx_backstab.png",
+		"enemy_fireball": "res://assets/effects/fx_fireball.png",
+	}
+	for id: String in fx_map:
+		var path: String = fx_map[id]
+		if ResourceLoader.exists(path):
+			_effect_textures[id] = load(path) as Texture2D
+
+func _play_ability_effect(hex: Vector2i, ability_id: String) -> void:
+	var tex: Texture2D = _effect_textures.get(ability_id, _effect_textures.get("basic_attack"))
+	if tex == null:
+		return
+	var pixel_pos: Vector2 = HexGrid.hex_to_pixel(hex, HEX_SIZE)
+	var fx := Sprite2D.new()
+	fx.texture        = tex
+	fx.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	fx.position       = pixel_pos + Vector2(0.0, -20.0)
+	fx.scale          = Vector2(0.5, 0.5)
+	fx.z_index        = 20
+	_entity_layer.add_child(fx)
+	var tw: Tween = create_tween()
+	tw.tween_property(fx, "scale", Vector2(1.6, 1.6), 0.42) \
+		.set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_BACK)
+	tw.parallel().tween_property(fx, "modulate:a", 0.0, 0.42) \
+		.set_ease(Tween.EASE_IN)
+	tw.tween_callback(fx.queue_free)
 
 ## ─── Idle Animation ───────────────────────────────────────────────────────────
 
@@ -403,7 +448,7 @@ func _spawn_entity_node(c: Combatant) -> void:
 		var sprite_scale: float = 0.95 if is_boss else 0.78
 		sprite.scale = Vector2(sprite_scale, sprite_scale)
 		sprite.position = Vector2(0.0, -24.0)
-		sprite.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS
+		sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 		root.add_child(sprite)
 
 		# Idle breathing bob (enemies bounce a bit faster than hero)
@@ -692,6 +737,7 @@ func _apply_lava_heat(c: Combatant) -> void:
 		return
 	var heat_dmg: int = 3 + (lava_adj - 1) * 3
 	var actual: int = _engine.apply_environment_damage(c, heat_dmg)
+	_play_ability_effect(c.position, "lava_heat")
 	_show_damage_number(c, actual, LAVA_HEAT_CLR)
 	_update_hp_bar(c)
 	if c.faction == Combatant.Faction.HERO:
@@ -776,6 +822,7 @@ func _do_hero_attack(target: Combatant) -> void:
 	var abl_data: Dictionary = Abilities.get_ability(_selected_ability)
 	_player_turn = false
 	_clear_highlights()
+	_play_ability_effect(target.position, _selected_ability)
 	_engine.perform_attack(_hero, target, _selected_ability)
 	match _selected_ability:
 		"backstab":    SystemVoice.speak("ability_backstab")
@@ -844,11 +891,13 @@ func _do_hero_aoe_ability(center_hex: Vector2i) -> void:
 
 	if _selected_ability == "frost_nova":
 		aoe_radius = 1
+		_play_ability_effect(_hero.position, "frost_nova")
 		# Apply frozen status to all enemies in range 1 of hero (not center_hex)
 		var frozen_count: int = 0
 		for e: Combatant in _enemies:
 			if e.is_alive() and HexGrid.is_in_range(_hero.position, e.position, 1):
 				e.apply_status(StatusEffect.frozen(2))
+				_play_ability_effect(e.position, "frost_nova")
 				frozen_count += 1
 		if frozen_count > 0:
 			SystemVoice.speak_direct(SystemVoice.pick("ability_frost_hit") % frozen_count)
@@ -857,6 +906,7 @@ func _do_hero_aoe_ability(center_hex: Vector2i) -> void:
 			SystemVoice.speak("ability_frost_miss")
 	else:
 		# Damage AOE (fireball etc.)
+		_play_ability_effect(center_hex, _selected_ability)
 		var disk_hexes: Array[Vector2i] = HexGrid.disk(center_hex, aoe_radius)
 		var targets: Array[Combatant] = []
 		for e: Combatant in _enemies:
@@ -897,10 +947,12 @@ func _do_hero_self_ability() -> void:
 			var dur: int = abl.get("fortified_duration", 3)
 			_hero.apply_status(StatusEffect.fortified(dur, armor_bonus))
 			SystemVoice.speak("ability_taunt")
+			_play_ability_effect(_hero.position, "taunt")
 			_flash_hex_area(_hero.position, 0, SELF_CLR)
 		"vanish":
 			_hero.apply_status(StatusEffect.vanished(3.0))
 			SystemVoice.speak("ability_vanish")
+			_play_ability_effect(_hero.position, "vanish")
 			# Visual: briefly dim hero node
 			var hnode: Node2D = _entity_nodes.get(_hero.id)
 			if hnode != null:
@@ -1030,7 +1082,10 @@ func _clear_highlights() -> void:
 
 ## ─── Engine Signal Handlers ───────────────────────────────────────────────────
 
-func _on_action_taken(attacker: Combatant, target: Combatant, damage: int, _ability_id: String) -> void:
+func _on_action_taken(attacker: Combatant, target: Combatant, damage: int, ability_id: String) -> void:
+	# Show hit effect at target for enemy attacks (hero attacks fire at the call site)
+	if attacker.faction == Combatant.Faction.ENEMY:
+		_play_ability_effect(target.position, ability_id)
 	_show_damage_number(target, damage)
 	_hit_flash(target)
 	_update_hp_bar(target)
