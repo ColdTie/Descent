@@ -97,10 +97,9 @@ func _build_ui() -> void:
 	stats.alignment = BoxContainer.ALIGNMENT_CENTER
 	vbox.add_child(stats)
 
+	_stat_card(stats, "★", "SCORE",    str(GameState.run_score()),  Color(1.00, 0.84, 0.16))
 	_stat_card(stats, "◆", "LEVEL",    str(GameState.hero_level),   Color(0.38, 0.60, 1.00))
-	_stat_card(stats, "❤", "HP",
-		"%d / %d" % [GameState.hero_hp, GameState.hero_max_hp],      Color(0.18, 0.90, 0.28))
-	_stat_card(stats, "✦", "TOTAL XP", str(GameState.hero_xp),      Color(0.30, 0.82, 0.42))
+	_stat_card(stats, "⚔", "KILLS",    str(GameState.total_kills),  Color(0.90, 0.34, 0.20))
 
 	# ── Button ────────────────────────────────────────────────────────────────
 	var btn_row := HBoxContainer.new()

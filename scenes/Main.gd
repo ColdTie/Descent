@@ -1,6 +1,7 @@
 extends Node
 ## Root scene — manages top-level scene transitions.
 
+const TITLE_SCENE := "res://scenes/TitleScreen.tscn"
 const CLASS_SELECT_SCENE := "res://scenes/ClassSelect.tscn"
 const BATTLE_SCENE := "res://scenes/BattleScene.tscn"
 const VICTORY_SCENE := "res://scenes/VictoryScreen.tscn"
@@ -17,7 +18,10 @@ func _ready() -> void:
 	GameState.run_started.connect(_on_run_started)
 	GameState.floor_changed.connect(_on_floor_changed)
 	GameState.hero_died.connect(_on_hero_died)
-	_go_to_class_select()
+	_go_to_title()
+
+func _go_to_title() -> void:
+	_load_scene(TITLE_SCENE)
 
 func _go_to_class_select() -> void:
 	_load_scene(CLASS_SELECT_SCENE)
@@ -57,6 +61,8 @@ func _load_scene(path: String) -> void:
 		_current_scene.upgrade_chosen.connect(_on_upgrade_chosen)
 	if _current_scene.has_signal("play_again"):
 		_current_scene.play_again.connect(_go_to_class_select)
+	if _current_scene.has_signal("start_game"):
+		_current_scene.start_game.connect(_go_to_class_select)
 
 func _on_battle_complete(hero_won: bool, xp_earned: int, enemies_killed: int) -> void:
 	if not hero_won:
@@ -64,9 +70,12 @@ func _on_battle_complete(hero_won: bool, xp_earned: int, enemies_killed: int) ->
 		GameState.hero_hp = 0
 		_go_to_class_select()
 		return
-	# Store data for VictoryScreen
+	# Store data for VictoryScreen + accumulate run stats
 	_pending_xp = xp_earned
 	_pending_kills = enemies_killed
+	GameState.total_kills += enemies_killed
+	if EnemyDefs.is_boss_floor(GameState.floor_num):
+		GameState.bosses_slain += 1
 	_load_scene(VICTORY_SCENE)
 
 func _on_floor_cleared() -> void:

@@ -99,6 +99,14 @@ const BOSSES: Array[Dictionary] = [
 	},
 ]
 
+## Bosses appear on milestone floors only (every 3rd: 3, 6, 9, 12, 15, 18).
+## Regular floors are normal enemy waves — this makes boss floors feel special
+## instead of every floor having a "boss" (the old behaviour).
+const BOSS_FLOOR_INTERVAL: int = 3
+
+static func is_boss_floor(floor_num: int) -> bool:
+	return floor_num > 0 and floor_num % BOSS_FLOOR_INTERVAL == 0
+
 static func get_boss_for_floor(floor_num: int) -> Dictionary:
 	for boss: Dictionary in BOSSES:
 		if floor_num >= boss["min_floor"] and floor_num <= boss["max_floor"]:

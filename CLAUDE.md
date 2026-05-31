@@ -20,7 +20,7 @@ DESCENT is a turn-based tactical dungeon crawler in the spirit of **Dungeon Craw
 ## Architecture Rules
 1. **Pure rules engine**: `BattleEngine`, `Combatant`, `HexGrid`, `DungeonMap`, `Abilities`, `Classes`, `EnemyDefs` — **zero Node dependency**, fully testable headlessly
 2. **Randomness**: All gameplay RNG routes through `GameRng` autoload. Pure logic functions accept explicit `rng: RandomNumberGenerator` parameter
-3. **Autoloads**: `GameRng`, `GameState`, `SystemVoice` — always available
+3. **Autoloads**: `GameRng`, `GameState`, `SystemVoice`, `AudioManager` — always available
 4. **Signals over direct calls** for cross-system communication
 
 ## Godot 4.4.1 API Gotchas (learned in Runs 1–3)
@@ -35,7 +35,7 @@ DESCENT is a turn-based tactical dungeon crawler in the spirit of **Dungeon Craw
 - **Architecture rule**: `BattleEngine._calculate_damage()` returns RAW damage (no armor). `Combatant.take_damage(amount, ignore_armor=false)` applies armor. Don't double-apply armor in both places.
 - `Combatant.take_damage(amount, ignore_armor)` — the `ignore_armor` parameter bypasses the `armor` field reduction (for backstab, env damage, etc.)
 
-## Current State (Run 15 — Boss Phase 2 + Enemy Ability Unlocks + Shadow Step)
+## Current State (Run 16 — Audio + Crits + Boss Floors + Title Screen)
 ### Implemented ✅
 **Run 1 (Bootstrap):**
 - `GameRng`, `GameState`, `SystemVoice` autoloads
@@ -199,6 +199,15 @@ DESCENT is a turn-based tactical dungeon crawler in the spirit of **Dungeon Craw
 - **`ClassSelect.gd`** — portrait filter changed to `LINEAR_WITH_MIPMAPS` to match
 - **`deploy.yml`** — installs `libcairo2` + `cairosvg`, runs `gen_sprites_v5.py`
 
+**Run 16 (Audio + Critical Hits + Boss Floors + Title Screen + Score):**
+- **Procedural audio system** — first sound in the game. `tools/gen_audio.py` synthesizes 16 short 16-bit WAV SFX using ONLY the Python stdlib (`wave`/`struct`/`math` — no Pillow/no deps): hit, crit, kill, hurt, move, select, ability, fire, frost, heal, enrage, levelup, victory, defeat, descend, lava. New autoload `AudioManager` (`autoloads/AudioManager.gd`) preloads them, plays through an 8-voice `AudioStreamPlayer` pool with optional pitch variation, and is **defensive** (missing file = silent no-op). Wired into combat (hit/crit/kill/hurt/lava/enrage/ability casts), movement, victory/defeat, and all UI screens (select/levelup/heal/descend). SFX on/off toggle on the title screen. `project.godot` autoload + `deploy.yml` run `gen_audio.py`.
+- **Critical hits** — hero-favouring combat depth. `BattleEngine` rolls `hero_crit_chance` (default 0.15) on hero/Donut damaging attacks; crits deal `CRIT_MULT` (2×) and set `last_attack_was_crit`. Enemies never crit (keeps it player-positive). `BattleScene._on_action_taken` reads the flag → gold enlarged "-N CRIT!" number, crit SFX, and a `critical_hit` System quip pool (7 lines).
+- **Bosses on milestone floors only** — `EnemyDefs.is_boss_floor(n)` returns true every 3rd floor (3/6/9/12/15/18 = 6 boss fights). Previously EVERY floor spawned a "boss", which diluted the concept. `BattleScene._build_encounter` only spawns the boss on boss floors; regular floors are pure enemy waves. Makes boss floors a real difficulty spike.
+- **Title / main menu screen** — `scenes/TitleScreen.tscn/.gd`. Branded "DESCENT" title with drop shadow + fade-in, tagline, how-to-play text, a System intro quip (`title` pool, 8 lines), BEGIN DESCENT → ClassSelect, and an SFX toggle. `Main` now boots here first (`_go_to_title`), wires the `start_game` signal.
+- **Run score + stats** — `GameState.total_kills`, `bosses_slain` (reset in `start_run`, accumulated in `Main._on_battle_complete`), and `run_score()` = floor×1000 + kills×25 + bosses×250 + level×100. Shown on WinScreen (SCORE/LEVEL/KILLS cards) and the death overlay summary line.
+- **Loot cleanup** — replaced the dead `recharge_all` item (did nothing across floors since abilities reset each battle) with **Warlord's Brand** (`multi` type: +6 Attack & +15 Max HP). New `multi` loot type handler + color.
+- **24 new headless tests** — `tests/test_run16.gd` (crits ×5, boss floors ×3, score formula ×2 — autoload-free per the test-mode rule).
+
 **Run 15 (Boss Phase 2 + Enemy Ability Unlocks + Shadow Step):**
 - **Boss Phase 2 (enrage)** — Each boss enters an enraged state when HP drops below 30%: speed +4, attack_bonus +4. `Combatant.is_boss` and `Combatant.is_enraged` flags added. `BattleEngine._check_boss_enrage()` fires after every hit; emits `boss_enraged` signal. `BattleScene._on_boss_enraged()` switches the boss glow ring from void-purple to crimson-orange (kills old tween, starts new rage pulse), changes HP bar to enrage color, shows banner with System quip. `SystemVoice` has new `boss_enraged` pool (8 lines).
 - **Skeleton Bone Volley (floor 10+)** — Skeletons on floors 10+ automatically gain `bone_volley` (ranged, 20 dmg, range 3, 2-charge). `EnemyDefs.make_combatant` conditionally appends the ability by enemy ID + floor. Skeleton AI in `BattleEngine.enemy_ai_action` now matches on `sprite_key == "skeleton"` and uses Bone Volley from range instead of closing to melee.
@@ -220,13 +229,57 @@ DESCENT is a turn-based tactical dungeon crawler in the spirit of **Dungeon Craw
 - **`BattleEngine.move_toward()`** — Public wrapper around `_move_toward()` for companion AI use.
 - **SystemVoice** — New line when Donut is knocked out.
 
-### Next Priorities (Run 16+)
-1. **Sounds** — Even a minimal audio pass: hit, kill, move, ability sounds (use Godot's AudioStreamGenerator or import simple .ogg files).
-2. **More floor variety** — Unique map features per tier: Tier 1 crumbling bridges (impassable walls shift), Tier 2 arcane pools (freeze-on-entry), Tier 3 void rifts (warp random enemies each turn).
-3. **Arcanist class-specific unlock** — Arcanist currently inherits Backstab/Taunt from cross-class. Add an Arcanist-exclusive ability (e.g. Time Warp — skip 2 enemy turns but cost 50 HP, or Mana Shield — absorb 40 damage next hit).
-4. **Loot system depth** — Add item tiers by floor (Common / Rare / Legendary), give Legendary items a dramatic System quip and screen flash. Add a few equipment-style items (e.g. "Ring of Spite: +3 damage for each alive enemy").
-5. **Enemy variety late-game** — Add 2–3 new enemy types for Tier 2/3 (e.g. Void Wraith that can pass through walls; Bone Colossus with extreme HP but slow; Lich that resurrects fallen skeletons).
-6. **Boss special moves** — Give each boss a unique triggered ability (Dungeon Lord: rallies one dead enemy; Warden: ground-slam that knocks back all adjacent; Abyss Keeper: void pull that drags hero toward it).
+## Genre Gap Analysis & Direction (audited Run 16)
+Compared against tactical roguelike / DCC-style peers (Slay the Spire, Into the Breach,
+FTL, traditional roguelikes). Status of the "what are we missing" audit:
+
+### ✅ Done / no longer a gap
+- Audio (SFX) — Run 16
+- Critical hits — Run 16
+- Bosses as milestone spikes (not every floor) — Run 16
+- Title/main menu screen — Run 16
+- Run score + end-of-run summary — Run 16
+- Companion (Donut) — Run 14
+- Boss phase 2 / enrage — Run 15
+- Floor-scaled enemy abilities — Run 15
+- Class-specific unlockable abilities (mostly) — Runs 12/15
+
+### 🔜 Highest-value, easiest remaining (do next, roughly in order)
+1. **Background music / ambient loop** — SFX exist now; a low droning ambient loop per
+   tier would massively lift atmosphere. Can be procedurally generated (longer WAV, looped
+   AudioStreamPlayer with `loop`). Medium effort; AudioManager already exists to host it.
+2. **Gold economy + between-floor shop** — `GameState.hero_gold` exists but is never earned
+   or spent. Award gold per kill, add a simple Shop screen between floors (buy heals, stat
+   boosts, ability recharges, reroll loot). Big DCC flavour ("the dungeon's storefront").
+3. **Pause / settings menu (in-battle)** — No way to pause, restart, quit, or change volume
+   mid-run. Add an ESC overlay: Resume / Restart Run / Quit to Title + SFX volume slider.
+4. **Arcanist class-specific unlock** — Arcanist still inherits Backstab/Taunt cross-class.
+   Give it an exclusive (e.g. Mana Shield: absorb next 40 dmg; or Chain Lightning).
+5. **Combat log panel** — Only transient System banners exist. A small scrolling log of the
+   last ~6 events helps readability. Pure-UI, low risk.
+6. **Loot rarity tiers** — Common/Rare/Legendary with color + a Legendary screen flash and
+   special quip. Extends the existing LootScreen with minimal new code.
+
+### 🟡 Larger / later (note, not yet scoped)
+7. **More floor variety** — Per-tier hazards: Tier 1 crumbling bridges, Tier 2 freeze pools,
+   Tier 3 void rifts that warp enemies. Needs DungeonMap + BattleScene tile-type support.
+8. **More enemy types for Tier 2/3** — Void Wraith (phases through walls), Bone Colossus
+   (huge HP, slow), Lich (resurrects skeletons).
+9. **Boss signature moves** — Dungeon Lord rallies a dead enemy; Warden ground-slam knockback;
+   Abyss Keeper void-pull. Per-boss scripted ability in enemy AI.
+10. **Meta-progression / unlocks** — Persistent currency between runs, unlockable classes or
+    starting perks. Requires save persistence (web: `user://` works in Godot web export).
+11. **Save / resume a run** — Serialize GameState to `user://` so a run survives a refresh.
+12. **Status-effect depth** — Bleed, stun, vulnerability; show stacks/durations on a tooltip.
+13. **Accessibility/options** — Screen shake toggle, colorblind-friendly hex highlights,
+    text size. Cheap goodwill once a settings menu exists (#3).
+
+### Long-term vision
+DESCENT should feel like a **tight, replayable tactical roguelike** wearing a Dungeon Crawler
+Carl skin: every floor is a bite-sized hex puzzle, the System narrates your hubris, bosses are
+set-piece spikes, and loot/level-up choices build a run. The next phase is **economy + audio
+atmosphere + run meta** (shop, music, persistence) to turn a good combat prototype into a
+loop players return to.
 
 ## File Map
 ```
@@ -235,10 +288,15 @@ assets/
                  SVG source files also live here (*.svg) — edit SVGs to update art
   portraits/   — 200×220 PNG class portraits for ClassSelect (generated by gen_sprites_v5.py from hero SVGs)
 
+assets/
+  audio/       — 16 procedurally-generated WAV SFX (from tools/gen_audio.py, stdlib only)
+  effects/     — 64×64 ability VFX PNGs (from tools/gen_effects.py)
+
 autoloads/
   GameRng.gd         — seeded RNG singleton
-  GameState.gd       — run-persistent hero state
+  GameState.gd       — run-persistent hero state (+run_score, total_kills, bosses_slain)
   SystemVoice.gd     — The System commentary pools + signal
+  AudioManager.gd    — SFX player: preloads WAV pool, play(name, pitch_var, vol_db), SFX toggle
 
 src/combat/
   Combatant.gd       — pure fighter data class (+take_damage ignore_armor param)
@@ -256,7 +314,8 @@ src/data/
   EnemyDefs.gd       — enemy definitions + Combatant factory (+floor_num scaling param)
 
 scenes/
-  Main.tscn/.gd      — root, scene orchestration; now routes through VictoryScreen
+  Main.tscn/.gd      — root, scene orchestration; boots to TitleScreen, routes through VictoryScreen
+  TitleScreen.tscn/.gd  — main menu: branding, how-to-play, SFX toggle, BEGIN DESCENT
   ClassSelect.tscn/.gd  — class picker front end
   BattleScene.tscn/.gd  — hex battle visual driver (Run 3: charges HUD, lava heat, class glyphs)
   VictoryScreen.tscn/.gd — NEW: post-battle floor clear screen (Run 3)
@@ -270,6 +329,8 @@ tests/
   test_combat.gd     — Combatant + BattleEngine tests
   test_movement.gd   — movement, ability effects, AI variants, attack_bonus (Run 2)
   test_run3.gd       — ability charges, backstab armor, collision, floor scaling, env damage (Run 3)
+  test_run15.gd      — boss enrage, enemy ability unlocks, shadow step (Run 15)
+  test_run16.gd      — critical hits, boss-floor milestones, score formula (Run 16)
 ```
 
 ## Running Tests

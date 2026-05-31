@@ -174,6 +174,7 @@ func _try_load_tex(primary: String, fallback: String) -> Texture2D:
 
 func _on_class_selected(class_id: String, panel: PanelContainer) -> void:
 	_selected_class = class_id
+	AudioManager.play("select")
 	# Dim all cards then brighten the chosen one
 	for child: Node in _class_cards.get_children():
 		child.modulate = Color(0.45, 0.45, 0.45)
@@ -191,4 +192,5 @@ func _on_class_selected(class_id: String, panel: PanelContainer) -> void:
 func _on_start_pressed() -> void:
 	if _selected_class.is_empty():
 		return
+	AudioManager.play("descend")
 	GameState.start_run(_selected_class)

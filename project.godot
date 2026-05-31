@@ -20,6 +20,7 @@ config/features=PackedStringArray("4.4", "GL Compatibility")
 GameRng="*res://autoloads/GameRng.gd"
 GameState="*res://autoloads/GameState.gd"
 SystemVoice="*res://autoloads/SystemVoice.gd"
+AudioManager="*res://autoloads/AudioManager.gd"
 
 [display]
 

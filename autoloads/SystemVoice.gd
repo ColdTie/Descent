@@ -8,6 +8,18 @@ signal line_spoken(text: String, duration: float)
 
 const LINES: Dictionary = {
 
+	# ── Title / main menu ──────────────────────────────────────────────────────
+	"title": [
+		"Welcome, Hero. The dungeon has been expecting you. It is rarely disappointed.",
+		"Eighteen floors. One of you. The math has been run. You won't like the result.",
+		"A new contestant. The audience is already placing bets. None of them on you.",
+		"Press the button, Hero. The dungeon is bored. Entertain it. Briefly.",
+		"You volunteered for this. The System has the paperwork. Let's begin.",
+		"Another descent begins. The dungeon files your name under 'optimistic.'",
+		"The crowd wants blood. Usually yours. Try to surprise them.",
+		"Ready when you are. The dungeon, regrettably, is always ready.",
+	],
+
 	# ── Combat: hitting an enemy ───────────────────────────────────────────────
 	"hit": [
 		"Hit confirmed. The dungeon takes note.",
@@ -44,6 +56,17 @@ const LINES: Dictionary = {
 		"That creature will no longer be a problem. A replacement is being sourced.",
 		"Kill recorded. The dungeon is annoyed. You should find this encouraging.",
 		"Eliminated. One less. Many more to go. The math is not in your favor.",
+	],
+
+	# ── Combat: critical hit ──────────────────────────────────────────────────
+	"critical_hit": [
+		"Critical hit. The dungeon flinches. Statistically, that shouldn't happen. It did.",
+		"Critical strike. Double damage. The System logs this with rare approval.",
+		"A precise, devastating blow. The enemy's anatomy disagreed with the outcome.",
+		"Critical. That one hurt it considerably more than usual. Do it again.",
+		"Maximum impact. The dungeon recalculates. The number is not in its favor.",
+		"Critical hit confirmed. Brutal. Efficient. The System almost smiles.",
+		"That landed perfectly. The enemy is now significantly more dead than expected.",
 	],
 
 	# ── Combat: first kill of an encounter ────────────────────────────────────

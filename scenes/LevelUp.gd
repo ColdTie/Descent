@@ -45,6 +45,7 @@ func _ready() -> void:
 	_subtitle_label.text = "Choose an upgrade, Hero. The dungeon waits."
 	_continue_button.visible = false
 	_continue_button.pressed.connect(_on_continue)
+	AudioManager.play("levelup")
 	SystemVoice.speak("level_up")
 	SystemVoice.line_spoken.connect(func(text: String, _d: float) -> void:
 		_system_label.text = text)

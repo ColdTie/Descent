@@ -21,6 +21,12 @@ var total_xp: int = 0
 
 var rng: RandomNumberGenerator
 
+# Critical hits — hero-favouring. Heroes (and Donut) have a chance to deal
+# CRIT_MULT× damage. Enemies never crit (keeps the roguelike feel player-positive).
+const CRIT_MULT: float = 2.0
+var hero_crit_chance: float = 0.15
+var last_attack_was_crit: bool = false
+
 func _init(p_rng: RandomNumberGenerator = null) -> void:
 	if p_rng == null:
 		rng = RandomNumberGenerator.new()
@@ -88,6 +94,12 @@ func perform_attack(attacker: Combatant, target: Combatant, ability_id: String =
 	## Returns damage dealt. Emits action_taken.
 	var dmg: int = _calculate_damage(attacker, target, ability_id)
 	var ability_data: Dictionary = Abilities.get_ability(ability_id)
+	# Critical hit roll — only for hero-side damaging attacks
+	last_attack_was_crit = false
+	if attacker.faction == Combatant.Faction.HERO and ability_data.get("base_damage", 0) > 0:
+		if rng.randf() < hero_crit_chance:
+			last_attack_was_crit = true
+			dmg = int(float(dmg) * CRIT_MULT)
 	var ignore_armor: bool = ability_data.get("ignore_armor", false)
 	var actual: int = target.take_damage(dmg, ignore_armor)
 	action_taken.emit(attacker, target, actual, ability_id)

@@ -16,6 +16,10 @@ var hero_gold: int = 0
 var hero_abilities: Array[String] = []
 var hero_base_stats: Dictionary = {}
 
+# Run statistics — for end-of-run score and summary screens
+var total_kills: int = 0
+var bosses_slain: int = 0
+
 const XP_PER_LEVEL: int = 100
 const TOTAL_FLOORS: int = 18
 
@@ -29,6 +33,8 @@ func start_run(class_id: String, seed_val: int = -1) -> void:
 	hero_xp = 0
 	hero_level = 1
 	hero_gold = 0
+	total_kills = 0
+	bosses_slain = 0
 	var cls_data: Dictionary = Classes.get_class_data(class_id)
 	hero_max_hp = cls_data.get("hp", 100)
 	hero_hp = hero_max_hp
@@ -64,3 +70,8 @@ func regen_between_floors() -> int:
 	var old_hp: int = hero_hp
 	hero_hp = min(hero_max_hp, hero_hp + regen)
 	return hero_hp - old_hp
+
+func run_score() -> int:
+	## Composite end-of-run score: depth dominates, with bonuses for kills,
+	## bosses, and level. Used on the win / death summary screens.
+	return floor_num * 1000 + total_kills * 25 + bosses_slain * 250 + hero_level * 100

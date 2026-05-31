@@ -154,14 +154,16 @@ func _build_encounter() -> void:
 		_hero_ability_objs[ability_id] = abl_obj
 
 	_enemies.clear()
-	# Spawn boss at dedicated boss spawn point
-	var boss: Combatant = EnemyDefs.make_boss(GameState.floor_num, _map.boss_spawn, _battle_rng)
-	_enemies.append(boss)
+	# Bosses only appear on milestone floors (every 3rd). Regular floors are waves.
+	var has_boss: bool = EnemyDefs.is_boss_floor(GameState.floor_num)
+	if has_boss:
+		var boss: Combatant = EnemyDefs.make_boss(GameState.floor_num, _map.boss_spawn, _battle_rng)
+		_enemies.append(boss)
 
 	var pool: Array[Dictionary] = EnemyDefs.get_enemies_for_floor(GameState.floor_num)
 	for i: int in range(_map.spawn_points.size()):
-		# Skip the boss_spawn if a regular enemy would land on it
-		if _map.spawn_points[i] == _map.boss_spawn:
+		# On boss floors, keep the boss_spawn hex clear for the boss
+		if has_boss and _map.spawn_points[i] == _map.boss_spawn:
 			continue
 		var def: Dictionary = pool[_battle_rng.randi_range(0, pool.size() - 1)]
 		# Pass floor_num for scaling
@@ -929,6 +931,7 @@ func _apply_lava_heat(c: Combatant) -> void:
 		return
 	var heat_dmg: int = 3 + (lava_adj - 1) * 3
 	var actual: int = _engine.apply_environment_damage(c, heat_dmg)
+	AudioManager.play("lava", 0.1)
 	_play_ability_effect(c.position, "lava_heat")
 	_show_damage_number(c, actual, LAVA_HEAT_CLR)
 	_update_hp_bar(c)
@@ -997,6 +1000,7 @@ func _is_valid_move_hex(hex: Vector2i) -> bool:
 func _do_hero_move(hex: Vector2i) -> void:
 	_player_turn = false
 	_clear_highlights()
+	AudioManager.play("move", 0.12)
 	_engine.move_combatant(_hero, hex)
 	# Visual movement handled by _on_hero_moved signal
 	SystemVoice.speak("move")
@@ -1040,6 +1044,7 @@ func _do_hero_attack(target: Combatant) -> void:
 		var from_hex: Vector2i = _hero.position
 		var dest: Vector2i = _find_teleport_hex_near(target)
 		if dest != from_hex:
+			AudioManager.play("ability")
 			_play_ability_effect(from_hex, "shadow_step")
 			_hero.position = dest
 			var hero_node: Node2D = _entity_nodes.get(_hero.id)
@@ -1122,6 +1127,7 @@ func _do_hero_aoe_ability(center_hex: Vector2i) -> void:
 
 	if _selected_ability == "frost_nova":
 		aoe_radius = 1
+		AudioManager.play("frost")
 		_play_ability_effect(_hero.position, "frost_nova")
 		# Apply frozen status to all enemies in range 1 of hero (not center_hex)
 		var frozen_count: int = 0
@@ -1137,6 +1143,7 @@ func _do_hero_aoe_ability(center_hex: Vector2i) -> void:
 			SystemVoice.speak("ability_frost_miss")
 	else:
 		# Damage AOE (fireball etc.)
+		AudioManager.play("fire")
 		_play_ability_effect(center_hex, _selected_ability)
 		var disk_hexes: Array[Vector2i] = HexGrid.disk(center_hex, aoe_radius)
 		var targets: Array[Combatant] = []
@@ -1243,6 +1250,7 @@ func _on_ability_btn(ability_id: String) -> void:
 	if _selected_ability == ability_id and _player_turn and abl.get("target", "single_enemy") == "self":
 		_do_hero_self_ability()
 		return
+	AudioManager.play("select")
 	_selected_ability = ability_id
 	_refresh_ability_bar()
 	if _player_turn:
@@ -1317,7 +1325,22 @@ func _on_action_taken(attacker: Combatant, target: Combatant, damage: int, abili
 	# Show hit effect at target for enemy attacks (hero attacks fire at the call site)
 	if attacker.faction == Combatant.Faction.ENEMY:
 		_play_ability_effect(target.position, ability_id)
-	_show_damage_number(target, damage)
+
+	var was_crit: bool = _engine.last_attack_was_crit and attacker.faction == Combatant.Faction.HERO
+	if was_crit:
+		# Gold, larger damage number + extra flash + quip for critical hits
+		_show_damage_number(target, damage, Color(1.0, 0.85, 0.1), true)
+		AudioManager.play("crit", 0.05)
+		if _battle_rng.randf() < 0.5:
+			SystemVoice.speak("critical_hit")
+	else:
+		_show_damage_number(target, damage)
+		# Audio: hero hits vs hero gets hurt
+		if target.faction == Combatant.Faction.HERO:
+			AudioManager.play("hurt", 0.06)
+		else:
+			AudioManager.play("hit", 0.08)
+
 	_hit_flash(target)
 	_update_hp_bar(target)
 	_update_status_label(target)
@@ -1330,6 +1353,7 @@ func _on_action_taken(attacker: Combatant, target: Combatant, damage: int, abili
 func _on_combatant_died(c: Combatant) -> void:
 	if c.faction == Combatant.Faction.ENEMY:
 		_enemies_killed += 1
+		AudioManager.play("kill", 0.1)
 		if not _first_kill_done:
 			_first_kill_done = true
 			SystemVoice.speak("first_kill")
@@ -1398,6 +1422,7 @@ func _on_boss_enraged(boss: Combatant) -> void:
 			_boss_glow_tween.tween_property(glow, "color",
 				Color(0.9, 0.08, 0.04, 0.35), 0.8) \
 				.set_ease(Tween.EASE_IN_OUT).set_trans(Tween.TRANS_SINE)
+	AudioManager.play("enrage")
 	_hit_flash(boss)
 	_update_boss_hp_bar()
 	var quip: String = SystemVoice.pick("boss_enraged")
@@ -1409,6 +1434,7 @@ func _on_battle_ended(hero_won: bool, xp_earned: int) -> void:
 	if hero_won:
 		_turn_indicator.text = "VICTORY!"
 		_turn_indicator.add_theme_color_override("font_color", Color(1.0, 0.85, 0.1))
+		AudioManager.play("victory")
 		SystemVoice.speak_direct("All threats eliminated. XP: %d." % xp_earned)
 		# Brief pause then emit battle_complete (routes to VictoryScreen)
 		await get_tree().create_timer(1.2).timeout
@@ -1416,6 +1442,7 @@ func _on_battle_ended(hero_won: bool, xp_earned: int) -> void:
 	else:
 		_turn_indicator.text = "DEFEATED"
 		_turn_indicator.add_theme_color_override("font_color", Color(0.9, 0.1, 0.1))
+		AudioManager.play("defeat")
 		SystemVoice.speak("death")
 		# Death overlay shown by _on_combatant_died when hero dies
 
@@ -1476,8 +1503,9 @@ func _show_death_overlay() -> void:
 	stats_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	stats_lbl.add_theme_font_size_override("font_size", 15)
 	stats_lbl.add_theme_color_override("font_color", Color(0.58, 0.58, 0.58))
-	stats_lbl.text = "Floor %d  ·  %d enemies slain  ·  Level %d" % [
-		GameState.floor_num, _enemies_killed, GameState.hero_level
+	stats_lbl.text = "Floor %d  ·  %d enemies slain  ·  Level %d  ·  Score %d" % [
+		GameState.floor_num, GameState.total_kills + _enemies_killed,
+		GameState.hero_level, GameState.run_score()
 	]
 	cl.add_child(stats_lbl)
 
@@ -1580,18 +1608,24 @@ func _hit_flash(c: Combatant) -> void:
 	tw2.tween_property(node, "scale", Vector2(1.10, 0.88), 0.06)
 	tw2.tween_property(node, "scale", Vector2(1.0,  1.0),  0.12)
 
-func _show_damage_number(c: Combatant, damage: int, color: Color = Color(1.0, 0.25, 0.1)) -> void:
+func _show_damage_number(c: Combatant, damage: int, color: Color = Color(1.0, 0.25, 0.1),
+		is_crit: bool = false) -> void:
 	var node: Node2D = _entity_nodes.get(c.id)
 	if node == null:
 		return
 	var lbl := Label.new()
-	lbl.text = "-%d" % damage
-	lbl.add_theme_font_size_override("font_size", 22)
+	if is_crit:
+		lbl.text = "-%d CRIT!" % damage
+		lbl.add_theme_font_size_override("font_size", 30)
+	else:
+		lbl.text = "-%d" % damage
+		lbl.add_theme_font_size_override("font_size", 22)
 	lbl.add_theme_color_override("font_color", color)
 	lbl.position = node.position + Vector2(-14.0, -26.0)
 	_entity_layer.add_child(lbl)
+	var rise: float = -64.0 if is_crit else -52.0
 	var tw: Tween = create_tween()
-	tw.tween_property(lbl, "position", lbl.position + Vector2(0.0, -52.0), 0.9)
+	tw.tween_property(lbl, "position", lbl.position + Vector2(0.0, rise), 0.9)
 	tw.parallel().tween_property(lbl, "modulate:a", 0.0, 0.9)
 	tw.tween_callback(lbl.queue_free)
 

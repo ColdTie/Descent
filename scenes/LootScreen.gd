@@ -20,9 +20,10 @@ const LOOT_POOL: Array[Dictionary] = [
 	{"id": "hp_boost",   "type": "stat",   "icon": "❤",  "stat": "max_hp",  "value": 25,
 	 "name": "Heart of Stone",
 	 "desc": "+25 Max HP. The dungeon grows a piece of you."},
-	{"id": "recharge_all","type":"recharge","icon": "⟳",
-	 "name": "Chrono Shard",
-	 "desc": "Recharge all abilities right now. Use them wisely."},
+	{"id": "warlords_brand","type":"multi","icon": "⚜",
+	 "attack": 6, "max_hp": 15,
+	 "name": "Warlord's Brand",
+	 "desc": "+6 Attack and +15 Max HP. The dungeon brands its survivors."},
 	{"id": "floor_skip", "type": "skip",   "icon": "⬆",
 	 "name": "Teleport Shard",
 	 "desc": "Skip the next floor entirely. Cowardly but effective."},
@@ -35,7 +36,7 @@ const LOOT_POOL: Array[Dictionary] = [
 const TYPE_COLORS: Dictionary = {
 	"heal":    Color(0.18, 0.88, 0.28),
 	"stat":    Color(0.92, 0.76, 0.10),
-	"recharge":Color(0.38, 0.62, 1.00),
+	"multi":   Color(0.95, 0.55, 0.12),
 	"skip":    Color(0.62, 0.32, 0.92),
 }
 
@@ -124,6 +125,7 @@ func _make_loot_card(item: Dictionary) -> PanelContainer:
 func _on_loot_selected(loot_id: String, item: Dictionary,
 		panel: PanelContainer, ps: StyleBoxFlat) -> void:
 	_chosen = loot_id
+	AudioManager.play("heal" if item.get("type", "") == "heal" else "select")
 	_apply_loot(item)
 	for child: Node in _loot_cards.get_children():
 		child.modulate = Color(0.42, 0.42, 0.42)
@@ -156,8 +158,13 @@ func _apply_loot(item: Dictionary) -> void:
 					GameState.hero_base_stats["speed"] = \
 						GameState.hero_base_stats.get("speed", 10) + val
 			SystemVoice.speak_direct("Stat upgraded. You remain, somehow, alive.")
-		"recharge":
-			SystemVoice.speak_direct("All abilities recharged. Don't waste them.")
+		"multi":
+			GameState.hero_base_stats["attack"] = \
+				GameState.hero_base_stats.get("attack", 0) + item.get("attack", 0)
+			var hp_gain: int = item.get("max_hp", 0)
+			GameState.hero_max_hp += hp_gain
+			GameState.hero_hp = min(GameState.hero_hp + hp_gain, GameState.hero_max_hp)
+			SystemVoice.speak_direct("Branded. Stronger and harder to kill. The dungeon notices.")
 		"skip":
 			GameState.floor_num += 1
 			SystemVoice.speak_direct("Skipped a floor. The System judges you silently.")
