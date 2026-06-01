@@ -35,7 +35,7 @@ DESCENT is a turn-based tactical dungeon crawler in the spirit of **Dungeon Craw
 - **Architecture rule**: `BattleEngine._calculate_damage()` returns RAW damage (no armor). `Combatant.take_damage(amount, ignore_armor=false)` applies armor. Don't double-apply armor in both places.
 - `Combatant.take_damage(amount, ignore_armor)` — the `ignore_armor` parameter bypasses the `armor` field reduction (for backstab, env damage, etc.)
 
-## Current State (Run 17 — Donut Hologram + Button Fix)
+## Current State (Run 18 — Floor-3 Allies)
 ### Implemented ✅
 **Run 1 (Bootstrap):**
 - `GameRng`, `GameState`, `SystemVoice` autoloads
@@ -199,6 +199,25 @@ DESCENT is a turn-based tactical dungeon crawler in the spirit of **Dungeon Craw
 - **`ClassSelect.gd`** — portrait filter changed to `LINEAR_WITH_MIPMAPS` to match
 - **`deploy.yml`** — installs `libcairo2` + `cairosvg`, runs `gen_sprites_v5.py`
 
+**Run 18 (Floor-3 Allies — Marcus + Lina):**
+- **Two AI-controlled allies join Carl on Floor 3** (the first boss floor, vs. the Dungeon Lord). Survivors he encounters before the first boss fight; they fight one battle and don't persist past it.
+  - **Marcus the Steadfast** — knight: 70 HP, 3 armor, speed 11, attack +4. Tankier melee.
+  - **Lina Hexweaver** — hooded mage: 55 HP, 0 armor, speed 13, attack +6. Glassy hitter.
+- **`src/data/Allies.gd`** — pure data class with `ALLIES_BY_FLOOR` dict, `get_allies_for_floor(floor_num)`, `has_allies_on_floor(floor_num)`, and `make_ally(def, position, rng)` factory returning a HERO-faction `Combatant`.
+- **`tools/gen_allies.py`** — generates 192×192 PNGs `assets/sprites/ally_marcus.png` (knight with kite shield + sword + blue cloak + gold cross emblem) and `assets/sprites/ally_lina.png` (hooded mage with glowing arcane staff + hex amulet). Pillow only; matches existing sprite pipeline.
+- **`BattleScene.gd`** changes:
+  - `_build_encounter()` spawns ally Combatants via `Allies.make_ally()`. `_find_ally_spawn_hexes(count)` picks passable, unoccupied hexes in ring 1 around `_map.hero_start` (falls back to ring 2).
+  - `_get_sprite_path()` routes `sprite_key.begins_with("ally_")` to the ally PNG.
+  - `_spawn_entity_node()` gives allies a custom glow color from `Allies.ALLIES_BY_FLOOR` (gold for Marcus, teal for Lina) and a short first-name tag above their HP bar.
+  - `_next_turn()` adds a new branch: if `active == _hero` → player turn (Carl); else if `active.faction == HERO` → ally AI turn calling `_resolve_ally_turn(ally)`.
+  - `_resolve_ally_turn(ally)` — moves toward the nearest living enemy via `_engine.move_toward()` and basic-attacks if adjacent.
+  - `_on_combatant_died()` now special-cases on `c == _hero` (not just HERO faction) so an ally falling does NOT end the run. Ally-fell branch greys out the entity, plays a System banner + Donut quip pool.
+  - `_build_ally_panel()` builds one HP label per ally stacked under the hero HP label (top-left), updated in `_update_all_hp_bars()` and from `_on_action_taken()` when an ally is the target.
+  - `_on_hero_moved()` now uses the moved combatant's id (was hardcoded `_hero.id`) so any HERO-faction move animates.
+- **SystemVoice additions** — `allies_arrive` (6 lines) and `ally_fell` (5 lines) pools. Triggered: arrival on floor entry (1.2s delay), fall on ally death.
+- **Donut `DONUT_LINES`** — adds `allies_arrive` (6 cat-princess quips about Carl having "friends") and `ally_fell` (5 mournful lines).
+- **9 new headless tests** in `tests/test_run17_allies.gd`: floor 3 spawns two allies; floors 1/2/4/6/9/18 spawn zero; Marcus and Lina stats; sprite-key uniqueness; engine invariant that ally death alone doesn't trigger battle end.
+
 **Run 17 (Donut Hologram + Button Click Fix):**
 - **Ability button fix** — Vignette `ColorRect` nodes in `_draw_cave_background()` were missing `mouse_filter = MOUSE_FILTER_IGNORE`. The bottom vignette (y=640–720) covered most of the HUD panel (y=628–720), eating all mouse input. Result: basic attack, power strike, and taunt were only clickable in the top ~12px. Fix: `cr.mouse_filter = Control.MOUSE_FILTER_IGNORE` on all four vignette rects.
 - **Donut hologram advisor** — Donut is no longer a combat `Combatant` on the hex grid. She appears as a holographic projection in the bottom-left corner (x=8, y=476, 162×148px) with a teal scanline overlay and border-flicker tween. Speech bubbles fade in/out above the hologram panel. She speaks up at: floor entry, enemy kills (~42% chance), boss encounter, hero takes damage (~28% chance), hero near death (~45% chance), ability uses (~22% chance), victory, and hero death. All hologram elements have `mouse_filter=IGNORE` to avoid blocking hex grid clicks. `DONUT_LINES` constant in `BattleScene.gd` holds 8 categories of snarky cat-princess lines.
@@ -234,7 +253,7 @@ DESCENT is a turn-based tactical dungeon crawler in the spirit of **Dungeon Craw
 - **`BattleEngine.move_toward()`** — Public wrapper around `_move_toward()` for companion AI use.
 - **SystemVoice** — New line when Donut is knocked out.
 
-## Genre Gap Analysis & Direction (audited Run 16)
+## Genre Gap Analysis & Direction (audited Run 16, updated Run 18)
 Compared against tactical roguelike / DCC-style peers (Slay the Spire, Into the Breach,
 FTL, traditional roguelikes). Status of the "what are we missing" audit:
 
@@ -248,6 +267,7 @@ FTL, traditional roguelikes). Status of the "what are we missing" audit:
 - Boss phase 2 / enrage — Run 15
 - Floor-scaled enemy abilities — Run 15
 - Class-specific unlockable abilities (mostly) — Runs 12/15
+- Floor-scripted ally NPCs (Marcus + Lina on floor 3) — Run 18
 
 ### 🔜 Highest-value, easiest remaining (do next, roughly in order)
 1. **Background music / ambient loop** — SFX exist now; a low droning ambient loop per
@@ -317,6 +337,7 @@ src/data/
   Classes.gd         — class definitions (Brawler/Rogue/Arcanist)
   Abilities.gd       — all ability definitions (+ignore_armor flag on backstab)
   EnemyDefs.gd       — enemy definitions + Combatant factory (+floor_num scaling param)
+  Allies.gd          — floor-scripted ally NPCs + Combatant factory (Run 18)
 
 scenes/
   Main.tscn/.gd      — root, scene orchestration; boots to TitleScreen, routes through VictoryScreen
@@ -336,6 +357,7 @@ tests/
   test_run3.gd       — ability charges, backstab armor, collision, floor scaling, env damage (Run 3)
   test_run15.gd      — boss enrage, enemy ability unlocks, shadow step (Run 15)
   test_run16.gd      — critical hits, boss-floor milestones, score formula (Run 16)
+  test_run17_allies.gd — floor-3 ally spawn, factory, engine integration (Run 18)
 ```
 
 ## Running Tests

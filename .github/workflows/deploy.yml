@@ -41,6 +41,7 @@ jobs:
           python3 tools/gen_sprites_v6.py
           python3 tools/gen_effects.py
           python3 tools/gen_donut.py
+          python3 tools/gen_allies.py
           python3 tools/gen_audio.py
 
       - name: Import project assets

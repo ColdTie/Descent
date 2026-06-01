@@ -431,6 +431,25 @@ const LINES: Dictionary = {
 		"The demon is using Hellfire. The dungeon considers this a personal touch.",
 	],
 
+	# ── Allies join the encounter ─────────────────────────────────────────────
+	"allies_arrive": [
+		"Unexpected support detected. Two combatants. Friendly. Allegedly.",
+		"Survivors. Real ones. The dungeon did not budget for this. It is recalculating.",
+		"Allied units present. The System notes this with mild confusion. Carry on.",
+		"Two additional heroes have entered the encounter. The dungeon's spreadsheet protests.",
+		"Reinforcements identified. The System recommends not getting them killed. Immediately.",
+		"Backup acquired. The dungeon is offended. You should be encouraged.",
+	],
+
+	# ── Ally falls in battle ──────────────────────────────────────────────────
+	"ally_fell": [
+		"Allied unit down. The dungeon recovers a hex of operating room.",
+		"Combatant lost. They held the line longer than statistics suggested.",
+		"One ally fallen. The other one is still here. Probably. Check.",
+		"Friendly down. The encounter recalculates. Adjust your formation.",
+		"Loss recorded. The System notes this with something almost like regret.",
+	],
+
 	# ── Win screen (cleared all 18 floors) ────────────────────────────────────
 	"win": [
 		"Floor 18 cleared. The System is surprised. Don't let it go to your head.",

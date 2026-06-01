@@ -83,6 +83,21 @@ const DONUT_LINES: Dictionary = {
 		"Yeeees! Like THAT!",
 		"Go go go go go!",
 	],
+	"allies_arrive": [
+		"Oh! Look, Carl, you have FRIENDS. Don't ruin this for me.",
+		"Survivors! Real ones! Try not to get them killed. Try, Carl.",
+		"Reinforcements. I almost believe this floor likes you. Almost.",
+		"Backup! Backup is here! *purrs* This is a NICE change.",
+		"Other people! In MY dungeon! How exciting and also concerning.",
+		"They came to help. Be NICE. Use your soft voice. I MEAN it.",
+	],
+	"ally_fell": [
+		"Mrrooow... no... not them too. We owed them better.",
+		"They went down for YOU, Carl. Remember that. Loudly.",
+		"*tail droops* That one was a friend. The dungeon will pay.",
+		"Down. One of the good ones. I'm noting this. Permanently.",
+		"They fell. The System owes us an apology. It will not give one.",
+	],
 }
 
 # Floor-theme colors — initialized in _setup_floor_theme() before drawing begins
@@ -98,7 +113,11 @@ var _engine: BattleEngine
 var _map: DungeonMap
 var _hero: Combatant
 var _enemies: Array[Combatant] = []
+var _allies: Array[Combatant] = []
 var _all_combatants: Array[Combatant] = []
+
+# Ally HP labels in the top-left HUD column (one per ally) — populated by _build_ally_panel().
+var _ally_hp_labels: Dictionary = {}  # combatant.id -> Label
 
 # Visual nodes
 var _hex_polys: Dictionary = {}    # Vector2i -> Polygon2D
@@ -149,9 +168,16 @@ func _ready() -> void:
 	_build_boss_hp_bar()
 	_build_donut_hologram()
 	_build_inferno_map()
+	_build_ally_panel()
 	_update_hero_hp_label()
 	SystemVoice.speak("floor_enter", [GameState.floor_num])
 	get_tree().create_timer(2.0).timeout.connect(func() -> void: _donut_say(_donut_pick("floor_enter")))
+	# Allies arrival flavor — System banner + Donut quip if any joined this floor.
+	if not _allies.is_empty():
+		get_tree().create_timer(1.2).timeout.connect(func() -> void:
+			SystemVoice.speak_direct("Survivors detected. %d allied combatant(s) joined the encounter." % _allies.size()))
+		get_tree().create_timer(2.6).timeout.connect(func() -> void:
+			_donut_say(_donut_pick("allies_arrive")))
 	await get_tree().create_timer(0.4).timeout
 	_next_turn()
 
@@ -243,8 +269,20 @@ func _build_encounter() -> void:
 		var e: Combatant = EnemyDefs.make_combatant(def, _map.spawn_points[i], _battle_rng, GameState.floor_num)
 		_enemies.append(e)
 
+	# Allies: floor-specific NPCs that join Carl for one battle.
+	# On floor 3 (first boss), two survivors (Marcus + Lina) appear adjacent to hero start.
+	_allies.clear()
+	var ally_defs: Array[Dictionary] = Allies.get_allies_for_floor(GameState.floor_num)
+	if not ally_defs.is_empty():
+		var ally_spots: Array[Vector2i] = _find_ally_spawn_hexes(ally_defs.size())
+		for i: int in range(min(ally_defs.size(), ally_spots.size())):
+			var a: Combatant = Allies.make_ally(ally_defs[i], ally_spots[i], _battle_rng)
+			_allies.append(a)
+
 	_all_combatants.clear()
 	_all_combatants.append(_hero)
+	for a2: Combatant in _allies:
+		_all_combatants.append(a2)
 	for e: Combatant in _enemies:
 		_all_combatants.append(e)
 	_engine = BattleEngine.new(_battle_rng)
@@ -255,6 +293,28 @@ func _build_encounter() -> void:
 	_engine.hero_moved.connect(_on_hero_moved)
 	_engine.boss_enraged.connect(_on_boss_enraged)
 	_engine.setup(_all_combatants)
+
+func _find_ally_spawn_hexes(count: int) -> Array[Vector2i]:
+	## Pick up to `count` passable, unoccupied hexes near the hero start.
+	## Prefers ring 1 (adjacent), then ring 2 if needed. Skips lava and enemies.
+	var result: Array[Vector2i] = []
+	var enemy_positions: Dictionary = {}
+	for e: Combatant in _enemies:
+		enemy_positions[e.position] = true
+	for radius: int in [1, 2]:
+		for h: Vector2i in HexGrid.ring(_map.hero_start, radius):
+			if result.size() >= count:
+				break
+			if h == _map.hero_start:
+				continue
+			if not _map.is_passable(h):
+				continue
+			if enemy_positions.has(h):
+				continue
+			result.append(h)
+		if result.size() >= count:
+			break
+	return result
 
 ## ─── Effect VFX ───────────────────────────────────────────────────────────────
 
@@ -504,6 +564,8 @@ func _spawn_entity_node(c: Combatant) -> void:
 			glow_poly.color = Color(0.55, 0.0, 0.78, 0.42)
 		elif c.sprite_key == "companion_donut":
 			glow_poly.color = Color(0.95, 0.72, 0.10, 0.42)
+		elif c.sprite_key.begins_with("ally_"):
+			glow_poly.color = _ally_glow_color(c)
 		elif c.faction == Combatant.Faction.HERO:
 			var gc := _hero_class_color()
 			gc.a = 0.38
@@ -581,6 +643,17 @@ func _spawn_entity_node(c: Combatant) -> void:
 		name_tag.custom_minimum_size = Vector2(60.0, 0.0)
 		name_tag.position = Vector2(-30.0, HEX_SIZE * 0.48)
 		root.add_child(name_tag)
+	# Ally name tag — short first-name only so it fits, gold to read "friendly"
+	elif c.sprite_key.begins_with("ally_"):
+		var first_name: String = c.display_name.split(" ")[0]
+		var ally_tag := Label.new()
+		ally_tag.text = first_name
+		ally_tag.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		ally_tag.add_theme_font_size_override("font_size", 9)
+		ally_tag.add_theme_color_override("font_color", Color(0.96, 0.82, 0.28))
+		ally_tag.custom_minimum_size = Vector2(60.0, 0.0)
+		ally_tag.position = Vector2(-30.0, HEX_SIZE * 0.48)
+		root.add_child(ally_tag)
 
 	# HP bar — wide border + background + coloured fill
 	var HP_W: float = 46.0
@@ -621,9 +694,20 @@ func _hero_class_color() -> Color:
 	var cls_data: Dictionary = Classes.get_class_data(GameState.hero_class)
 	return cls_data.get("icon_color", HERO_COLOR)
 
+func _ally_glow_color(c: Combatant) -> Color:
+	## Look up the ally's glow color from Allies.ALLIES_BY_FLOOR by sprite_key.
+	for _floor: int in Allies.ALLIES_BY_FLOOR:
+		var pool: Array = Allies.ALLIES_BY_FLOOR[_floor]
+		for def: Dictionary in pool:
+			if def.get("sprite_key", "") == c.sprite_key:
+				return def.get("glow_color", Color(0.85, 0.85, 0.4, 0.42))
+	return Color(0.85, 0.85, 0.4, 0.42)
+
 func _get_sprite_path(c: Combatant) -> String:
 	if c.sprite_key == "companion_donut":
 		return "res://assets/sprites/companion_donut.png"
+	if c.sprite_key.begins_with("ally_"):
+		return "res://assets/sprites/%s.png" % c.sprite_key
 	var base: String = "hero_%s" % GameState.hero_class if c.faction == Combatant.Faction.HERO \
 		else "enemy_%s" % c.sprite_key
 	return "res://assets/sprites/%s.png" % base
@@ -969,6 +1053,40 @@ func _update_boss_hp_bar() -> void:
 	else:
 		_boss_hp_fill.color = Color(0.72 - ratio * 0.22, 0.10 + ratio * 0.08, 0.82 - ratio * 0.42)
 
+## ─── Ally HP Panel ────────────────────────────────────────────────────────────
+
+func _build_ally_panel() -> void:
+	## Stack one HP label per ally under the hero HP label (top-left).
+	_ally_hp_labels.clear()
+	if _allies.is_empty():
+		return
+	var ui: CanvasLayer = $UILayer
+	var base_y: float = _hero_hp_label.position.y + 22.0
+	for i: int in range(_allies.size()):
+		var a: Combatant = _allies[i]
+		var lbl := Label.new()
+		lbl.add_theme_font_size_override("font_size", 13)
+		lbl.add_theme_color_override("font_color", Color(0.96, 0.82, 0.28))
+		lbl.position = Vector2(_hero_hp_label.position.x, base_y + float(i) * 18.0)
+		lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		ui.add_child(lbl)
+		_ally_hp_labels[a.id] = lbl
+		_update_ally_hp_label(a)
+
+func _update_ally_hp_label(c: Combatant) -> void:
+	var lbl: Label = _ally_hp_labels.get(c.id)
+	if lbl == null:
+		return
+	var first_name: String = c.display_name.split(" ")[0]
+	if c.is_alive():
+		lbl.text = "%s — HP %d/%d" % [first_name, c.hp, c.max_hp]
+		var ratio: float = float(c.hp) / float(max(1, c.max_hp))
+		lbl.add_theme_color_override("font_color",
+			Color(1.0 - ratio * 0.65, 0.55 + ratio * 0.35, 0.18))
+	else:
+		lbl.text = "%s — fallen" % first_name
+		lbl.add_theme_color_override("font_color", Color(0.5, 0.5, 0.5))
+
 ## ─── Ability Bar ──────────────────────────────────────────────────────────────
 
 func _build_ability_bar() -> void:
@@ -1043,7 +1161,7 @@ func _next_turn() -> void:
 	if _hero_dead:
 		return
 
-	if active.faction == Combatant.Faction.HERO:
+	if active == _hero:
 		# Tick ability cooldowns at the start of each hero turn
 		for id: String in _hero_ability_objs:
 			_hero_ability_objs[id].tick_cooldown()
@@ -1066,6 +1184,23 @@ func _next_turn() -> void:
 		_turn_indicator.add_theme_color_override("font_color", Color(0.35, 1.0, 0.35))
 		_update_highlights()
 		_update_hero_hp_label()
+	elif active.faction == Combatant.Faction.HERO:
+		# Ally turn — auto-driven (move toward nearest enemy, attack if adjacent)
+		_apply_lava_heat(active)
+		if _engine.battle_over:
+			return
+		_player_turn = false
+		_clear_highlights()
+		_turn_indicator.text = "%s's Turn" % active.display_name
+		_turn_indicator.add_theme_color_override("font_color", Color(0.96, 0.82, 0.28))
+		await get_tree().create_timer(0.45).timeout
+		if not _engine.battle_over:
+			_resolve_ally_turn(active)
+			_sync_entity_positions()
+			_update_all_hp_bars()
+			_engine.end_turn()
+			await get_tree().create_timer(0.22).timeout
+			_next_turn()
 	else:
 		# Apply lava heat to enemies too — makes lava tactically meaningful
 		_apply_lava_heat(active)
@@ -1090,6 +1225,31 @@ func _next_turn() -> void:
 			await get_tree().create_timer(0.25).timeout
 			_next_turn()
 
+func _resolve_ally_turn(ally: Combatant) -> void:
+	## Ally AI: close on the nearest living enemy and basic-attack if adjacent.
+	## Allies inherit the HERO crit roll in BattleEngine (faction-gated, not _hero-gated).
+	if _enemies.is_empty():
+		return
+	var nearest: Combatant = null
+	var best_d: int = 1000000
+	for e: Combatant in _enemies:
+		if not e.is_alive():
+			continue
+		var d: int = HexGrid.hex_distance(ally.position, e.position)
+		if d < best_d:
+			best_d = d
+			nearest = e
+	if nearest == null:
+		return
+	if best_d <= 1:
+		_play_ability_effect(nearest.position, "basic_attack")
+		_engine.perform_attack(ally, nearest, "basic_attack")
+	else:
+		var moved: bool = _engine.move_toward(ally, nearest.position, _map)
+		if moved and HexGrid.hex_distance(ally.position, nearest.position) <= 1:
+			_play_ability_effect(nearest.position, "basic_attack")
+			_engine.perform_attack(ally, nearest, "basic_attack")
+
 func _apply_lava_heat(c: Combatant) -> void:
 	## Deal heat damage to a combatant for each adjacent lava tile.
 	## One adjacent lava = 3 damage; two = 6; three+ = 10.
@@ -1107,9 +1267,11 @@ func _apply_lava_heat(c: Combatant) -> void:
 	_play_ability_effect(c.position, "lava_heat")
 	_show_damage_number(c, actual, LAVA_HEAT_CLR)
 	_update_hp_bar(c)
-	if c.faction == Combatant.Faction.HERO:
+	if c == _hero:
 		_update_hero_hp_label()
 		_show_system_banner("Lava heat! -%d HP. The floor is trying to kill you. Literally." % actual, 2.0)
+	elif c.sprite_key.begins_with("ally_"):
+		_update_ally_hp_label(c)
 
 ## ─── Hex Input ────────────────────────────────────────────────────────────────
 
@@ -1519,8 +1681,11 @@ func _on_action_taken(attacker: Combatant, target: Combatant, damage: int, abili
 	_update_hp_bar(target)
 	_update_status_label(target)
 	_update_boss_hp_bar()
-	# Contextual player-hit commentary — fire ~40% of the time to avoid spam
-	if target.faction == Combatant.Faction.HERO and attacker.faction == Combatant.Faction.ENEMY:
+	if target.sprite_key.begins_with("ally_"):
+		_update_ally_hp_label(target)
+	# Contextual player-hit commentary — fire ~40% of the time, only for Carl.
+	# (Quips address "you" / Carl directly, so they don't make sense for allies.)
+	if target == _hero and attacker.faction == Combatant.Faction.ENEMY:
 		if _battle_rng.randf() < 0.40:
 			SystemVoice.speak("took_hit_comment")
 		if _battle_rng.randf() < 0.28:
@@ -1543,7 +1708,7 @@ func _on_combatant_died(c: Combatant) -> void:
 		if _battle_rng.randf() < 0.42:
 			get_tree().create_timer(0.55).timeout.connect(
 				func() -> void: _donut_say(_donut_pick("enemy_killed")))
-	else:
+	elif c == _hero:
 		# Player hero died — end the battle immediately
 		if _hero_dead:
 			return
@@ -1558,6 +1723,12 @@ func _on_combatant_died(c: Combatant) -> void:
 			_engine.battle_ended.emit(false, 0)
 		await get_tree().create_timer(0.5).timeout
 		_show_death_overlay()
+	else:
+		# Ally fell — battle continues. Mourn them and grey them out.
+		SystemVoice.speak_direct("%s has fallen. They bought you time. Use it." % c.display_name)
+		_donut_say(_donut_pick("ally_fell"))
+		_grey_out_entity_delayed(c.id)
+		_update_ally_hp_label(c)
 
 func _grey_out_entity_delayed(entity_id: String) -> void:
 	## Wait for hit-flash tween to finish, then apply death grey.
@@ -1573,9 +1744,9 @@ func _on_status_ticked(c: Combatant, damage: int) -> void:
 	if c.faction == Combatant.Faction.HERO:
 		_sync_hero_alpha()
 
-func _on_hero_moved(_combatant: Combatant, _from_hex: Vector2i, to_hex: Vector2i) -> void:
-	## Animate hero node to new position
-	var node: Node2D = _entity_nodes.get(_hero.id)
+func _on_hero_moved(combatant: Combatant, _from_hex: Vector2i, to_hex: Vector2i) -> void:
+	## Animate moved hero-faction node to new position (player hero or ally).
+	var node: Node2D = _entity_nodes.get(combatant.id)
 	if node != null:
 		var tw: Tween = create_tween()
 		tw.set_ease(Tween.EASE_OUT)
@@ -1721,6 +1892,8 @@ func _update_all_hp_bars() -> void:
 		_update_status_label(c)
 	_update_boss_hp_bar()
 	_sync_hero_alpha()
+	for a: Combatant in _allies:
+		_update_ally_hp_label(a)
 
 func _update_hp_bar(c: Combatant) -> void:
 	var node: Node2D = _entity_nodes.get(c.id)
