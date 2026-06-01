@@ -16,6 +16,75 @@ const SELF_CLR       := Color(0.6, 0.3, 0.9, 0.5)
 const FROST_CLR      := Color(0.25, 0.65, 1.0, 0.5)
 const LAVA_HEAT_CLR  := Color(1.0, 0.45, 0.0, 0.9)
 
+const DONUT_LINES: Dictionary = {
+	"floor_enter": [
+		"Mrrrow. Another floor. What *lovely* decor. 'Early Dungeon Nightmare.'",
+		"I had a perfectly good nap scheduled. Just so you know.",
+		"Oh, more monsters. Truly. What a treat. I'm thrilled.",
+		"You really should stop volunteering for these things, Carl.",
+		"The vibes here are *atrocious*. Noted for the record.",
+		"It smells like bad decisions and sulfur down here.",
+	],
+	"enemy_killed": [
+		"*yawns* One down. Wake me when it's over.",
+		"Oh, they're dead. How dreadful for them.",
+		"You got one! You're welcome — I cheered. Internally.",
+		"Mrrph. That one was ugly. Not a compliment to your aim.",
+		"Satisfying. Almost as satisfying as tuna. Almost.",
+		"See? You CAN do it. Sometimes. Occasionally.",
+		"Another one bites the dust. Technically the lava.",
+		"*tail flick of approval*",
+	],
+	"boss_encounter": [
+		"That one is VERY large. I have several concerns.",
+		"I am going to need you to not die. Please. I'm serious.",
+		"Oh no. Oh no no no. Carl. CARL. That's a BOSS.",
+		"That's a boss. You've fought those before. You've also died before. Focus.",
+		"I'm not panicking. You're panicking. I'm a LITTLE panicking.",
+		"*presses paws to face* It's fine. It's totally fine. We're fine.",
+	],
+	"hero_hurt": [
+		"OW. I felt that from here. That looked like it *hurt*.",
+		"They hit you! How RUDE. Hit them back harder.",
+		"Mrrow! Can we maybe dodge? As a concept?",
+		"That's going to leave a mark. Dodge NEXT time!",
+		"Can we establish a 'not-getting-hit' policy? Going forward?",
+		"*winces* Less of that, please.",
+	],
+	"hero_near_death": [
+		"Okay. OKAY. We are NOT dying today. CATEGORICALLY not dying.",
+		"LOW HP! LOW HP, CARL. This is NOT the time for heroics!",
+		"I'm watching through my paws. Please stop almost dying.",
+		"If you die I will be SO annoyed. Personally. Permanently.",
+		"Is there a healing option?? DO THE HEALING THING. *NOW.*",
+		"*frantic tail lashing* CARL!!!",
+	],
+	"victory": [
+		"You did it! *purrs* Don't tell anyone I was worried. I wasn't.",
+		"Survived! As I fully expected. I was never worried at all.",
+		"That's one more floor. I'll allow it.",
+		"*stretches luxuriously* Good job. Now go deeper. Immediately.",
+		"Excellent! You're alive! The System is annoyed! Perfect outcome.",
+		"We're alive. I'm choosing to be calm about that.",
+	],
+	"hero_killed": [
+		"...Carl? ...Carl!? I TOLD you about that lava!!",
+		"Well. That happened. I am choosing to be unimpressed right now.",
+		"MRROOWW. Okay. Deep breaths. We try again. WE TRY AGAIN.",
+		"You died. I'm devastated. Mostly I'm just cold. It's very cold here.",
+		"*sits next to Carl* ...rude.",
+	],
+	"ability_used": [
+		"Show them who's boss!",
+		"Ooh, that looked very dramatic and intentional.",
+		"*twitches tail approvingly*",
+		"Nice form. Very menacing. 10 out of 10.",
+		"That's the spirit! More of that!",
+		"Yeeees! Like THAT!",
+		"Go go go go go!",
+	],
+}
+
 # Floor-theme colors — initialized in _setup_floor_theme() before drawing begins
 var LAVA_COLOR  := Color(0.88, 0.36, 0.04)
 var LAVA_GLOW   := Color(1.0, 0.60, 0.08, 0.35)
@@ -51,8 +120,10 @@ var _first_kill_done: bool = false   # for first_kill quip
 var _boss: Combatant = null
 var _boss_hp_fill: ColorRect = null
 var _boss_glow_tween: Tween = null
-var _donut: Combatant = null
-var _donut_hp_label: Label = null
+var _donut_speech_lbl: Label = null
+var _donut_speech_tween: Tween = null
+var _donut_rng: RandomNumberGenerator = RandomNumberGenerator.new()
+var _donut_last_line: Dictionary = {}
 var _hero_dead: bool = false
 
 @onready var _hex_layer: Node2D = $HexLayer
@@ -76,10 +147,11 @@ func _ready() -> void:
 	_draw_entities()
 	_build_ability_bar()
 	_build_boss_hp_bar()
-	_build_donut_hp_label()
+	_build_donut_hologram()
 	_build_inferno_map()
 	_update_hero_hp_label()
 	SystemVoice.speak("floor_enter", [GameState.floor_num])
+	get_tree().create_timer(2.0).timeout.connect(func() -> void: _donut_say(_donut_pick("floor_enter")))
 	await get_tree().create_timer(0.4).timeout
 	_next_turn()
 
@@ -120,6 +192,7 @@ func _setup_floor_theme() -> void:
 func _build_encounter() -> void:
 	_battle_rng = RandomNumberGenerator.new()
 	_battle_rng.seed = GameState.run_seed + GameState.floor_num * 997
+	_donut_rng.seed = GameState.run_seed ^ 0xD0047
 
 	_map = DungeonMap.new()
 	_map.generate(GameState.floor_num, _battle_rng)
@@ -170,24 +243,8 @@ func _build_encounter() -> void:
 		var e: Combatant = EnemyDefs.make_combatant(def, _map.spawn_points[i], _battle_rng, GameState.floor_num)
 		_enemies.append(e)
 
-	# Build Donut companion — she joins every run
-	_donut = Combatant.new("donut", "Donut", Combatant.Faction.HERO, 50, 12)
-	_donut.armor = 0
-	_donut.attack_bonus = 3
-	var donut_abilities: Array[String] = ["basic_attack"]
-	_donut.abilities = donut_abilities
-	_donut.sprite_key = "companion_donut"
-	_donut.xp_reward = 0
-	var donut_start: Vector2i = _map.hero_start
-	for n: Vector2i in HexGrid.neighbors(_map.hero_start):
-		if _map.is_passable(n):
-			donut_start = n
-			break
-	_donut.position = donut_start
-
 	_all_combatants.clear()
 	_all_combatants.append(_hero)
-	_all_combatants.append(_donut)
 	for e: Combatant in _enemies:
 		_all_combatants.append(e)
 	_engine = BattleEngine.new(_battle_rng)
@@ -278,6 +335,7 @@ func _draw_cave_background() -> void:
 		cr.size = Vector2(edge_rect[2], edge_rect[3])
 		cr.color = Color(0.03, 0.01, 0.06, 0.72)
 		cr.z_index = -10
+		cr.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		ui.add_child(cr)
 
 func _draw_stalagmites() -> void:
@@ -604,6 +662,7 @@ func _build_boss_hp_bar() -> void:
 		return
 	# Announce boss encounter after a brief delay so floor_enter lands first
 	get_tree().create_timer(1.8).timeout.connect(func() -> void: SystemVoice.speak("boss_encounter"))
+	get_tree().create_timer(3.2).timeout.connect(func() -> void: _donut_say(_donut_pick("boss_encounter")))
 
 	var ui: CanvasLayer = $UILayer
 	var bar_w: float = 400.0
@@ -639,64 +698,184 @@ func _build_boss_hp_bar() -> void:
 	_boss_hp_fill.color = Color(0.72, 0.10, 0.82)
 	ui.add_child(_boss_hp_fill)
 
-## ─── Donut Companion ──────────────────────────────────────────────────────────
+## ─── Donut Hologram ───────────────────────────────────────────────────────────
 
-func _build_donut_hp_label() -> void:
-	var lbl := Label.new()
-	lbl.name = "DonutHPLabel"
-	lbl.text = "🐱 Donut  50 / 50"
-	lbl.position = Vector2(16.0, 86.0)
-	lbl.add_theme_font_size_override("font_size", 13)
-	lbl.add_theme_color_override("font_color", Color(0.95, 0.72, 0.10))
-	$UILayer.add_child(lbl)
-	_donut_hp_label = lbl
+func _build_donut_hologram() -> void:
+	var ui: CanvasLayer = $UILayer
+	var PX: float = 8.0
+	var PY: float = 476.0
+	var PW: float = 162.0
+	var PH: float = 148.0
 
-func _update_donut_hp_label() -> void:
-	if _donut_hp_label == null or _donut == null:
+	# Outer glow border (teal)
+	var outer := ColorRect.new()
+	outer.position = Vector2(PX - 2.0, PY - 2.0)
+	outer.size = Vector2(PW + 4.0, PH + 4.0)
+	outer.color = Color(0.10, 0.88, 0.78, 0.75)
+	outer.z_index = 10
+	outer.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	ui.add_child(outer)
+
+	# Dark panel background
+	var bg := ColorRect.new()
+	bg.position = Vector2(PX, PY)
+	bg.size = Vector2(PW, PH)
+	bg.color = Color(0.02, 0.07, 0.11, 0.92)
+	bg.z_index = 11
+	bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	ui.add_child(bg)
+
+	# Header strip
+	var header_bg := ColorRect.new()
+	header_bg.position = Vector2(PX, PY)
+	header_bg.size = Vector2(PW, 17.0)
+	header_bg.color = Color(0.04, 0.18, 0.22, 1.0)
+	header_bg.z_index = 12
+	header_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	ui.add_child(header_bg)
+
+	var header_lbl := Label.new()
+	header_lbl.text = "📡  ADVISOR: DONUT"
+	header_lbl.position = Vector2(PX, PY + 1.0)
+	header_lbl.custom_minimum_size = Vector2(PW, 15.0)
+	header_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	header_lbl.add_theme_font_size_override("font_size", 9)
+	header_lbl.add_theme_color_override("font_color", Color(0.28, 1.0, 0.85))
+	header_lbl.z_index = 13
+	header_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	ui.add_child(header_lbl)
+
+	# Donut sprite with hologram tint
+	var sprite_path := "res://assets/sprites/companion_donut.png"
+	if ResourceLoader.exists(sprite_path):
+		var tex := load(sprite_path) as Texture2D
+		var sprite_rect := TextureRect.new()
+		sprite_rect.texture = tex
+		sprite_rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		sprite_rect.position = Vector2(PX + PW * 0.5 - 38.0, PY + 20.0)
+		sprite_rect.size = Vector2(76.0, 76.0)
+		sprite_rect.modulate = Color(0.45, 1.0, 0.92, 0.90)
+		sprite_rect.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+		sprite_rect.z_index = 13
+		sprite_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		ui.add_child(sprite_rect)
+
+	# Scanlines overlay
+	var scan_count: int = int(PH / 3)
+	for i: int in range(scan_count):
+		var scan := ColorRect.new()
+		scan.position = Vector2(PX, PY + float(i) * 3.0)
+		scan.size = Vector2(PW, 1.0)
+		scan.color = Color(0.0, 0.0, 0.0, 0.22)
+		scan.z_index = 14
+		scan.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		ui.add_child(scan)
+
+	# Footer text
+	var footer := Label.new()
+	footer.text = "── holographic ──"
+	footer.position = Vector2(PX, PY + PH - 15.0)
+	footer.custom_minimum_size = Vector2(PW, 13.0)
+	footer.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	footer.add_theme_font_size_override("font_size", 8)
+	footer.add_theme_color_override("font_color", Color(0.18, 0.58, 0.52, 0.55))
+	footer.z_index = 13
+	footer.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	ui.add_child(footer)
+
+	# Speech bubble background (above hologram, hidden until Donut speaks)
+	var bubble_bg := ColorRect.new()
+	bubble_bg.name = "DonutBubbleBg"
+	bubble_bg.position = Vector2(PX - 1.0, PY - 131.0)
+	bubble_bg.size = Vector2(PW + 2.0, 126.0)
+	bubble_bg.color = Color(0.03, 0.12, 0.16, 0.88)
+	bubble_bg.z_index = 14
+	bubble_bg.modulate.a = 0.0
+	bubble_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	ui.add_child(bubble_bg)
+
+	var bubble_border := ColorRect.new()
+	bubble_border.name = "DonutBubbleBorder"
+	bubble_border.position = Vector2(PX - 2.0, PY - 132.0)
+	bubble_border.size = Vector2(PW + 4.0, 128.0)
+	bubble_border.color = Color(0.10, 0.88, 0.78, 0.65)
+	bubble_border.z_index = 13
+	bubble_border.modulate.a = 0.0
+	bubble_border.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	ui.add_child(bubble_border)
+
+	# Connector arrow pointing down to hologram
+	var arrow := Label.new()
+	arrow.name = "DonutBubbleArrow"
+	arrow.text = "▼"
+	arrow.position = Vector2(PX + PW * 0.5 - 6.0, PY - 8.0)
+	arrow.add_theme_font_size_override("font_size", 10)
+	arrow.add_theme_color_override("font_color", Color(0.10, 0.88, 0.78, 0.65))
+	arrow.z_index = 15
+	arrow.modulate.a = 0.0
+	arrow.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	ui.add_child(arrow)
+
+	# Speech label inside bubble
+	_donut_speech_lbl = Label.new()
+	_donut_speech_lbl.text = ""
+	_donut_speech_lbl.position = Vector2(PX + 6.0, PY - 127.0)
+	_donut_speech_lbl.custom_minimum_size = Vector2(PW - 10.0, 0.0)
+	_donut_speech_lbl.size = Vector2(PW - 10.0, 118.0)
+	_donut_speech_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_donut_speech_lbl.add_theme_font_size_override("font_size", 12)
+	_donut_speech_lbl.add_theme_color_override("font_color", Color(0.85, 1.0, 0.96))
+	_donut_speech_lbl.modulate.a = 0.0
+	_donut_speech_lbl.z_index = 15
+	_donut_speech_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	ui.add_child(_donut_speech_lbl)
+
+	# Hologram flicker tween on the outer border
+	var flicker: Tween = create_tween()
+	flicker.set_loops()
+	flicker.tween_property(outer, "modulate:a", 0.55, 0.18)
+	flicker.tween_property(outer, "modulate:a", 1.0, 0.12)
+	flicker.tween_interval(1.1)
+	flicker.tween_property(outer, "modulate:a", 0.65, 0.08)
+	flicker.tween_property(outer, "modulate:a", 1.0, 0.10)
+	flicker.tween_interval(2.3)
+
+func _donut_say(text: String, duration: float = 3.8) -> void:
+	if _donut_speech_lbl == null:
 		return
-	if not _donut.is_alive():
-		_donut_hp_label.text = "🐱 Donut  KO"
-		_donut_hp_label.add_theme_color_override("font_color", Color(0.45, 0.35, 0.35))
-	else:
-		_donut_hp_label.text = "🐱 Donut  %d / %d" % [_donut.hp, _donut.max_hp]
-		var ratio: float = float(_donut.hp) / float(max(1, _donut.max_hp))
-		_donut_hp_label.add_theme_color_override("font_color",
-			Color(1.0 - ratio * 0.5, 0.52 + ratio * 0.20, 0.05))
+	_donut_speech_lbl.text = text
+	var ui: CanvasLayer = $UILayer
+	var bubble_bg: ColorRect = ui.get_node_or_null("DonutBubbleBg") as ColorRect
+	var bubble_border: ColorRect = ui.get_node_or_null("DonutBubbleBorder") as ColorRect
+	var arrow: Label = ui.get_node_or_null("DonutBubbleArrow") as Label
 
-func _resolve_donut_turn() -> void:
-	if not _donut.is_alive() or _engine.battle_over or _hero_dead:
-		_engine.end_turn()
-		await get_tree().create_timer(0.15).timeout
-		_next_turn()
-		return
+	if _donut_speech_tween != null:
+		_donut_speech_tween.kill()
+	_donut_speech_tween = create_tween()
+	_donut_speech_tween.tween_property(_donut_speech_lbl, "modulate:a", 1.0, 0.28)
+	if bubble_bg != null:
+		_donut_speech_tween.parallel().tween_property(bubble_bg, "modulate:a", 1.0, 0.28)
+	if bubble_border != null:
+		_donut_speech_tween.parallel().tween_property(bubble_border, "modulate:a", 1.0, 0.28)
+	if arrow != null:
+		_donut_speech_tween.parallel().tween_property(arrow, "modulate:a", 1.0, 0.28)
+	_donut_speech_tween.tween_interval(duration)
+	_donut_speech_tween.tween_property(_donut_speech_lbl, "modulate:a", 0.0, 0.50)
+	if bubble_bg != null:
+		_donut_speech_tween.parallel().tween_property(bubble_bg, "modulate:a", 0.0, 0.50)
+	if bubble_border != null:
+		_donut_speech_tween.parallel().tween_property(bubble_border, "modulate:a", 0.0, 0.50)
+	if arrow != null:
+		_donut_speech_tween.parallel().tween_property(arrow, "modulate:a", 0.0, 0.50)
 
-	var nearest: Combatant = _get_nearest_enemy_to(_donut.position)
-	if nearest != null:
-		var dist: int = HexGrid.hex_distance(_donut.position, nearest.position)
-		if dist <= 1:
-			_play_ability_effect(nearest.position, "basic_attack")
-			_engine.perform_attack(_donut, nearest, "basic_attack")
-			_update_all_hp_bars()
-			_update_donut_hp_label()
-		else:
-			_engine.move_toward(_donut, nearest.position, _map)
-			_sync_entity_positions()
-
-	await get_tree().create_timer(0.40).timeout
-	if not _engine.battle_over and not _hero_dead:
-		_engine.end_turn()
-		_next_turn()
-
-func _get_nearest_enemy_to(pos: Vector2i) -> Combatant:
-	var nearest: Combatant = null
-	var best_dist: int = 999
-	for e: Combatant in _enemies:
-		if e.is_alive():
-			var d: int = HexGrid.hex_distance(pos, e.position)
-			if d < best_dist:
-				best_dist = d
-				nearest = e
-	return nearest
+func _donut_pick(category: String) -> String:
+	var pool: Array = DONUT_LINES.get(category, ["..."])
+	var last: int = _donut_last_line.get(category, -1)
+	var idx: int = _donut_rng.randi_range(0, pool.size() - 1)
+	if pool.size() > 1 and idx == last:
+		idx = (idx + 1) % pool.size()
+	_donut_last_line[category] = idx
+	return pool[idx]
 
 ## ─── Inferno Map ──────────────────────────────────────────────────────────────
 
@@ -865,15 +1044,6 @@ func _next_turn() -> void:
 		return
 
 	if active.faction == Combatant.Faction.HERO:
-		# Donut auto-resolves her turn
-		if active.id == "donut":
-			_turn_indicator.text = "Donut's Turn"
-			_turn_indicator.add_theme_color_override("font_color", Color(0.95, 0.72, 0.10))
-			await get_tree().create_timer(0.35).timeout
-			if not _engine.battle_over and not _hero_dead:
-				await _resolve_donut_turn()
-			return
-
 		# Tick ability cooldowns at the start of each hero turn
 		for id: String in _hero_ability_objs:
 			_hero_ability_objs[id].tick_cooldown()
@@ -883,6 +1053,8 @@ func _next_turn() -> void:
 		var hp_ratio: float = float(_hero.hp) / float(max(1, _hero.max_hp))
 		if hp_ratio <= 0.25 and _battle_rng.randf() < 0.55:
 			SystemVoice.speak("near_death")
+		if hp_ratio <= 0.25 and _battle_rng.randf() < 0.45:
+			_donut_say(_donut_pick("hero_near_death"))
 
 		# Apply lava heat damage if adjacent to lava
 		_apply_lava_heat(active)
@@ -1064,6 +1236,8 @@ func _do_hero_attack(target: Combatant) -> void:
 		"shield_bash":  SystemVoice.speak("shield_bash")
 		"shadow_step":  pass  # quip already played above during teleport
 		_:              SystemVoice.speak("hit")
+	if _battle_rng.randf() < 0.22:
+		_donut_say(_donut_pick("ability_used"))
 
 	# Apply on-hit status effects (poison_blade, etc.)
 	if target.is_alive() and abl_data.get("applies_poisoned", false):
@@ -1349,6 +1523,8 @@ func _on_action_taken(attacker: Combatant, target: Combatant, damage: int, abili
 	if target.faction == Combatant.Faction.HERO and attacker.faction == Combatant.Faction.ENEMY:
 		if _battle_rng.randf() < 0.40:
 			SystemVoice.speak("took_hit_comment")
+		if _battle_rng.randf() < 0.28:
+			_donut_say(_donut_pick("hero_hurt"))
 
 func _on_combatant_died(c: Combatant) -> void:
 	if c.faction == Combatant.Faction.ENEMY:
@@ -1363,15 +1539,16 @@ func _on_combatant_died(c: Combatant) -> void:
 			SystemVoice.speak("kill")
 		# Delay grey-out so the hit-flash tween finishes first
 		_grey_out_entity_delayed(c.id)
-	elif c.id == "donut":
-		# Donut knocked out — run continues
-		SystemVoice.speak_direct("Donut is down. The princess is displeased. Extremely.")
-		_grey_out_entity_delayed(c.id)
+		# Donut hologram reacts to kills occasionally
+		if _battle_rng.randf() < 0.42:
+			get_tree().create_timer(0.55).timeout.connect(
+				func() -> void: _donut_say(_donut_pick("enemy_killed")))
 	else:
-		# Player hero died — end the battle immediately regardless of Donut's state
+		# Player hero died — end the battle immediately
 		if _hero_dead:
 			return
 		_hero_dead = true
+		_donut_say(_donut_pick("hero_killed"))
 		var node: Node2D = _entity_nodes.get(c.id)
 		if node != null:
 			node.modulate = DEAD_MODULATE
@@ -1436,6 +1613,7 @@ func _on_battle_ended(hero_won: bool, xp_earned: int) -> void:
 		_turn_indicator.add_theme_color_override("font_color", Color(1.0, 0.85, 0.1))
 		AudioManager.play("victory")
 		SystemVoice.speak_direct("All threats eliminated. XP: %d." % xp_earned)
+		get_tree().create_timer(0.5).timeout.connect(func() -> void: _donut_say(_donut_pick("victory")))
 		# Brief pause then emit battle_complete (routes to VictoryScreen)
 		await get_tree().create_timer(1.2).timeout
 		battle_complete.emit(true, xp_earned, _enemies_killed)
@@ -1542,7 +1720,6 @@ func _update_all_hp_bars() -> void:
 		_update_hp_bar(c)
 		_update_status_label(c)
 	_update_boss_hp_bar()
-	_update_donut_hp_label()
 	_sync_hero_alpha()
 
 func _update_hp_bar(c: Combatant) -> void:
