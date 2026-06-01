@@ -35,7 +35,7 @@ DESCENT is a turn-based tactical dungeon crawler in the spirit of **Dungeon Craw
 - **Architecture rule**: `BattleEngine._calculate_damage()` returns RAW damage (no armor). `Combatant.take_damage(amount, ignore_armor=false)` applies armor. Don't double-apply armor in both places.
 - `Combatant.take_damage(amount, ignore_armor)` — the `ignore_armor` parameter bypasses the `armor` field reduction (for backstab, env damage, etc.)
 
-## Current State (Run 16 — Audio + Crits + Boss Floors + Title Screen)
+## Current State (Run 17 — Donut Hologram + Button Fix)
 ### Implemented ✅
 **Run 1 (Bootstrap):**
 - `GameRng`, `GameState`, `SystemVoice` autoloads
@@ -198,6 +198,11 @@ DESCENT is a turn-based tactical dungeon crawler in the spirit of **Dungeon Craw
 - **`BattleScene.gd`** — `TEXTURE_FILTER_LINEAR_WITH_MIPMAPS` (was `NEAREST` — NEAREST was for pixel art; SVG art needs anti-aliasing); sprite scale 0.68/0.85 (was 0.95/1.20 — adjusted for 192px source)
 - **`ClassSelect.gd`** — portrait filter changed to `LINEAR_WITH_MIPMAPS` to match
 - **`deploy.yml`** — installs `libcairo2` + `cairosvg`, runs `gen_sprites_v5.py`
+
+**Run 17 (Donut Hologram + Button Click Fix):**
+- **Ability button fix** — Vignette `ColorRect` nodes in `_draw_cave_background()` were missing `mouse_filter = MOUSE_FILTER_IGNORE`. The bottom vignette (y=640–720) covered most of the HUD panel (y=628–720), eating all mouse input. Result: basic attack, power strike, and taunt were only clickable in the top ~12px. Fix: `cr.mouse_filter = Control.MOUSE_FILTER_IGNORE` on all four vignette rects.
+- **Donut hologram advisor** — Donut is no longer a combat `Combatant` on the hex grid. She appears as a holographic projection in the bottom-left corner (x=8, y=476, 162×148px) with a teal scanline overlay and border-flicker tween. Speech bubbles fade in/out above the hologram panel. She speaks up at: floor entry, enemy kills (~42% chance), boss encounter, hero takes damage (~28% chance), hero near death (~45% chance), ability uses (~22% chance), victory, and hero death. All hologram elements have `mouse_filter=IGNORE` to avoid blocking hex grid clicks. `DONUT_LINES` constant in `BattleScene.gd` holds 8 categories of snarky cat-princess lines.
+- **Removed from BattleScene:** `_donut: Combatant`, `_donut_hp_label`, `_resolve_donut_turn()`, `_get_nearest_enemy_to()`, `_build_donut_hp_label()`, `_update_donut_hp_label()`. Donut's turn was also removed from `_next_turn()`.
 
 **Run 16 (Audio + Critical Hits + Boss Floors + Title Screen + Score):**
 - **Procedural audio system** — first sound in the game. `tools/gen_audio.py` synthesizes 16 short 16-bit WAV SFX using ONLY the Python stdlib (`wave`/`struct`/`math` — no Pillow/no deps): hit, crit, kill, hurt, move, select, ability, fire, frost, heal, enrage, levelup, victory, defeat, descend, lava. New autoload `AudioManager` (`autoloads/AudioManager.gd`) preloads them, plays through an 8-voice `AudioStreamPlayer` pool with optional pitch variation, and is **defensive** (missing file = silent no-op). Wired into combat (hit/crit/kill/hurt/lava/enrage/ability casts), movement, victory/defeat, and all UI screens (select/levelup/heal/descend). SFX on/off toggle on the title screen. `project.godot` autoload + `deploy.yml` run `gen_audio.py`.
