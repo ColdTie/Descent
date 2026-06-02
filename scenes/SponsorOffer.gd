@@ -6,16 +6,16 @@ extends Control
 
 signal sponsor_chosen(sponsor_id: String)
 
-@onready var _title_label:    Label         = $VBox/TitleLabel
-@onready var _subtitle_label: Label         = $VBox/SubtitleLabel
-@onready var _system_label:   Label         = $VBox/SystemLabel
+@onready var _title_label:  Label  = $VBox/TitleLabel
+@onready var _subtitle_label: Label  = $VBox/SubtitleLabel
+@onready var _system_label:  Label  = $VBox/SystemLabel
 @onready var _cards_container:HBoxContainer = $VBox/Cards
-@onready var _continue_button:Button        = $VBox/ContinueButton
+@onready var _continue_button:Button  = $VBox/ContinueButton
 
 var _chosen: String = ""
 
 func _ready() -> void:
-	_title_label.text = "★ SPONSOR INTERLUDE ★"
+	_title_label.text = "* SPONSOR INTERLUDE *"
 	_subtitle_label.text = "Audience favor: %d. A sponsor would like a word." \
 		% GameState.audience_score
 	_continue_button.visible = false
@@ -38,7 +38,7 @@ func _make_card(item: Dictionary) -> PanelContainer:
 	var panel := PanelContainer.new()
 	panel.custom_minimum_size = Vector2(280.0, 240.0)
 	var ps := StyleBoxFlat.new()
-	ps.bg_color     = Color(0.08, 0.06, 0.12, 0.97)
+	ps.bg_color  = Color(0.08, 0.06, 0.12, 0.97)
 	ps.border_color = col.darkened(0.28)
 	ps.set_border_width_all(2)
 	ps.set_corner_radius_all(5)
@@ -65,7 +65,7 @@ func _make_card(item: Dictionary) -> PanelContainer:
 	vbox.add_child(header_row)
 
 	var icon_lbl := Label.new()
-	icon_lbl.text = item.get("icon", "★")
+	icon_lbl.text = item.get("icon", "*")
 	icon_lbl.add_theme_font_size_override("font_size", 26)
 	icon_lbl.add_theme_color_override("font_color", col)
 	header_row.add_child(icon_lbl)

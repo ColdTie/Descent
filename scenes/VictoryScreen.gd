@@ -8,7 +8,7 @@ var xp_earned: int = 0
 var enemies_killed: int = 0
 
 func prepare(data: Dictionary) -> void:
-	xp_earned      = data.get("xp", 0)
+	xp_earned  = data.get("xp", 0)
 	enemies_killed = data.get("kills", 0)
 
 func _ready() -> void:
@@ -29,8 +29,8 @@ func _build_ui() -> void:
 	# ── Stone panel ───────────────────────────────────────────────────────────
 	var outer := PanelContainer.new()
 	outer.set_anchors_preset(Control.PRESET_CENTER)
-	outer.offset_left   = -510.0
-	outer.offset_top    = -288.0
+	outer.offset_left  = -510.0
+	outer.offset_top  = -288.0
 	outer.offset_right  =  510.0
 	outer.offset_bottom =  288.0
 	var s := StyleBoxFlat.new()
@@ -50,7 +50,7 @@ func _build_ui() -> void:
 
 	# ── Floor label ───────────────────────────────────────────────────────────
 	var floor_lbl := Label.new()
-	floor_lbl.text = "▶  FLOOR %d / %d  ◀" % [GameState.floor_num, GameState.TOTAL_FLOORS]
+	floor_lbl.text = "  FLOOR %d / %d  " % [GameState.floor_num, GameState.TOTAL_FLOORS]
 	floor_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	floor_lbl.add_theme_font_size_override("font_size", 20)
 	floor_lbl.add_theme_color_override("font_color", Color(0.60, 0.48, 0.18))
@@ -123,26 +123,26 @@ func _build_ui() -> void:
 	# ── Stat cards ────────────────────────────────────────────────────────────
 	var stats_row := HBoxContainer.new()
 	stats_row.alignment = BoxContainer.ALIGNMENT_CENTER
-	# Run 21: tightened separation 18→12 so the 6th (GOLD) card fits.
+	# Run 21: tightened separation 18->12 so the 6th (GOLD) card fits.
 	stats_row.add_theme_constant_override("separation", 12)
 	vbox.add_child(stats_row)
 
-	_stat_card(stats_row, "⚔", "ENEMIES",   str(enemies_killed),
+	_stat_card(stats_row, "ATK", "ENEMIES",  str(enemies_killed),
 		Color(0.90, 0.28, 0.16))
-	_stat_card(stats_row, "✦", "XP EARNED", str(xp_earned),
+	_stat_card(stats_row, "*", "XP EARNED", str(xp_earned),
 		Color(0.28, 0.82, 0.38))
-	_stat_card(stats_row, "◆", "LEVEL",     str(GameState.hero_level),
+	_stat_card(stats_row, "*", "LEVEL",  str(GameState.hero_level),
 		Color(0.38, 0.60, 1.00))
 	var hp_ratio: float = float(GameState.hero_hp) / float(max(1, GameState.hero_max_hp))
-	_stat_card(stats_row, "❤", "HP",
+	_stat_card(stats_row, "HP", "HP",
 		"%d / %d" % [GameState.hero_hp, GameState.hero_max_hp],
 		Color(0.18, 0.90, 0.22) if hp_ratio > 0.50 else Color(1.0, 0.38, 0.08))
 	# Run 19: audience score for THIS floor — reality-show tally.
-	_stat_card(stats_row, "★", "AUDIENCE",
+	_stat_card(stats_row, "*", "AUDIENCE",
 		str(GameState.audience_score_floor),
 		Color(0.96, 0.78, 0.18))
 	# Run 21: gold balance — spent at the between-floor merchant.
-	_stat_card(stats_row, "◉", "GOLD",
+	_stat_card(stats_row, "$", "GOLD",
 		str(GameState.hero_gold),
 		Color(1.00, 0.80, 0.16))
 
@@ -152,7 +152,7 @@ func _build_ui() -> void:
 	vbox.add_child(btn_row)
 
 	var btn := Button.new()
-	btn.text = "▼  DESCEND DEEPER  ▼"
+	btn.text = "  DESCEND DEEPER  "
 	btn.custom_minimum_size = Vector2(300.0, 58.0)
 	btn.add_theme_font_size_override("font_size", 20)
 	btn.add_theme_color_override("font_color", Color(0.96, 0.76, 0.10))
@@ -163,8 +163,8 @@ func _build_ui() -> void:
 func _stat_card(parent: Node, icon: String, label_text: String,
 		value_text: String, val_color: Color) -> void:
 	var panel := PanelContainer.new()
-	# Run 19: shrunk from 200 → 178 so the new AUDIENCE card fits (5 cards now).
-	# Run 21: shrunk again 178 → 156 so the GOLD card (6 cards now) fits.
+	# Run 19: shrunk from 200 -> 178 so the new AUDIENCE card fits (5 cards now).
+	# Run 21: shrunk again 178 -> 156 so the GOLD card (6 cards now) fits.
 	panel.custom_minimum_size = Vector2(156.0, 90.0)
 	var ps := StyleBoxFlat.new()
 	ps.bg_color = Color(0.09, 0.07, 0.13, 0.96)

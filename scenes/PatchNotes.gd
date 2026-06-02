@@ -43,8 +43,8 @@ func _build_ui() -> void:
 
 	var outer := PanelContainer.new()
 	outer.set_anchors_preset(Control.PRESET_CENTER)
-	outer.offset_left   = -440.0
-	outer.offset_top    = -260.0
+	outer.offset_left  = -440.0
+	outer.offset_top  = -260.0
 	outer.offset_right  =  440.0
 	outer.offset_bottom =  260.0
 	var s := StyleBoxFlat.new()
@@ -126,7 +126,7 @@ func _build_ui() -> void:
 	vbox.add_child(btn_row)
 
 	var btn := Button.new()
-	btn.text = "▼  ACKNOWLEDGE & DESCEND  ▼"
+	btn.text = "  ACKNOWLEDGE & DESCEND  "
 	btn.custom_minimum_size = Vector2(320.0, 52.0)
 	btn.add_theme_font_size_override("font_size", 17)
 	btn.add_theme_color_override("font_color", border_col.lightened(0.40))

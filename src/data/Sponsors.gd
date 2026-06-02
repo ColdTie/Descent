@@ -16,7 +16,7 @@ const POOL: Array[Dictionary] = [
 	{
 		"id": "hyperion_drink",
 		"sponsor": "Hyperion Drink-It-All",
-		"icon": "✦",
+		"icon": "*",
 		"name": "Sponsorship Hydration Pack",
 		"color": Color(0.30, 0.78, 0.96),
 		"desc": "+15 Max HP and heal 30. The label says \"REFRESHING\". It is lying.",
@@ -25,7 +25,7 @@ const POOL: Array[Dictionary] = [
 	{
 		"id": "big_mikes_meat",
 		"sponsor": "BIG MIKE'S MEAT EMPORIUM",
-		"icon": "⚔",
+		"icon": "ATK",
 		"name": "Endorsement Cleaver",
 		"color": Color(0.92, 0.30, 0.18),
 		"desc": "+12 Attack, -10 Max HP. Big Mike believes in confidence over caution.",
@@ -34,7 +34,7 @@ const POOL: Array[Dictionary] = [
 	{
 		"id": "iron_tassel",
 		"sponsor": "Iron Tassel Hardware",
-		"icon": "🛡",
+		"icon": "DEF",
 		"name": "Branded Plating",
 		"color": Color(0.42, 0.68, 1.00),
 		"desc": "+5 Armor. \"BRAND VISIBILITY\" is etched across your chest. Loudly.",
@@ -43,7 +43,7 @@ const POOL: Array[Dictionary] = [
 	{
 		"id": "spectral_cola",
 		"sponsor": "Spectral Cola Corp.",
-		"icon": "⚡",
+		"icon": "SPD",
 		"name": "Spectral Sugar Rush",
 		"color": Color(0.95, 0.78, 0.10),
 		"desc": "+6 Speed and +6 Attack. The crash will come later. It always does.",
@@ -52,7 +52,7 @@ const POOL: Array[Dictionary] = [
 	{
 		"id": "bopca_insurance",
 		"sponsor": "Bopca Insurance & Mortuary",
-		"icon": "❤",
+		"icon": "HP",
 		"name": "Pre-Paid Funeral Plan",
 		"color": Color(0.28, 0.86, 0.40),
 		"desc": "+30 Max HP. Bopca cares about your continued ad-impressions.",
@@ -61,7 +61,7 @@ const POOL: Array[Dictionary] = [
 	{
 		"id": "gofundit",
 		"sponsor": "GoFundIt Toaster Co.",
-		"icon": "★",
+		"icon": "*",
 		"name": "Toaster Endorsement Deal",
 		"color": Color(0.96, 0.60, 0.18),
 		"desc": "+75 Audience favor. No stats. Pure brand exposure. The crowd loves a sellout.",
@@ -70,7 +70,7 @@ const POOL: Array[Dictionary] = [
 	{
 		"id": "rays_pizza",
 		"sponsor": "Ray's Pizza Tactics",
-		"icon": "✚",
+		"icon": "+",
 		"name": "Combat Slice",
 		"color": Color(0.95, 0.40, 0.18),
 		"desc": "Restore 60 HP now. Ray believes pizza solves most tactical problems.",
@@ -79,7 +79,7 @@ const POOL: Array[Dictionary] = [
 	{
 		"id": "quantec_pet",
 		"sponsor": "QuanTec Pet Supplies",
-		"icon": "✦",
+		"icon": "*",
 		"name": "Princess Donut Endorsement",
 		"color": Color(0.96, 0.72, 0.96),
 		"desc": "+8 Attack, +20 Max HP. The cat insisted on signing this one personally.",
@@ -88,7 +88,7 @@ const POOL: Array[Dictionary] = [
 	{
 		"id": "rumnoir_rotgut",
 		"sponsor": "RumNoir Rotgut Whiskey",
-		"icon": "⚔",
+		"icon": "ATK",
 		"name": "Liquid Courage",
 		"color": Color(0.78, 0.42, 0.10),
 		"desc": "+14 Attack, -3 Armor. The label warns of \"poor decision-making\". Accurate.",
@@ -97,7 +97,7 @@ const POOL: Array[Dictionary] = [
 	{
 		"id": "exitpit_adv",
 		"sponsor": "ExitPit Adventures, Ltd.",
-		"icon": "🛡",
+		"icon": "DEF",
 		"name": "Branded Tower Shield",
 		"color": Color(0.62, 0.58, 1.00),
 		"desc": "+7 Armor, -2 Speed. Heavy. Slow. Reassuringly thick.",

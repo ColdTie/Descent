@@ -108,7 +108,7 @@ func _build_ui() -> void:
 	vbox.add_child(btn_row)
 
 	var begin_btn := Button.new()
-	begin_btn.text = "⚔  BEGIN DESCENT"
+	begin_btn.text = "BEGIN DESCENT"
 	begin_btn.custom_minimum_size = Vector2(320.0, 60.0)
 	begin_btn.add_theme_font_size_override("font_size", 22)
 	begin_btn.add_theme_color_override("font_color", Color(1.0, 0.86, 0.12))
@@ -116,7 +116,7 @@ func _build_ui() -> void:
 	btn_row.add_child(begin_btn)
 
 	var sfx_btn := Button.new()
-	sfx_btn.text = "🔊 SFX: ON"
+	sfx_btn.text = "SFX: ON"
 	sfx_btn.custom_minimum_size = Vector2(150.0, 60.0)
 	sfx_btn.add_theme_font_size_override("font_size", 16)
 	sfx_btn.pressed.connect(_on_toggle_sfx.bind(sfx_btn))
@@ -128,6 +128,6 @@ func _on_begin() -> void:
 
 func _on_toggle_sfx(btn: Button) -> void:
 	var on: bool = AudioManager.toggle_enabled()
-	btn.text = "🔊 SFX: ON" if on else "🔇 SFX: OFF"
+	btn.text = "SFX: ON" if on else "SFX: OFF"
 	if on:
 		AudioManager.play("select")

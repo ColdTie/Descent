@@ -8,7 +8,7 @@ class_name PatchNotes
 ##
 ## Pure data, no autoload references. Safe in --script tests.
 
-## Map: floor the player is ENTERING → patch payload.
+## Map: floor the player is ENTERING -> patch payload.
 ## When `Main` is about to descend, it checks `notes_for(target_floor)`. If
 ## non-empty and not yet in `GameState.patch_notes_seen`, the patch screen
 ## plays before the actual floor change.

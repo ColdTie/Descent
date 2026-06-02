@@ -4,40 +4,40 @@ extends Control
 
 signal upgrade_chosen(upgrade_id: String)
 
-@onready var _title_label:    Label        = $VBox/TitleLabel
-@onready var _subtitle_label: Label        = $VBox/SubtitleLabel
+@onready var _title_label:  Label  = $VBox/TitleLabel
+@onready var _subtitle_label: Label  = $VBox/SubtitleLabel
 @onready var _cards_container:HBoxContainer= $VBox/Cards
-@onready var _system_label:   Label        = $VBox/SystemLabel
-@onready var _continue_button:Button       = $VBox/ContinueButton
+@onready var _system_label:  Label  = $VBox/SystemLabel
+@onready var _continue_button:Button  = $VBox/ContinueButton
 
 var _chosen: String = ""
 
 # Abilities each class can unlock (abilities NOT in their starting kit)
 const CLASS_UNLOCKS: Dictionary = {
 	"brawler":  ["shield_bash"],
-	"rogue":    ["shadow_step", "frost_nova"],
+	"rogue":  ["shadow_step", "frost_nova"],
 	# Run 21: arcanist now has a class-unique unlock (mana_shield) ahead of the
 	# generic cross-class options. Order matters — first available wins.
 	"arcanist": ["mana_shield", "backstab", "taunt"],
 }
 
 const UPGRADES: Array[Dictionary] = [
-	{"id": "atk_up",   "name": "Savage Strike",    "icon": "⚔",
+	{"id": "atk_up",  "name": "Savage Strike",  "icon": "ATK",
 	 "color": Color(0.90, 0.28, 0.16),
 	 "desc": "+8 Attack. Your strikes land harder. The dungeon is unimpressed."},
-	{"id": "spd_up",   "name": "Quick Reflexes",   "icon": "⚡",
+	{"id": "spd_up",  "name": "Quick Reflexes",  "icon": "SPD",
 	 "color": Color(0.95, 0.80, 0.10),
 	 "desc": "+4 Speed. Act before they do. Simple math."},
-	{"id": "hp_up",    "name": "Iron Constitution","icon": "❤",
+	{"id": "hp_up",  "name": "Iron Constitution","icon": "HP",
 	 "color": Color(0.18, 0.88, 0.28),
 	 "desc": "+30 Max HP and heal 30. Your body becomes slightly less breakable."},
-	{"id": "def_up",   "name": "Thick Skin",       "icon": "🛡",
+	{"id": "def_up",  "name": "Thick Skin",  "icon": "DEF",
 	 "color": Color(0.38, 0.62, 1.00),
 	 "desc": "+4 Armor. You've learned to absorb punishment. Professionally."},
-	{"id": "xp_bonus", "name": "Combat Instincts", "icon": "✦",
+	{"id": "xp_bonus", "name": "Combat Instincts", "icon": "*",
 	 "color": Color(0.55, 0.38, 0.90),
 	 "desc": "Next floor grants +50% XP. The System upgrades your XP farm."},
-	{"id": "heal_big", "name": "Second Wind",      "icon": "✚",
+	{"id": "heal_big", "name": "Second Wind",  "icon": "+",
 	 "color": Color(0.20, 0.92, 0.42),
 	 "desc": "Restore 50 HP now. The dungeon sighs and patches you up."},
 ]
@@ -66,7 +66,7 @@ func _generate_choices() -> void:
 				"type": "ability",
 				"ability_id": ability_id,
 				"name": "Learn: %s" % abl.get("display_name", ability_id),
-				"icon": "✦",
+				"icon": "*",
 				"color": Color(0.95, 0.72, 0.10),
 				"desc": abl.get("description", ""),
 			}
@@ -93,7 +93,7 @@ func _make_card(item: Dictionary) -> PanelContainer:
 	var panel := PanelContainer.new()
 	panel.custom_minimum_size = Vector2(270.0, 220.0)
 	var ps := StyleBoxFlat.new()
-	ps.bg_color     = Color(0.07, 0.05, 0.11, 0.97)
+	ps.bg_color  = Color(0.07, 0.05, 0.11, 0.97)
 	ps.border_color = col.darkened(0.30)
 	ps.set_border_width_all(2)
 	ps.set_corner_radius_all(5)
@@ -113,7 +113,7 @@ func _make_card(item: Dictionary) -> PanelContainer:
 	vbox.add_child(header_row)
 
 	var icon_lbl := Label.new()
-	icon_lbl.text = item.get("icon", "✦")
+	icon_lbl.text = item.get("icon", "*")
 	icon_lbl.add_theme_font_size_override("font_size", 28)
 	icon_lbl.add_theme_color_override("font_color", col)
 	header_row.add_child(icon_lbl)

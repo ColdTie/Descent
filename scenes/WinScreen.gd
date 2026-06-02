@@ -24,8 +24,8 @@ func _build_ui() -> void:
 	# ── Stone panel — gold border for victory ─────────────────────────────────
 	var outer := PanelContainer.new()
 	outer.set_anchors_preset(Control.PRESET_CENTER)
-	outer.offset_left   = -510.0
-	outer.offset_top    = -270.0
+	outer.offset_left  = -510.0
+	outer.offset_top  = -270.0
 	outer.offset_right  =  510.0
 	outer.offset_bottom =  270.0
 	var s := StyleBoxFlat.new()
@@ -95,23 +95,23 @@ func _build_ui() -> void:
 
 	# ── Stat cards ────────────────────────────────────────────────────────────
 	var stats := HBoxContainer.new()
-	# Run 21: tightened separation 24→14 to make room for the GOLD card.
+	# Run 21: tightened separation 24->14 to make room for the GOLD card.
 	stats.add_theme_constant_override("separation", 14)
 	stats.alignment = BoxContainer.ALIGNMENT_CENTER
 	vbox.add_child(stats)
 
-	_stat_card(stats, "★", "SCORE",    str(GameState.run_score()),         Color(1.00, 0.84, 0.16))
-	_stat_card(stats, "◆", "LEVEL",    str(GameState.hero_level),          Color(0.38, 0.60, 1.00))
-	_stat_card(stats, "⚔", "KILLS",    str(GameState.total_kills),         Color(0.90, 0.34, 0.20))
-	_stat_card(stats, "♛", "AUDIENCE", str(GameState.audience_score),      Color(0.96, 0.78, 0.18))
+	_stat_card(stats, "*", "SCORE",  str(GameState.run_score()),  Color(1.00, 0.84, 0.16))
+	_stat_card(stats, "*", "LEVEL",  str(GameState.hero_level),  Color(0.38, 0.60, 1.00))
+	_stat_card(stats, "ATK", "KILLS",  str(GameState.total_kills),  Color(0.90, 0.34, 0.20))
+	_stat_card(stats, "*", "AUDIENCE", str(GameState.audience_score),  Color(0.96, 0.78, 0.18))
 	# Run 21: gold left over at end of run — small contribution to SCORE.
-	_stat_card(stats, "◉", "GOLD",     str(GameState.hero_gold),           Color(1.00, 0.80, 0.16))
+	_stat_card(stats, "$", "GOLD",  str(GameState.hero_gold),  Color(1.00, 0.80, 0.16))
 
 	# Run 19: achievement roster — show what the player earned this run.
 	var ach_count: int = Achievements.unlocked_ids.size()
 	var ach_total: int = Achievements.DEFS.size()
 	var ach_row := Label.new()
-	ach_row.text = "✦  %d / %d achievements unlocked  ✦" % [ach_count, ach_total]
+	ach_row.text = "*  %d / %d achievements unlocked  *" % [ach_count, ach_total]
 	ach_row.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	ach_row.add_theme_font_size_override("font_size", 13)
 	ach_row.add_theme_color_override("font_color", Color(0.78, 0.72, 0.50))
@@ -136,7 +136,7 @@ func _build_ui() -> void:
 	vbox.add_child(btn_row)
 
 	var btn := Button.new()
-	btn.text = "⟳  PLAY AGAIN"
+	btn.text = "PLAY AGAIN"
 	btn.custom_minimum_size = Vector2(270.0, 58.0)
 	btn.add_theme_font_size_override("font_size", 20)
 	btn.add_theme_color_override("font_color", Color(1.0, 0.86, 0.12))
@@ -147,7 +147,7 @@ func _build_ui() -> void:
 func _stat_card(parent: Node, icon: String, label_text: String,
 		value_text: String, val_color: Color) -> void:
 	var panel := PanelContainer.new()
-	# Run 21: shrunk from 270 → 188 so the new GOLD card fits (5 cards now).
+	# Run 21: shrunk from 270 -> 188 so the new GOLD card fits (5 cards now).
 	panel.custom_minimum_size = Vector2(188.0, 90.0)
 	var ps := StyleBoxFlat.new()
 	ps.bg_color = Color(0.09, 0.07, 0.13, 0.96)

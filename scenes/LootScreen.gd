@@ -5,44 +5,44 @@ extends Control
 signal loot_chosen(loot_id: String)
 
 const LOOT_POOL: Array[Dictionary] = [
-	{"id": "heal_small", "type": "heal",   "icon": "✚",
-	 "name": "Field Dressing",      "value": 30,
+	{"id": "heal_small", "type": "heal",  "icon": "+",
+	 "name": "Field Dressing",  "value": 30,
 	 "desc": "Restore 30 HP. Simple. Effective. Boring."},
-	{"id": "heal_large", "type": "heal",   "icon": "✚",
-	 "name": "Elixir of Life",      "value": 60,
+	{"id": "heal_large", "type": "heal",  "icon": "+",
+	 "name": "Elixir of Life",  "value": 60,
 	 "desc": "Restore 60 HP. The dungeon begrudgingly provides this."},
-	{"id": "atk_boost",  "type": "stat",   "icon": "⚔",  "stat": "attack",  "value": 10,
+	{"id": "atk_boost",  "type": "stat",  "icon": "ATK",  "stat": "attack",  "value": 10,
 	 "name": "Berserker Salve",
 	 "desc": "+10 Attack. You become marginally scarier."},
-	{"id": "def_boost",  "type": "stat",   "icon": "🛡",  "stat": "defense", "value": 3,
+	{"id": "def_boost",  "type": "stat",  "icon": "DEF",  "stat": "defense", "value": 3,
 	 "name": "Chitin Plate Shard",
 	 "desc": "+3 Armor. Every bit helps. Or doesn't."},
-	{"id": "hp_boost",   "type": "stat",   "icon": "❤",  "stat": "max_hp",  "value": 25,
+	{"id": "hp_boost",  "type": "stat",  "icon": "HP",  "stat": "max_hp",  "value": 25,
 	 "name": "Heart of Stone",
 	 "desc": "+25 Max HP. The dungeon grows a piece of you."},
-	{"id": "warlords_brand","type":"multi","icon": "⚜",
+	{"id": "warlords_brand","type":"multi","icon": "*",
 	 "attack": 6, "max_hp": 15,
 	 "name": "Warlord's Brand",
 	 "desc": "+6 Attack and +15 Max HP. The dungeon brands its survivors."},
-	{"id": "floor_skip", "type": "skip",   "icon": "⬆",
+	{"id": "floor_skip", "type": "skip",  "icon": "^",
 	 "name": "Teleport Shard",
 	 "desc": "Skip the next floor entirely. Cowardly but effective."},
-	{"id": "spd_boost",  "type": "stat",   "icon": "⚡", "stat": "speed",   "value": 3,
+	{"id": "spd_boost",  "type": "stat",  "icon": "SPD", "stat": "speed",  "value": 3,
 	 "name": "Quicksilver Vial",
 	 "desc": "+3 Speed. Act earlier, die later."},
 ]
 
 # Border/accent colors per item type
 const TYPE_COLORS: Dictionary = {
-	"heal":    Color(0.18, 0.88, 0.28),
-	"stat":    Color(0.92, 0.76, 0.10),
-	"multi":   Color(0.95, 0.55, 0.12),
-	"skip":    Color(0.62, 0.32, 0.92),
+	"heal":  Color(0.18, 0.88, 0.28),
+	"stat":  Color(0.92, 0.76, 0.10),
+	"multi":  Color(0.95, 0.55, 0.12),
+	"skip":  Color(0.62, 0.32, 0.92),
 }
 
-@onready var _loot_cards:      HBoxContainer = $VBox/LootCards
-@onready var _system_label:    Label         = $VBox/SystemLabel
-@onready var _continue_button: Button        = $VBox/ContinueButton
+@onready var _loot_cards:  HBoxContainer = $VBox/LootCards
+@onready var _system_label:  Label  = $VBox/SystemLabel
+@onready var _continue_button: Button  = $VBox/ContinueButton
 
 var _chosen: String = ""
 
@@ -66,7 +66,7 @@ func _make_loot_card(item: Dictionary) -> PanelContainer:
 	var panel := PanelContainer.new()
 	panel.custom_minimum_size = Vector2(250.0, 200.0)
 	var ps := StyleBoxFlat.new()
-	ps.bg_color     = Color(0.07, 0.05, 0.11, 0.97)
+	ps.bg_color  = Color(0.07, 0.05, 0.11, 0.97)
 	ps.border_color = col.darkened(0.32)
 	ps.set_border_width_all(2)
 	ps.set_corner_radius_all(5)
@@ -86,7 +86,7 @@ func _make_loot_card(item: Dictionary) -> PanelContainer:
 	vbox.add_child(header)
 
 	var icon_lbl := Label.new()
-	icon_lbl.text = item.get("icon", "✦")
+	icon_lbl.text = item.get("icon", "*")
 	icon_lbl.add_theme_font_size_override("font_size", 28)
 	icon_lbl.add_theme_color_override("font_color", col)
 	header.add_child(icon_lbl)

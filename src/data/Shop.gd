@@ -27,7 +27,7 @@ const INVENTORY: Array[Dictionary] = [
 	{
 		"id": "shop_field_kit",
 		"name": "Field Medic Kit",
-		"icon": "✚",
+		"icon": "+",
 		"color": Color(0.28, 0.86, 0.40),
 		"cost": 40,
 		"desc": "Restore 40 HP. The dungeon's first-aid concession. Generously priced.",
@@ -36,7 +36,7 @@ const INVENTORY: Array[Dictionary] = [
 	{
 		"id": "shop_blood_transfusion",
 		"name": "Black-Market Transfusion",
-		"icon": "❤",
+		"icon": "HP",
 		"color": Color(0.92, 0.32, 0.18),
 		"cost": 90,
 		"desc": "+20 Max HP and heal 60. The provenance of the blood is not discussed.",
@@ -45,7 +45,7 @@ const INVENTORY: Array[Dictionary] = [
 	{
 		"id": "shop_sharpening_stone",
 		"name": "Mystery Whetstone",
-		"icon": "⚔",
+		"icon": "ATK",
 		"color": Color(0.95, 0.55, 0.10),
 		"cost": 75,
 		"desc": "+8 Attack. The merchant insists it sharpens fists too. He is lying about most things.",
@@ -54,7 +54,7 @@ const INVENTORY: Array[Dictionary] = [
 	{
 		"id": "shop_plate_kit",
 		"name": "Reinforced Plating",
-		"icon": "🛡",
+		"icon": "DEF",
 		"color": Color(0.45, 0.65, 1.00),
 		"cost": 70,
 		"desc": "+3 Armor. Bolted to your existing armor. Removal not included.",
@@ -63,7 +63,7 @@ const INVENTORY: Array[Dictionary] = [
 	{
 		"id": "shop_caffeine_pack",
 		"name": "Quickdraw Stims",
-		"icon": "⚡",
+		"icon": "SPD",
 		"color": Color(0.96, 0.86, 0.20),
 		"cost": 60,
 		"desc": "+3 Speed. The merchant assures you the side-effects clear before Floor 18.",
@@ -72,7 +72,7 @@ const INVENTORY: Array[Dictionary] = [
 	{
 		"id": "shop_megaheal",
 		"name": "Suspicious Healing Draught",
-		"icon": "✦",
+		"icon": "*",
 		"color": Color(0.40, 0.92, 0.50),
 		"cost": 120,
 		"desc": "Restore 90 HP and +10 Max HP. Tastes like copper. The merchant won't say why.",
@@ -81,7 +81,7 @@ const INVENTORY: Array[Dictionary] = [
 	{
 		"id": "shop_combat_brew",
 		"name": "Berserker's Brew",
-		"icon": "⚔",
+		"icon": "ATK",
 		"color": Color(0.78, 0.28, 0.18),
 		"cost": 130,
 		"desc": "+12 Attack, +2 Speed. The aftertaste lingers. So does the aggression.",
@@ -90,7 +90,7 @@ const INVENTORY: Array[Dictionary] = [
 	{
 		"id": "shop_tower_shield",
 		"name": "Surplus Tower Shield",
-		"icon": "🛡",
+		"icon": "DEF",
 		"color": Color(0.55, 0.65, 0.95),
 		"cost": 140,
 		"desc": "+6 Armor, +25 Max HP. Heavy. Reassuringly so. The previous owner could not be reached for comment.",
@@ -99,7 +99,7 @@ const INVENTORY: Array[Dictionary] = [
 	{
 		"id": "shop_publicity_packet",
 		"name": "Publicity Packet",
-		"icon": "★",
+		"icon": "*",
 		"color": Color(0.96, 0.78, 0.18),
 		"cost": 50,
 		"desc": "+60 Audience favor. Pre-printed merchandise. The crowd does love a sellout.",
@@ -108,7 +108,7 @@ const INVENTORY: Array[Dictionary] = [
 	{
 		"id": "shop_titan_tonic",
 		"name": "Titan's Tonic",
-		"icon": "❤",
+		"icon": "HP",
 		"color": Color(0.30, 0.84, 0.30),
 		"cost": 180,
 		"desc": "+40 Max HP and heal to full. The dungeon files an objection. Ignored.",
@@ -117,7 +117,7 @@ const INVENTORY: Array[Dictionary] = [
 	{
 		"id": "shop_warpaint",
 		"name": "Branded Warpaint",
-		"icon": "✦",
+		"icon": "*",
 		"color": Color(0.95, 0.32, 0.62),
 		"cost": 100,
 		"desc": "+5 Attack, +5 Defense, +25 Audience. Sponsored by 'Nobody Important'.",

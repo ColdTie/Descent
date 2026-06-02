@@ -11,7 +11,7 @@ extends Control
 signal shop_left
 
 var _slate: Array[Dictionary] = []
-var _purchased: Dictionary = {}        # id -> true once bought (greys the card)
+var _purchased: Dictionary = {}  # id -> true once bought (greys the card)
 var _gold_label: Label = null
 var _system_label: Label = null
 var _cards_container: HBoxContainer = null
@@ -45,8 +45,8 @@ func _build_ui() -> void:
 	# Stone panel
 	var outer := PanelContainer.new()
 	outer.set_anchors_preset(Control.PRESET_CENTER)
-	outer.offset_left   = -560.0
-	outer.offset_top    = -290.0
+	outer.offset_left  = -560.0
+	outer.offset_top  = -290.0
 	outer.offset_right  =  560.0
 	outer.offset_bottom =  290.0
 	var s := StyleBoxFlat.new()
@@ -66,7 +66,7 @@ func _build_ui() -> void:
 
 	# Title
 	var title := Label.new()
-	title.text = "◈  MERCHANT INTERLUDE  ◈"
+	title.text = "*  MERCHANT INTERLUDE  *"
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	title.add_theme_font_size_override("font_size", 32)
 	title.add_theme_color_override("font_color", Color(0.96, 0.82, 0.20))
@@ -118,7 +118,7 @@ func _build_ui() -> void:
 	vbox.add_child(btn_row)
 
 	_leave_button = Button.new()
-	_leave_button.text = "▼  LEAVE & DESCEND  ▼"
+	_leave_button.text = "  LEAVE & DESCEND  "
 	_leave_button.custom_minimum_size = Vector2(300.0, 52.0)
 	_leave_button.add_theme_font_size_override("font_size", 17)
 	_leave_button.add_theme_color_override("font_color", Color(0.96, 0.80, 0.18))
@@ -127,7 +127,7 @@ func _build_ui() -> void:
 
 
 func _gold_text() -> String:
-	return "◉  GOLD: %d" % GameState.hero_gold
+	return "$  GOLD: %d" % GameState.hero_gold
 
 
 func _make_card(item: Dictionary) -> PanelContainer:
@@ -156,7 +156,7 @@ func _make_card(item: Dictionary) -> PanelContainer:
 	vb.add_child(header)
 
 	var icon_lbl := Label.new()
-	icon_lbl.text = item.get("icon", "✦")
+	icon_lbl.text = item.get("icon", "*")
 	icon_lbl.add_theme_font_size_override("font_size", 26)
 	icon_lbl.add_theme_color_override("font_color", col)
 	header.add_child(icon_lbl)
@@ -187,7 +187,7 @@ func _make_card(item: Dictionary) -> PanelContainer:
 	# Cost label
 	var cost: int = int(item.get("cost", 0))
 	var cost_lbl := Label.new()
-	cost_lbl.text = "◉ %d gold" % cost
+	cost_lbl.text = "$ %d gold" % cost
 	cost_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	cost_lbl.add_theme_font_size_override("font_size", 14)
 	cost_lbl.add_theme_color_override("font_color", Color(1.0, 0.86, 0.18))

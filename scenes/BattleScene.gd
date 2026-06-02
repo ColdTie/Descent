@@ -5,15 +5,15 @@ extends Node2D
 signal battle_complete(hero_won: bool, xp_earned: int, enemies_killed: int)
 
 const HEX_SIZE: float = 38.0
-const HERO_COLOR     := Color(0.25, 0.55, 1.0)
-const ENEMY_COLOR    := Color(0.9, 0.2, 0.15)
-const SELECTED_CLR   := Color(1.0, 0.9, 0.2)
+const HERO_COLOR  := Color(0.25, 0.55, 1.0)
+const ENEMY_COLOR  := Color(0.9, 0.2, 0.15)
+const SELECTED_CLR  := Color(1.0, 0.9, 0.2)
 const DEAD_MODULATE  := Color(0.35, 0.35, 0.35, 0.4)
-const MOVE_CLR       := Color(0.15, 0.85, 0.35, 0.45)
-const ATTACK_CLR     := Color(0.9, 0.15, 0.05, 0.55)
-const AOE_CLR        := Color(0.9, 0.45, 0.05, 0.35)
-const SELF_CLR       := Color(0.6, 0.3, 0.9, 0.5)
-const FROST_CLR      := Color(0.25, 0.65, 1.0, 0.5)
+const MOVE_CLR  := Color(0.15, 0.85, 0.35, 0.45)
+const ATTACK_CLR  := Color(0.9, 0.15, 0.05, 0.55)
+const AOE_CLR  := Color(0.9, 0.45, 0.05, 0.35)
+const SELF_CLR  := Color(0.6, 0.3, 0.9, 0.5)
+const FROST_CLR  := Color(0.25, 0.65, 1.0, 0.5)
 const LAVA_HEAT_CLR  := Color(1.0, 0.45, 0.0, 0.9)
 
 const DONUT_LINES: Dictionary = {
@@ -102,10 +102,10 @@ const DONUT_LINES: Dictionary = {
 
 # Floor-theme colors — initialized in _setup_floor_theme() before drawing begins
 var LAVA_COLOR  := Color(0.88, 0.36, 0.04)
-var LAVA_GLOW   := Color(1.0, 0.60, 0.08, 0.35)
+var LAVA_GLOW  := Color(1.0, 0.60, 0.08, 0.35)
 var LAVA_BORDER := Color(0.95, 0.42, 0.04)
 var FLOOR_COLOR := Color(0.18, 0.15, 0.22)
-var FLOOR_ALT   := Color(0.14, 0.11, 0.17)
+var FLOOR_ALT  := Color(0.14, 0.11, 0.17)
 var STONE_EDGE  := Color(0.38, 0.30, 0.45)
 var ATMO_COLOR  := Color(0.82, 0.76, 0.96)
 
@@ -120,7 +120,7 @@ var _all_combatants: Array[Combatant] = []
 var _ally_hp_labels: Dictionary = {}  # combatant.id -> Label
 
 # Visual nodes
-var _hex_polys: Dictionary = {}    # Vector2i -> Polygon2D
+var _hex_polys: Dictionary = {}  # Vector2i -> Polygon2D
 var _entity_nodes: Dictionary = {} # combatant.id -> Node2D
 var _ability_btns: Dictionary = {} # ability_id -> Button
 var _highlight_hexes: Array[Vector2i] = []
@@ -135,7 +135,7 @@ var _selected_ability: String = "basic_attack"
 var _player_turn: bool = false
 var _battle_rng: RandomNumberGenerator
 var _enemies_killed: int = 0
-var _first_kill_done: bool = false   # for first_kill quip
+var _first_kill_done: bool = false  # for first_kill quip
 var _boss: Combatant = null
 var _boss_hp_fill: ColorRect = null
 var _boss_glow_tween: Tween = null
@@ -151,7 +151,7 @@ var _audience_widget: Label = null
 var _audience_flash_tween: Tween = null
 var _pending_toasts: Array[Dictionary] = []
 var _toast_showing: bool = false
-var _attack_pre_hp: int = 0   # snapshot of target HP before _do_hero_attack — for one-shot detection
+var _attack_pre_hp: int = 0  # snapshot of target HP before _do_hero_attack — for one-shot detection
 
 # Run 21: gold HUD widget — sits below the audience widget. Flashes on gain.
 var _gold_widget: Label = null
@@ -208,28 +208,28 @@ func _setup_floor_theme() -> void:
 	match tier:
 		1:  # Obsidian halls — cold blue-black stone, arcane blue-fire
 			FLOOR_COLOR  = Color(0.07, 0.09, 0.18)
-			FLOOR_ALT    = Color(0.04, 0.06, 0.13)
-			STONE_EDGE   = Color(0.20, 0.28, 0.55)
-			LAVA_COLOR   = Color(0.06, 0.28, 0.82)
-			LAVA_GLOW    = Color(0.15, 0.50, 1.0, 0.30)
+			FLOOR_ALT  = Color(0.04, 0.06, 0.13)
+			STONE_EDGE  = Color(0.20, 0.28, 0.55)
+			LAVA_COLOR  = Color(0.06, 0.28, 0.82)
+			LAVA_GLOW  = Color(0.15, 0.50, 1.0, 0.30)
 			LAVA_BORDER  = Color(0.18, 0.52, 1.0)
-			ATMO_COLOR   = Color(0.68, 0.76, 1.0)
+			ATMO_COLOR  = Color(0.68, 0.76, 1.0)
 		2:  # The Abyss — near-black void with crackling void-purple energy
 			FLOOR_COLOR  = Color(0.04, 0.02, 0.08)
-			FLOOR_ALT    = Color(0.02, 0.01, 0.05)
-			STONE_EDGE   = Color(0.40, 0.10, 0.52)
-			LAVA_COLOR   = Color(0.52, 0.00, 0.72)
-			LAVA_GLOW    = Color(0.70, 0.05, 0.90, 0.28)
+			FLOOR_ALT  = Color(0.02, 0.01, 0.05)
+			STONE_EDGE  = Color(0.40, 0.10, 0.52)
+			LAVA_COLOR  = Color(0.52, 0.00, 0.72)
+			LAVA_GLOW  = Color(0.70, 0.05, 0.90, 0.28)
 			LAVA_BORDER  = Color(0.80, 0.10, 0.95)
-			ATMO_COLOR   = Color(0.70, 0.62, 0.96)
+			ATMO_COLOR  = Color(0.70, 0.62, 0.96)
 		_:  # Default stone (floors 1-6)
 			FLOOR_COLOR  = Color(0.18, 0.15, 0.22)
-			FLOOR_ALT    = Color(0.14, 0.11, 0.17)
-			STONE_EDGE   = Color(0.38, 0.30, 0.45)
-			LAVA_COLOR   = Color(0.88, 0.36, 0.04)
-			LAVA_GLOW    = Color(1.0, 0.60, 0.08, 0.35)
+			FLOOR_ALT  = Color(0.14, 0.11, 0.17)
+			STONE_EDGE  = Color(0.38, 0.30, 0.45)
+			LAVA_COLOR  = Color(0.88, 0.36, 0.04)
+			LAVA_GLOW  = Color(1.0, 0.60, 0.08, 0.35)
 			LAVA_BORDER  = Color(0.95, 0.42, 0.04)
-			ATMO_COLOR   = Color(0.82, 0.76, 0.96)
+			ATMO_COLOR  = Color(0.82, 0.76, 0.96)
 
 ## ─── Encounter Setup ──────────────────────────────────────────────────────────
 
@@ -347,22 +347,22 @@ func _find_ally_spawn_hexes(count: int) -> Array[Vector2i]:
 
 func _load_effect_textures() -> void:
 	var fx_map: Dictionary = {
-		"basic_attack":   "res://assets/effects/fx_impact.png",
-		"power_strike":   "res://assets/effects/fx_power_strike.png",
-		"backstab":       "res://assets/effects/fx_backstab.png",
-		"fireball":       "res://assets/effects/fx_fireball.png",
-		"frost_nova":     "res://assets/effects/fx_frost.png",
-		"taunt":          "res://assets/effects/fx_taunt.png",
-		"vanish":         "res://assets/effects/fx_vanish.png",
-		"shield_bash":    "res://assets/effects/fx_impact.png",
-		"shadow_step":    "res://assets/effects/fx_shadow_step.png",
-		"mana_shield":    "res://assets/effects/fx_mana_shield.png",
-		"lava_heat":      "res://assets/effects/fx_lava_heat.png",
-		"enemy_claw":     "res://assets/effects/fx_impact.png",
-		"enemy_bite":     "res://assets/effects/fx_backstab.png",
+		"basic_attack":  "res://assets/effects/fx_impact.png",
+		"power_strike":  "res://assets/effects/fx_power_strike.png",
+		"backstab":  "res://assets/effects/fx_backstab.png",
+		"fireball":  "res://assets/effects/fx_fireball.png",
+		"frost_nova":  "res://assets/effects/fx_frost.png",
+		"taunt":  "res://assets/effects/fx_taunt.png",
+		"vanish":  "res://assets/effects/fx_vanish.png",
+		"shield_bash":  "res://assets/effects/fx_impact.png",
+		"shadow_step":  "res://assets/effects/fx_shadow_step.png",
+		"mana_shield":  "res://assets/effects/fx_mana_shield.png",
+		"lava_heat":  "res://assets/effects/fx_lava_heat.png",
+		"enemy_claw":  "res://assets/effects/fx_impact.png",
+		"enemy_bite":  "res://assets/effects/fx_backstab.png",
 		"enemy_fireball": "res://assets/effects/fx_fireball.png",
-		"bone_volley":    "res://assets/effects/fx_impact.png",
-		"hellfire_aoe":   "res://assets/effects/fx_fireball.png",
+		"bone_volley":  "res://assets/effects/fx_impact.png",
+		"hellfire_aoe":  "res://assets/effects/fx_fireball.png",
 	}
 	for id: String in fx_map:
 		var path: String = fx_map[id]
@@ -375,11 +375,11 @@ func _play_ability_effect(hex: Vector2i, ability_id: String) -> void:
 		return
 	var pixel_pos: Vector2 = HexGrid.hex_to_pixel(hex, HEX_SIZE)
 	var fx := Sprite2D.new()
-	fx.texture        = tex
+	fx.texture  = tex
 	fx.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-	fx.position       = pixel_pos + Vector2(0.0, -20.0)
-	fx.scale          = Vector2(0.5, 0.5)
-	fx.z_index        = 20
+	fx.position  = pixel_pos + Vector2(0.0, -20.0)
+	fx.scale  = Vector2(0.5, 0.5)
+	fx.z_index  = 20
 	_entity_layer.add_child(fx)
 	var tw: Tween = create_tween()
 	tw.tween_property(fx, "scale", Vector2(1.6, 1.6), 0.42) \
@@ -393,7 +393,7 @@ func _play_ability_effect(hex: Vector2i, ability_id: String) -> void:
 func _start_idle_bob(sprite: Sprite2D, is_hero: bool) -> void:
 	## Slow breathing bob: hero moves gently, enemies bounce more assertively.
 	var base_y: float  = -24.0
-	var amp:    float  = 2.0 if is_hero else 3.5
+	var amp:  float  = 2.0 if is_hero else 3.5
 	var period: float  = 1.8 if is_hero else 1.2
 	var tw: Tween = create_tween()
 	tw.set_loops()
@@ -413,10 +413,10 @@ func _draw_cave_background() -> void:
 	# Vignette — four dark gradient strips around the viewport edges
 	var ui: CanvasLayer = $UILayer
 	for edge_rect: Array in [
-		[0, 0, 1280, 80],     # top
-		[0, 640, 1280, 80],   # bottom
-		[0, 0, 90, 720],      # left
-		[1190, 0, 90, 720],   # right
+		[0, 0, 1280, 80],  # top
+		[0, 640, 1280, 80],  # bottom
+		[0, 0, 90, 720],  # left
+		[1190, 0, 90, 720],  # right
 	]:
 		var cr := ColorRect.new()
 		cr.position = Vector2(edge_rect[0], edge_rect[1])
@@ -554,7 +554,7 @@ func _add_stone_texture(poly: Polygon2D, hex: Vector2i) -> void:
 func _start_lava_pulse(poly: Polygon2D) -> void:
 	## Pulse lava tiles between bright and dim — colors follow floor theme
 	var bright: Color = LAVA_COLOR.lightened(0.25)
-	var dim:    Color = LAVA_COLOR.darkened(0.38)
+	var dim:  Color = LAVA_COLOR.darkened(0.38)
 	var tw: Tween = create_tween()
 	tw.set_loops()
 	var delay: float = _battle_rng.randf_range(0.0, 1.5)
@@ -683,7 +683,7 @@ func _spawn_entity_node(c: Combatant) -> void:
 		ally_tag.position = Vector2(-30.0, HEX_SIZE * 0.48)
 		root.add_child(ally_tag)
 
-	# HP bar — wide border + background + coloured fill + numeric readout (Run 22).
+	# HP bar — wide border + background + coloured fill (Run 22 tweaks: 50×11).
 	var HP_W: float = 50.0
 	var HP_H: float = 11.0
 	var hp_y: float = HEX_SIZE * 0.58
@@ -706,32 +706,6 @@ func _spawn_entity_node(c: Combatant) -> void:
 	hp_bar.position = Vector2(-HP_W * 0.5, hp_y + 1.0)
 	hp_bar.color = Color(0.18, 0.88, 0.22)
 	root.add_child(hp_bar)
-
-	# Run 22: numeric HP overlay — small "23 / 40" label centred on the bar with
-	# a dark shadow for legibility against any fill color.
-	var hp_text_shadow := Label.new()
-	hp_text_shadow.name = "HPTextShadow"
-	hp_text_shadow.text = "%d / %d" % [c.hp, c.max_hp]
-	hp_text_shadow.size = Vector2(HP_W + 2.0, HP_H + 2.0)
-	hp_text_shadow.position = Vector2(-(HP_W + 2.0) * 0.5 + 1.0, hp_y + 1.0)
-	hp_text_shadow.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	hp_text_shadow.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	hp_text_shadow.add_theme_font_size_override("font_size", 9)
-	hp_text_shadow.add_theme_color_override("font_color", Color(0.0, 0.0, 0.0, 0.85))
-	hp_text_shadow.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	root.add_child(hp_text_shadow)
-
-	var hp_text := Label.new()
-	hp_text.name = "HPText"
-	hp_text.text = "%d / %d" % [c.hp, c.max_hp]
-	hp_text.size = Vector2(HP_W + 2.0, HP_H + 2.0)
-	hp_text.position = Vector2(-(HP_W + 2.0) * 0.5, hp_y)
-	hp_text.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	hp_text.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	hp_text.add_theme_font_size_override("font_size", 9)
-	hp_text.add_theme_color_override("font_color", Color(1.0, 1.0, 1.0, 0.98))
-	hp_text.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	root.add_child(hp_text)
 
 	# Status icons
 	var status_lbl := Label.new()
@@ -767,25 +741,27 @@ func _get_sprite_path(c: Combatant) -> String:
 	return "res://assets/sprites/%s.png" % base
 
 func _entity_glyph(c: Combatant) -> String:
+	# Run 22 (fix): glyph fallback used when sprite art isn't loaded. ASCII
+	# only — the default Godot font draws missing-glyph boxes for emoji.
 	if c.sprite_key == "companion_donut":
-		return "🐱"
+		return "D"
 	if c.faction == Combatant.Faction.HERO:
 		match GameState.hero_class:
-			"brawler": return "⚔"
-			"rogue":   return "🗡"
-			"arcanist":return "✦"
+			"brawler": return "B"
+			"rogue":   return "R"
+			"arcanist":return "A"
 		return "C"
 	# Enemy glyphs by sprite_key
 	match c.sprite_key:
-		"imp":     return "👿"
+		"imp":     return "i"
 		"goblin":  return "G"
-		"skeleton":return "💀"
+		"skeleton":return "S"
 		"demon":   return "D"
-		"golem":   return "⬡"
-		"boss_dungeon_lord":  return "♛"
-		"boss_warden":        return "⛓"
-		"boss_abyss_keeper":  return "☠"
-	if c.sprite_key.begins_with("boss"): return "♛"
+		"golem":   return "o"
+		"boss_dungeon_lord":  return "*"
+		"boss_warden":  return "⛓"
+		"boss_abyss_keeper":  return "X"
+	if c.sprite_key.begins_with("boss"): return "*"
 	return c.display_name.left(1).to_upper()
 
 ## ─── Boss HP Bar ──────────────────────────────────────────────────────────────
@@ -807,7 +783,7 @@ func _build_boss_hp_bar() -> void:
 
 	# Label
 	var name_lbl := Label.new()
-	name_lbl.text = "☠  %s  ☠" % _boss.display_name.to_upper()
+	name_lbl.text = "X  %s  X" % _boss.display_name.to_upper()
 	name_lbl.position = Vector2(640.0 - bar_w / 2.0, 68.0)
 	name_lbl.custom_minimum_size = Vector2(bar_w, 0.0)
 	name_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -873,7 +849,7 @@ func _build_donut_hologram() -> void:
 	ui.add_child(header_bg)
 
 	var header_lbl := Label.new()
-	header_lbl.text = "📡  ADVISOR: DONUT"
+	header_lbl.text = ">>  ADVISOR: DONUT"
 	header_lbl.position = Vector2(PX, PY + 1.0)
 	header_lbl.custom_minimum_size = Vector2(PW, 15.0)
 	header_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -945,7 +921,7 @@ func _build_donut_hologram() -> void:
 	# Connector arrow pointing down to hologram
 	var arrow := Label.new()
 	arrow.name = "DonutBubbleArrow"
-	arrow.text = "▼"
+	arrow.text = ""
 	arrow.position = Vector2(PX + PW * 0.5 - 6.0, PY - 8.0)
 	arrow.add_theme_font_size_override("font_size", 10)
 	arrow.add_theme_color_override("font_color", Color(0.10, 0.88, 0.78, 0.65))
@@ -1085,7 +1061,7 @@ func _build_inferno_map() -> void:
 		# Label on current floor only
 		if floor_n == GameState.floor_num:
 			var fn_lbl := Label.new()
-			fn_lbl.text = "▶ %d" % floor_n
+			fn_lbl.text = " %d" % floor_n
 			fn_lbl.add_theme_font_size_override("font_size", 7)
 			fn_lbl.add_theme_color_override("font_color", Color(0.05, 0.03, 0.0, 1.0))
 			fn_lbl.position = Vector2(fx, fy)
@@ -1165,33 +1141,27 @@ func _refresh_ability_bar() -> void:
 		var abl: Dictionary = Abilities.get_ability(ability_id)
 		var abl_obj: Ability = _hero_ability_objs.get(ability_id)
 
-		# Icon row
-		var atype: String = abl.get("target", "single_enemy")
-		var type_icon: String = "⚔"
-		if atype == "self":
-			type_icon = "✦"
-		elif atype == "all_enemies":
-			type_icon = "💥"
-
-		# Charge / cooldown display
+		# Charge / cooldown display (Run 22 fix: dropped emoji type-icon; the
+		# default Godot font renders ATK/*/AoE as missing-glyph boxes. The ability
+		# name + charges line is plenty without it.)
 		var charge_str: String = ""
 		var on_cooldown: bool = false
 		if abl_obj != null:
 			if abl_obj.max_charges == -1:
-				# Unlimited — always available
-				charge_str = "∞"
+				# Unlimited — always available. Use ASCII infinity stand-in.
+				charge_str = "(unlimited)"
 			elif abl_obj.cooldown_remaining > 0:
 				# On cooldown
-				charge_str = "↻ %d" % abl_obj.cooldown_remaining
+				charge_str = "CD %d" % abl_obj.cooldown_remaining
 				on_cooldown = true
 			else:
 				# Show charge dots: filled vs empty
 				var dots: String = ""
 				for i: int in range(abl_obj.max_charges):
-					dots += "●" if i < abl_obj.current_charges else "○"
+					dots += "*" if i < abl_obj.current_charges else "."
 				charge_str = dots
 
-		btn.text = "%s  %s\n%s" % [type_icon, abl.get("display_name", ability_id), charge_str]
+		btn.text = "%s\n%s" % [abl.get("display_name", ability_id), charge_str]
 		btn.add_theme_font_size_override("font_size", 11)
 		btn.disabled = on_cooldown
 
@@ -1371,7 +1341,7 @@ func _on_hex_input(_viewport: Viewport, event: InputEvent, _shape_idx: int, hex:
 	var abl_target: String = abl.get("target", "single_enemy")
 	var abl_range: int = abl.get("range", 1)
 
-	# Clicking hero's own hex → use self-target abilities
+	# Clicking hero's own hex -> use self-target abilities
 	if hex == _hero.position:
 		if abl_target == "self":
 			_do_hero_self_ability()
@@ -1486,10 +1456,10 @@ func _do_hero_attack(target: Combatant) -> void:
 	# Reset it now so a later poison/lava death can't mis-attribute as a one-shot.
 	_attack_pre_hp = 0
 	match _selected_ability:
-		"backstab":     SystemVoice.speak("ability_backstab")
+		"backstab":  SystemVoice.speak("ability_backstab")
 		"shield_bash":  SystemVoice.speak("shield_bash")
 		"shadow_step":  pass  # quip already played above during teleport
-		_:              SystemVoice.speak("hit")
+		_:  SystemVoice.speak("hit")
 	if _battle_rng.randf() < 0.22:
 		_donut_say(_donut_pick("ability_used"))
 
@@ -1694,7 +1664,7 @@ func _on_ability_btn(ability_id: String) -> void:
 		_show_system_banner("On cooldown: %d turns remain." % abl_obj.cooldown_remaining, 1.5)
 		return
 
-	# If already selected and player's turn → self-target abilities fire immediately
+	# If already selected and player's turn -> self-target abilities fire immediately
 	var abl: Dictionary = Abilities.get_ability(ability_id)
 	if _selected_ability == ability_id and _player_turn and abl.get("target", "single_enemy") == "self":
 		_do_hero_self_ability()
@@ -2044,18 +2014,9 @@ func _update_hp_bar(c: Combatant) -> void:
 	if hp_bar == null:
 		return
 	var ratio: float = float(c.hp) / float(max(1, c.max_hp))
-	# Run 22: bar widened 46→50 alongside the entity-node layout bump.
 	hp_bar.size.x = 50.0 * clampf(ratio, 0.0, 1.0)
-	# Green → yellow → red gradient as HP drops
+	# Green -> yellow -> red gradient as HP drops
 	hp_bar.color = Color(1.0 - ratio * 0.78, 0.18 + ratio * 0.70, 0.08)
-	# Run 22: refresh numeric overlay so combat damage is legible at a glance.
-	var hp_text: Label = node.get_node_or_null("HPText")
-	var hp_shadow: Label = node.get_node_or_null("HPTextShadow")
-	var text: String = "%d / %d" % [c.hp, c.max_hp]
-	if hp_text != null:
-		hp_text.text = text
-	if hp_shadow != null:
-		hp_shadow.text = text
 
 func _update_status_label(c: Combatant) -> void:
 	var node: Node2D = _entity_nodes.get(c.id)
@@ -2064,14 +2025,17 @@ func _update_status_label(c: Combatant) -> void:
 	var status_lbl: Label = node.get_node_or_null("StatusLabel")
 	if status_lbl == null:
 		return
+	# Run 22 (fix): use ASCII letter codes — the emoji glyphs above rendered as
+	# missing-glyph boxes in Godot's default font.
 	var icons: Array[String] = []
 	for eff: Dictionary in c.status_effects:
 		match eff.get("id", ""):
-			"burning":  icons.append("🔥")
-			"frozen":   icons.append("❄")
-			"poisoned": icons.append("☠")
-			"fortified":icons.append("🛡")
-			"vanished": icons.append("👁")
+			"burning":  icons.append("[BRN]")
+			"frozen":  icons.append("[FRZ]")
+			"poisoned":  icons.append("[PSN]")
+			"fortified":  icons.append("[DEF]")
+			"vanished":  icons.append("[HID]")
+			"mana_shield": icons.append("[SHD]")
 	status_lbl.text = " ".join(icons)
 
 func _update_hero_hp_label() -> void:
@@ -2154,10 +2118,11 @@ func _build_achievement_overlay() -> void:
 	_achievement_layer.layer = 5
 	add_child(_achievement_layer)
 
-	# Audience score widget — top-right, always visible, flashes on gain.
+	# Run 22 (fix): widgets were colliding with the HeroHPLabel at (1070,16).
+	# Stack them BELOW the hero HP line instead — top-right column, y=58+.
 	var widget := PanelContainer.new()
-	widget.position = Vector2(1080.0, 12.0)
-	widget.custom_minimum_size = Vector2(188.0, 38.0)
+	widget.position = Vector2(1080.0, 58.0)
+	widget.custom_minimum_size = Vector2(188.0, 34.0)
 	var sb := StyleBoxFlat.new()
 	sb.bg_color = Color(0.08, 0.06, 0.12, 0.86)
 	sb.border_color = Color(0.95, 0.78, 0.18)
@@ -2171,15 +2136,15 @@ func _build_achievement_overlay() -> void:
 	_audience_widget = Label.new()
 	_audience_widget.text = _audience_widget_text()
 	_audience_widget.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_audience_widget.add_theme_font_size_override("font_size", 14)
+	_audience_widget.add_theme_font_size_override("font_size", 13)
 	_audience_widget.add_theme_color_override("font_color", Color(0.95, 0.82, 0.22))
 	_audience_widget.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	widget.add_child(_audience_widget)
 
-	# Run 21: gold widget sits directly under the audience widget.
+	# Run 21: gold widget — moved (with the audience widget) below the hero HP line.
 	var gold_panel := PanelContainer.new()
-	gold_panel.position = Vector2(1080.0, 56.0)
-	gold_panel.custom_minimum_size = Vector2(188.0, 32.0)
+	gold_panel.position = Vector2(1080.0, 98.0)
+	gold_panel.custom_minimum_size = Vector2(188.0, 30.0)
 	var gsb := StyleBoxFlat.new()
 	gsb.bg_color = Color(0.08, 0.06, 0.12, 0.86)
 	gsb.border_color = Color(0.78, 0.58, 0.10)
@@ -2191,7 +2156,7 @@ func _build_achievement_overlay() -> void:
 	_achievement_layer.add_child(gold_panel)
 
 	_gold_widget = Label.new()
-	_gold_widget.text = "◉ GOLD  %d" % GameState.hero_gold
+	_gold_widget.text = "GOLD  %d" % GameState.hero_gold
 	_gold_widget.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_gold_widget.add_theme_font_size_override("font_size", 13)
 	_gold_widget.add_theme_color_override("font_color", Color(1.0, 0.86, 0.18))
@@ -2215,20 +2180,20 @@ func _on_audience_gained(_amount: int, _reason: String) -> void:
 
 func _audience_widget_text() -> String:
 	## Run 22: show run-total audience plus the threshold for the next sponsor
-	## offer. Format: "★ AUDIENCE  N / T". When all earnable thresholds for
+	## offer. Format: "* AUDIENCE  N / T". When all earnable thresholds for
 	## the current `audience_score` are already taken, fall back to the next
 	## multiple — keeps the progression bar honest even after sponsor accepts.
 	var total: int = GameState.audience_score
 	var taken: int = GameState.sponsor_offers_taken
 	var threshold: int = int(Sponsors.SPONSOR_THRESHOLD) * (taken + 1)
-	return "★ AUDIENCE  %d / %d" % [total, threshold]
+	return "AUDIENCE  %d / %d" % [total, threshold]
 
 
 func _on_gold_gained(_amount: int, _reason: String) -> void:
 	## Run 21: refresh the HUD coin-count and flash gold briefly.
 	if _gold_widget == null:
 		return
-	_gold_widget.text = "◉ GOLD  %d" % GameState.hero_gold
+	_gold_widget.text = "GOLD  %d" % GameState.hero_gold
 	if _gold_flash_tween != null and _gold_flash_tween.is_valid():
 		_gold_flash_tween.kill()
 	_gold_widget.modulate = Color(1.6, 1.35, 0.55, 1.0)
@@ -2270,7 +2235,7 @@ func _show_next_toast() -> void:
 	panel.add_child(vb)
 
 	var head := Label.new()
-	head.text = "✦ ACHIEVEMENT UNLOCKED"
+	head.text = "* ACHIEVEMENT UNLOCKED"
 	head.add_theme_font_size_override("font_size", 11)
 	head.add_theme_color_override("font_color", Color(0.96, 0.78, 0.18))
 	vb.add_child(head)
