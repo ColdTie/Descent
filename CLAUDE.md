@@ -35,7 +35,7 @@ DESCENT is a turn-based tactical dungeon crawler in the spirit of **Dungeon Craw
 - **Architecture rule**: `BattleEngine._calculate_damage()` returns RAW damage (no armor). `Combatant.take_damage(amount, ignore_armor=false)` applies armor. Don't double-apply armor in both places.
 - `Combatant.take_damage(amount, ignore_armor)` — the `ignore_armor` parameter bypasses the `armor` field reduction (for backstab, env damage, etc.)
 
-## Current State (Run 21 — Gold Economy + Between-Floor Shop + Mana Shield)
+## Current State (Run 23 — Move-vs-Ability UX + Right-Click Cancel)
 ### Implemented ✅
 **Run 1 (Bootstrap):**
 - `GameRng`, `GameState`, `SystemVoice` autoloads
@@ -199,6 +199,40 @@ DESCENT is a turn-based tactical dungeon crawler in the spirit of **Dungeon Craw
 - **`ClassSelect.gd`** — portrait filter changed to `LINEAR_WITH_MIPMAPS` to match
 - **`deploy.yml`** — installs `libcairo2` + `cairosvg`, runs `gen_sprites_v5.py`
 
+**Run 23 (Move-vs-Ability UX — Persistent Move Rings + Dynamic Hint + Right-Click Cancel):**
+- **Root issue:** With an ability armed, the player could still click an empty adjacent hex to move, but the green move tiles visually merged into (or were dominated by) the ability's fill overlays — and nothing on screen explained that move was still available. The single static "YOUR TURN — Click to move or attack" text didn't disambiguate.
+- **`scenes/BattleScene.gd` `_highlight_move_ring(hex)`** — new helper. Move markers are now drawn as a thin **green outlined Line2D ring** (3px, rounded joints, `z_index = 1`) instead of a filled `Polygon2D`. The ring sits ABOVE ability-zone fills, so even on a Fireball turn the player still sees exactly where they can step. A subtle sine-wave alpha pulse (0.55 ↔ 0.95) draws the eye without being noisy. The ring uses a distinct node name (`"MoveRing"`) so it doesn't collide with the existing `"Highlight"` dedupe; `_clear_highlights()` now wipes both per hex.
+- **`_update_turn_hint()`** — new dynamic turn-indicator text that adapts to the armed ability:
+  - Single-enemy abilities: `YOUR TURN  •  GREEN = move  •  click ENEMY for [name]  •  right-click cancels`
+  - Range-1 AOE (Frost Nova): `… AOE hits all adjacent foes …`
+  - Ranged AOE (Fireball, Hellfire): `… click ORANGE tile to drop [name] …`
+  - Self buffs (Taunt, Vanish, Mana Shield): `… click YOURSELF for [name] …`
+  Called from turn-start AND from `_on_ability_btn` so the hint stays current as the player cycles through abilities. The `TurnIndicator` Label was 264px in the .tscn; widened at runtime to 1056px to fit the new text on one line.
+- **Right-click to cancel** — `_on_hex_input` now treats `MOUSE_BUTTON_RIGHT` as "revert to Basic Attack". Frees the player from being stuck in an armed-ability state if they picked the wrong one; just right-click the grid to go back to default mode. Plays the `select` SFX at a slightly lower pitch as audible feedback.
+
+**Run 22 (HUD + Font Polish — ASCII Icons, Bar/Widget Layout Fixes):**
+- **HP numeric overlay reverted** — the `HPText` / `HPTextShadow` Labels added in the original Run 22 (centered "23 / 40" on each unit's HP bar) were visually offset and added clutter. Per player feedback, removed. Bars are now plain 50×11 green→red fills with the variance gradient.
+- **Audience + Gold widget collision fixed** — the `HeroHPLabel` declared in `BattleScene.tscn` sits at `(1070, 16)` and shows "HP: NN / NN" for Carl. The new audience widget had been placed at `(1080, 12)`, exactly on top — so Carl's HP text was being covered. Moved both widgets DOWN: audience now at `(1080, 58)`, gold at `(1080, 98)`. The right-edge HUD column reads top-down: Hero HP → Audience → Gold.
+- **ASCII-only icon migration** — Godot's bundled default font has no glyphs for the emoji and extended-Unicode chars the UI was using (`⚔ 🛡 ❤ ⚡ ✚ ★ ✦ ◆ ◉ ♛ 💥 ▼ ▶ ⟳ 📡` and friends); they all rendered as missing-glyph fallback boxes. Replaced every icon literal across `scenes/*.gd` and `src/data/*.gd` with a safe-ASCII equivalent so they render correctly without bundling a custom font. The mapping is consistent across all UI:
+  ```
+  ⚔ sword         → ATK
+  🛡 shield       → DEF
+  ❤ heart         → HP
+  ⚡ bolt          → SPD
+  ✚ cross         → +
+  ★ ✦ ◆ ♛ stars  → *
+  ◉ coin         → $
+  💥 boom         → AoE
+  ▼ ▶ ◀ ⟳ arrows → removed
+  ⬡ hexagon      → o
+  ↻ recycle      → "CD "
+  ∞ infinity     → "(unl)"
+  ```
+- **In-battle status badges** changed from emoji glyphs to bracketed letter codes: `[BRN]` (burning), `[FRZ]` (frozen), `[PSN]` (poisoned), `[DEF]` (fortified), `[HID]` (vanished), `[SHD]` (mana shield).
+- **Ability bar charge dots** changed from `●○` to `*.` so they render without a special font.
+- **Sponsor progress widget** — `_audience_widget_text()` shows `AUDIENCE  N / T` where T is the threshold for the next sponsor offer, computed as `SPONSOR_THRESHOLD × (sponsor_offers_taken + 1)`. Previously just a bare run-total.
+- **Ability button styleboxes** — replaced the subtle `modulate = SELECTED_CLR` tint approach with real `StyleBoxFlat` overrides. Selected ability now has a **bright gold border + warm amber fill + glow shadow**; on-cooldown / depleted shows a dim grey border + muted font; normal sits as bronze border on dark fill. Applied to `normal`, `hover`, `pressed`, `disabled`, `focus` slots so the styling doesn't flicker on mouseover.
+
 **Run 21 (Gold Economy + Between-Floor Shop + Arcanist Mana Shield):**
 - **`src/data/Shop.gd`** — new pure-data shop inventory + economy math. 11 items spanning healing (Field Medic Kit, Suspicious Healing Draught, Titan's Tonic), stat boosts (Mystery Whetstone, Reinforced Plating, Quickdraw Stims), multi-effects (Berserker's Brew, Surplus Tower Shield, Branded Warpaint), audience favor (Publicity Packet), and an HP/heal combo (Black-Market Transfusion). Cost range 40–180. Static `slate(rng)` returns SLATE_SIZE=4 distinct items via deterministic Fisher-Yates. `gold_for_kill/_boss/_clear(floor_num)` scale with floor depth (kill: 12–46, boss: 55–140, clear: 23–74). `should_show_shop(floor, gold)` gates the route. Zero autoload deps — testable in `--script` mode.
 - **`scenes/Shop.tscn/.gd`** — new merchant interlude scene. Unlike LootScreen / SponsorOffer (pick-one), the Shop is multi-purchase: each card shows cost + effects; BUY deducts gold, marks the card PURCHASED, and re-runs affordability checks on the remaining cards (unaffordable ones flip to "TOO POOR"). Big gold balance in the header updates live via `GameState.gold_spent` signal. "LEAVE & DESCEND" continues. Matches existing PanelContainer + StyleBoxFlat visual language (warm gold/amber palette, distinct from sponsor screen).
@@ -327,6 +361,8 @@ FTL, traditional roguelikes). Status of the "what are we missing" audit:
 - DCC reality-show layer: patch notes between tiers — Run 20
 - Gold economy + between-floor shop — Run 21
 - Arcanist class-specific unlock (Mana Shield) — Run 21
+- HUD polish + ASCII-safe iconography (no missing-glyph boxes) — Run 22
+- Move-vs-ability UX (persistent green rings + dynamic hint + right-click cancel) — Run 23
 
 ### 🔜 Highest-value, easiest remaining (do next, roughly in order)
 1. **Background music / ambient loop** — SFX exist now; a low droning ambient loop per

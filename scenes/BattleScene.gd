@@ -1233,9 +1233,9 @@ func _next_turn() -> void:
 			return
 
 		_player_turn = true
-		_turn_indicator.text = "YOUR TURN — Click to move or attack"
 		_turn_indicator.add_theme_color_override("font_color", Color(0.35, 1.0, 0.35))
 		_update_highlights()
+		_update_turn_hint()
 		_update_hero_hp_label()
 	elif active.faction == Combatant.Faction.HERO:
 		# Ally turn — auto-driven (move toward nearest enemy, attack if adjacent)
@@ -1334,6 +1334,17 @@ func _on_hex_input(_viewport: Viewport, event: InputEvent, _shape_idx: int, hex:
 	if not (event is InputEventMouseButton):
 		return
 	var mb := event as InputEventMouseButton
+	# Run 23 (UX): right-click anywhere on the grid deselects the current
+	# ability and snaps back to Basic Attack. Gives the player a quick "back
+	# out" if they armed the wrong ability and just want to move/attack.
+	if mb.pressed and mb.button_index == MOUSE_BUTTON_RIGHT:
+		if _selected_ability != "basic_attack":
+			AudioManager.play("select", -0.05)
+			_selected_ability = "basic_attack"
+			_refresh_ability_bar()
+			_update_highlights()
+			_update_turn_hint()
+		return
 	if not (mb.pressed and mb.button_index == MOUSE_BUTTON_LEFT):
 		return
 
@@ -1674,18 +1685,52 @@ func _on_ability_btn(ability_id: String) -> void:
 	_refresh_ability_bar()
 	if _player_turn:
 		_update_highlights()
+		_update_turn_hint()
 
 ## ─── Movement Highlighting ────────────────────────────────────────────────────
+
+func _update_turn_hint() -> void:
+	## Run 23 (UX): the turn indicator now tells the player exactly what each
+	## click will do given their currently armed ability. Previously it was
+	## a static "Click to move or attack" — players didn't realize that
+	## clicking an empty green hex still moved them with an ability armed.
+	if not _player_turn:
+		return
+	# Make sure the label is wide enough for the hint string. The .tscn ships
+	# at 264px; widen to 1040 so the multi-segment hint fits on one line.
+	_turn_indicator.offset_right = 1056.0
+	var abl: Dictionary = Abilities.get_ability(_selected_ability)
+	var name_s: String = String(abl.get("display_name", _selected_ability))
+	var target: String = String(abl.get("target", "single_enemy"))
+	var action_segment: String
+	match target:
+		"single_enemy":
+			action_segment = "click ENEMY for %s" % name_s
+		"all_enemies":
+			var abl_range: int = int(abl.get("range", 1))
+			if abl_range <= 1:
+				action_segment = "%s hits all adjacent foes" % name_s
+			else:
+				action_segment = "click ORANGE tile to drop %s" % name_s
+		"self":
+			action_segment = "click YOURSELF for %s" % name_s
+		_:
+			action_segment = "%s armed" % name_s
+	_turn_indicator.text = "YOUR TURN  •  GREEN = move  •  %s  •  right-click cancels" % action_segment
+
 
 func _update_highlights() -> void:
 	_clear_highlights()
 	if not _player_turn:
 		return
 
-	# Movement hexes — adjacent, passable, empty
+	# Movement hexes — adjacent, passable, empty.
+	# Run 23 (UX): drawn as a thin GREEN RING (Line2D outline) rather than a
+	# fill so they remain unmistakably "move here" even when an ability is
+	# armed and the rest of the grid is painted with attack/AOE fills.
 	for n: Vector2i in HexGrid.neighbors(_hero.position):
 		if _is_valid_move_hex(n):
-			_highlight_hex(n, MOVE_CLR)
+			_highlight_move_ring(n)
 
 	# Ability-range highlights
 	var abl: Dictionary = Abilities.get_ability(_selected_ability)
@@ -1729,13 +1774,45 @@ func _highlight_hex(hex: Vector2i, color: Color) -> void:
 	poly.add_child(overlay)
 	_highlight_hexes.append(hex)
 
+func _highlight_move_ring(hex: Vector2i) -> void:
+	## Run 23 (UX): movement marker rendered as a thin pulsing green ring so
+	## it stays legible on top of any subsequent ability-zone fill (red /
+	## orange / blue). Distinct child name "MoveRing" lets the ability code
+	## ALSO paint the same hex if needed without colliding on dedupe.
+	var poly: Polygon2D = _hex_polys.get(hex)
+	if poly == null:
+		return
+	if poly.get_node_or_null("MoveRing") != null:
+		return
+	var ring := Line2D.new()
+	ring.name = "MoveRing"
+	var pts: PackedVector2Array = _make_hex_pts(HEX_SIZE - 5.0)
+	pts.append(pts[0])  # close the loop
+	ring.points = pts
+	ring.width = 3.0
+	ring.default_color = Color(0.30, 1.0, 0.45, 0.95)
+	ring.joint_mode = Line2D.LINE_JOINT_ROUND
+	ring.z_index = 1   # above ability fills so the green ring is always visible
+	poly.add_child(ring)
+	# Pulse the alpha so it draws the eye even when other highlights are present.
+	var tw: Tween = create_tween()
+	tw.set_loops()
+	tw.tween_property(ring, "default_color:a", 0.55, 0.55) \
+		.set_ease(Tween.EASE_IN_OUT).set_trans(Tween.TRANS_SINE)
+	tw.tween_property(ring, "default_color:a", 0.95, 0.55) \
+		.set_ease(Tween.EASE_IN_OUT).set_trans(Tween.TRANS_SINE)
+	_highlight_hexes.append(hex)
+
 func _clear_highlights() -> void:
 	for hex: Vector2i in _highlight_hexes:
 		var poly: Polygon2D = _hex_polys.get(hex)
 		if poly != null:
-			var overlay: Node = poly.get_node_or_null("Highlight")
-			if overlay != null:
-				overlay.queue_free()
+			# Wipe both the fill overlay AND the move ring (Run 23) — either
+			# may exist on a given hex.
+			for child_name: String in ["Highlight", "MoveRing"]:
+				var child: Node = poly.get_node_or_null(child_name)
+				if child != null:
+					child.queue_free()
 	_highlight_hexes.clear()
 
 ## ─── Engine Signal Handlers ───────────────────────────────────────────────────
