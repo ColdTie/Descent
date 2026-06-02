@@ -95,7 +95,8 @@ func _build_ui() -> void:
 
 	# ── Stat cards ────────────────────────────────────────────────────────────
 	var stats := HBoxContainer.new()
-	stats.add_theme_constant_override("separation", 24)
+	# Run 21: tightened separation 24→14 to make room for the GOLD card.
+	stats.add_theme_constant_override("separation", 14)
 	stats.alignment = BoxContainer.ALIGNMENT_CENTER
 	vbox.add_child(stats)
 
@@ -103,6 +104,8 @@ func _build_ui() -> void:
 	_stat_card(stats, "◆", "LEVEL",    str(GameState.hero_level),          Color(0.38, 0.60, 1.00))
 	_stat_card(stats, "⚔", "KILLS",    str(GameState.total_kills),         Color(0.90, 0.34, 0.20))
 	_stat_card(stats, "♛", "AUDIENCE", str(GameState.audience_score),      Color(0.96, 0.78, 0.18))
+	# Run 21: gold left over at end of run — small contribution to SCORE.
+	_stat_card(stats, "◉", "GOLD",     str(GameState.hero_gold),           Color(1.00, 0.80, 0.16))
 
 	# Run 19: achievement roster — show what the player earned this run.
 	var ach_count: int = Achievements.unlocked_ids.size()
@@ -144,7 +147,8 @@ func _build_ui() -> void:
 func _stat_card(parent: Node, icon: String, label_text: String,
 		value_text: String, val_color: Color) -> void:
 	var panel := PanelContainer.new()
-	panel.custom_minimum_size = Vector2(270.0, 90.0)
+	# Run 21: shrunk from 270 → 188 so the new GOLD card fits (5 cards now).
+	panel.custom_minimum_size = Vector2(188.0, 90.0)
 	var ps := StyleBoxFlat.new()
 	ps.bg_color = Color(0.09, 0.07, 0.13, 0.96)
 	ps.border_color = val_color.darkened(0.38)

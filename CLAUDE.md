@@ -35,7 +35,7 @@ DESCENT is a turn-based tactical dungeon crawler in the spirit of **Dungeon Craw
 - **Architecture rule**: `BattleEngine._calculate_damage()` returns RAW damage (no armor). `Combatant.take_damage(amount, ignore_armor=false)` applies armor. Don't double-apply armor in both places.
 - `Combatant.take_damage(amount, ignore_armor)` — the `ignore_armor` parameter bypasses the `armor` field reduction (for backstab, env damage, etc.)
 
-## Current State (Run 20 — DCC Reality-Show Layer: Sponsors + Patch Notes)
+## Current State (Run 21 — Gold Economy + Between-Floor Shop + Mana Shield)
 ### Implemented ✅
 **Run 1 (Bootstrap):**
 - `GameRng`, `GameState`, `SystemVoice` autoloads
@@ -199,6 +199,30 @@ DESCENT is a turn-based tactical dungeon crawler in the spirit of **Dungeon Craw
 - **`ClassSelect.gd`** — portrait filter changed to `LINEAR_WITH_MIPMAPS` to match
 - **`deploy.yml`** — installs `libcairo2` + `cairosvg`, runs `gen_sprites_v5.py`
 
+**Run 21 (Gold Economy + Between-Floor Shop + Arcanist Mana Shield):**
+- **`src/data/Shop.gd`** — new pure-data shop inventory + economy math. 11 items spanning healing (Field Medic Kit, Suspicious Healing Draught, Titan's Tonic), stat boosts (Mystery Whetstone, Reinforced Plating, Quickdraw Stims), multi-effects (Berserker's Brew, Surplus Tower Shield, Branded Warpaint), audience favor (Publicity Packet), and an HP/heal combo (Black-Market Transfusion). Cost range 40–180. Static `slate(rng)` returns SLATE_SIZE=4 distinct items via deterministic Fisher-Yates. `gold_for_kill/_boss/_clear(floor_num)` scale with floor depth (kill: 12–46, boss: 55–140, clear: 23–74). `should_show_shop(floor, gold)` gates the route. Zero autoload deps — testable in `--script` mode.
+- **`scenes/Shop.tscn/.gd`** — new merchant interlude scene. Unlike LootScreen / SponsorOffer (pick-one), the Shop is multi-purchase: each card shows cost + effects; BUY deducts gold, marks the card PURCHASED, and re-runs affordability checks on the remaining cards (unaffordable ones flip to "TOO POOR"). Big gold balance in the header updates live via `GameState.gold_spent` signal. "LEAVE & DESCEND" continues. Matches existing PanelContainer + StyleBoxFlat visual language (warm gold/amber palette, distinct from sponsor screen).
+- **`autoloads/GameState.gd`** — gold economy state. `award_gold(amount, reason)` and `spend_gold(amount, item_id)` with matching `gold_gained` / `gold_spent` signals. `shop_visits: int` resets in `start_run()`. `run_score()` now includes `hero_gold × 1` so hoarding is a real (but secondary) strategy vs. spending. `hero_gold` already existed but was never written to before this run.
+- **`scenes/Main.gd`** routing — after loot pick (and after PatchNotes when tier-transitioning), `_route_to_shop_or_descend()` checks `Shop.should_show_shop()` and inserts the Shop scene before `GameState.descend()`. Shop emits `shop_left` to continue. Suppressed on Floor 1 (no gold yet) and when broke.
+- **`scenes/BattleScene.gd`** — gold awards wired in:
+  - `_on_combatant_died` awards `Shop.gold_for_kill(floor_num)` per enemy and `Shop.gold_for_boss(floor_num)` extra for bosses.
+  - `_on_battle_ended` (hero_won) awards `Shop.gold_for_clear(floor_num)` after the audience-floor-clear bonus.
+  - New HUD gold widget (`_gold_widget`) sits below the audience widget at (1080, 56), 188×32 panel with gold border. Flashes warm-gold and updates text on every `gold_gained` signal via `_on_gold_gained`.
+- **`scenes/VictoryScreen.gd`** — adds GOLD stat card (6 cards now). Card width shrunk 178→156 and separation 18→12 to fit.
+- **`scenes/WinScreen.gd`** — adds GOLD stat card (5 cards). Card width shrunk 270→188 and separation 24→14.
+- **`autoloads/SystemVoice.gd`** — new `shop_enter` (8 lines), `shop_purchase` (6 lines), and `ability_mana_shield` (6 lines) quip pools.
+
+**Arcanist Mana Shield (class-unique unlock — fills the audited gap from Run 20):**
+- **`src/data/Abilities.gd`** — new `mana_shield` ability: self-target buff, 1 charge, 5-turn cooldown, `mana_shield_amount = 40`, marker key `applies_mana_shield: true`.
+- **`src/combat/StatusEffect.gd`** — new `mana_shield(absorb, duration=10)` factory. Carries `absorb_remaining` and `absorb_max` (the latter retained for any future HUD tooltip).
+- **`src/combat/Combatant.gd`** — `take_damage()` now drains the shield BEFORE armor (and HP). New private `_consume_mana_shield(incoming)` walks `status_effects`, drains, drops the effect when its pool hits zero, and returns leftover damage to fall through normally. Overflow correctly continues into the armor path (or ignores it if `ignore_armor=true`).
+- **`scenes/BattleScene.gd`** `_do_hero_self_ability` — new `"mana_shield"` branch applies the status, plays the SystemVoice quip, fires the VFX, and flashes the hero hex blue.
+- **`scenes/LevelUp.gd`** `CLASS_UNLOCKS["arcanist"]` — `mana_shield` added FIRST in the list (order = priority for the unlock card). Backstab/taunt remain as later cross-class fallbacks.
+- **`tools/gen_effects.py`** — new `make_mana_shield()` generator: cyan-blue radial halo, three concentric arcane rings, six radial spokes, bright inner core, sparks. Registered in EFFECTS list as `fx_mana_shield.png`. `BattleScene._load_effect_textures` maps the ability id to the new texture.
+
+- **`tests/test_run21.gd`** (22 test functions, ~148 assertions): Shop inventory schema (size, required keys, unique IDs, allowed effect keys = the ones `Shop._apply_effects` actually handles — drift-detector), gold economy helper monotonicity + boss > kill invariant + non-zero clear bonus, `should_show_shop` skip-when-broke + show-when-wealthy, slate determinism across identical seeds + uniqueness within a slate, `Abilities.mana_shield` schema, `StatusEffect.mana_shield()` factory shape, and four Combatant-integration tests for shield absorption (full absorb, overflow through armor, overflow with ignore_armor, zero-damage edge case).
+- **Test suite total: 595 passed, 0 failed** (up from 447 in Run 20).
+
 **Run 20 (DCC Reality-Show Layer — Sponsor Offers + Patch Notes):**
 - **`src/data/Sponsors.gd`** — pure data + threshold math. 10 DCC-flavored sponsor offers (`hyperion_drink`, `big_mikes_meat`, `iron_tassel`, `spectral_cola`, `bopca_insurance`, `gofundit`, `rays_pizza`, `quantec_pet`, `rumnoir_rotgut`, `exitpit_adv`). Each has a `sponsor` brand name, color, icon, description, and an `effects` dict with any of `attack`/`defense`/`speed`/`max_hp`/`heal`/`audience`. `SPONSOR_THRESHOLD = 200`. Static `sponsors_owed(audience, taken)` returns `max(0, audience / 200 - taken)` — clamps at zero so over-counting can never produce phantom offers.
 - **`src/data/PatchNotes.gd`** — pure data. `NOTES` dict maps the floor a hero is *entering* (7 = Obsidian tier; 13 = Void tier) to a patch payload (`version`, `subtitle`, `lines[]`, `closing`). The patch lines use `+` / `-` / `#` prefixes that the PatchNotes scene colors as green/red/accent. Pure flavor — the underlying scaling already happens via `EnemyDefs.make_combatant` and floor-gated abilities; this just narrates the difficulty spike like a live-service balance patch.
@@ -283,7 +307,7 @@ DESCENT is a turn-based tactical dungeon crawler in the spirit of **Dungeon Craw
 - **`BattleEngine.move_toward()`** — Public wrapper around `_move_toward()` for companion AI use.
 - **SystemVoice** — New line when Donut is knocked out.
 
-## Genre Gap Analysis & Direction (audited Run 16, updated Run 20)
+## Genre Gap Analysis & Direction (audited Run 16, updated Run 21)
 Compared against tactical roguelike / DCC-style peers (Slay the Spire, Into the Breach,
 FTL, traditional roguelikes). Status of the "what are we missing" audit:
 
@@ -301,26 +325,26 @@ FTL, traditional roguelikes). Status of the "what are we missing" audit:
 - DCC reality-show layer: achievements + audience score — Run 19
 - DCC reality-show layer: sponsor offers — Run 20
 - DCC reality-show layer: patch notes between tiers — Run 20
+- Gold economy + between-floor shop — Run 21
+- Arcanist class-specific unlock (Mana Shield) — Run 21
 
 ### 🔜 Highest-value, easiest remaining (do next, roughly in order)
 1. **Background music / ambient loop** — SFX exist now; a low droning ambient loop per
    tier would massively lift atmosphere. Can be procedurally generated (longer WAV, looped
    AudioStreamPlayer with `loop`). Medium effort; AudioManager already exists to host it.
-2. **Gold economy + between-floor shop** — `GameState.hero_gold` exists but is never earned
-   or spent. Award gold per kill, add a simple Shop screen between floors (buy heals, stat
-   boosts, ability recharges, reroll loot). Big DCC flavour ("the dungeon's storefront").
-   Pairs naturally with Run 20's sponsor / patch-note interlude pattern.
-3. **Pause / settings menu (in-battle)** — No way to pause, restart, quit, or change volume
+2. **Pause / settings menu (in-battle)** — No way to pause, restart, quit, or change volume
    mid-run. Add an ESC overlay: Resume / Restart Run / Quit to Title + SFX volume slider.
-4. **Arcanist class-specific unlock** — Arcanist still inherits Backstab/Taunt cross-class.
-   Give it an exclusive (e.g. Mana Shield: absorb next 40 dmg; or Chain Lightning).
-5. **Combat log panel** — Only transient System banners exist. A small scrolling log of the
+3. **Combat log panel** — Only transient System banners exist. A small scrolling log of the
    last ~6 events helps readability. Pure-UI, low risk.
-6. **Loot rarity tiers** — Common/Rare/Legendary with color + a Legendary screen flash and
+4. **Loot rarity tiers** — Common/Rare/Legendary with color + a Legendary screen flash and
    special quip. Extends the existing LootScreen with minimal new code.
-7. **Sponsor cooldown / variety** — Run 20 ships 10 sponsors at a flat 200-audience cadence.
+5. **Sponsor cooldown / variety** — Run 20 ships 10 sponsors at a flat 200-audience cadence.
    Could weight rare/legendary sponsors at higher audience thresholds, or thread sponsor
    stories across multiple offers (e.g. "Big Mike returns" with a follow-up gift).
+6. **Shop variety / rare items** — Run 21 ships 11 items with a flat 4-card slate. Could
+   gate higher-cost items behind floor depth, weight by rarity, or add a "REROLL" button
+   (costs a small gold premium). Mana Shield HUD widget: show `absorb_remaining` as a
+   floating bar above Carl when active.
 
 ### 🟡 Larger / later (note, not yet scoped)
 7. **More floor variety** — Per-tier hazards: Tier 1 crumbling bridges, Tier 2 freeze pools,
@@ -373,11 +397,12 @@ src/map/
 
 src/data/
   Classes.gd         — class definitions (Brawler/Rogue/Arcanist)
-  Abilities.gd       — all ability definitions (+ignore_armor flag on backstab)
+  Abilities.gd       — all ability definitions (+ignore_armor flag on backstab, +mana_shield Run 21)
   EnemyDefs.gd       — enemy definitions + Combatant factory (+floor_num scaling param)
   Allies.gd          — floor-scripted ally NPCs + Combatant factory (Run 18)
   Sponsors.gd        — Run 20: DCC sponsor-offer pool + threshold math (sponsors_owed)
   PatchNotes.gd      — Run 20: per-tier patch-note payloads (floors 7, 13)
+  Shop.gd            — Run 21: merchant inventory + gold-economy helpers (slate/gold_for_*/should_show_shop)
 
 scenes/
   Main.tscn/.gd      — root, scene orchestration; boots to TitleScreen, routes through VictoryScreen
@@ -390,6 +415,7 @@ scenes/
   LootScreen.tscn/.gd   — post-battle choose-one loot
   SponsorOffer.tscn/.gd  — Run 20: 3-card sponsor pick when audience score crosses a threshold
   PatchNotes.tscn/.gd    — Run 20: mocking "patch notes" overlay at floors 7 and 13
+  Shop.tscn/.gd          — Run 21: between-floor merchant; multi-purchase, gold-gated cards
 
 tests/
   run_tests.gd       — headless test runner (SceneTree)
@@ -403,6 +429,7 @@ tests/
   test_run17_allies.gd — floor-3 ally spawn, factory, engine integration (Run 18)
   test_run19.gd      — achievement DEFS schema + audience-score math (Run 19)
   test_run20.gd      — Sponsors pool + threshold math + PatchNotes content (Run 20)
+  test_run21.gd      — Shop inventory schema + gold helpers + slate determinism + Mana Shield absorb math (Run 21)
 ```
 
 ## Running Tests

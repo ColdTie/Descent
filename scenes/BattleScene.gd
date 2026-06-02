@@ -153,6 +153,10 @@ var _pending_toasts: Array[Dictionary] = []
 var _toast_showing: bool = false
 var _attack_pre_hp: int = 0   # snapshot of target HP before _do_hero_attack — for one-shot detection
 
+# Run 21: gold HUD widget — sits below the audience widget. Flashes on gain.
+var _gold_widget: Label = null
+var _gold_flash_tween: Tween = null
+
 @onready var _hex_layer: Node2D = $HexLayer
 @onready var _entity_layer: Node2D = $EntityLayer
 @onready var _floor_label: Label = $UILayer/FloorLabel
@@ -313,6 +317,9 @@ func _build_encounter() -> void:
 		Achievements.achievement_unlocked.connect(_on_achievement_unlocked)
 	if not GameState.audience_gained.is_connected(_on_audience_gained):
 		GameState.audience_gained.connect(_on_audience_gained)
+	# Run 21: gold widget reacts to award_gold from this scene + any spends.
+	if not GameState.gold_gained.is_connected(_on_gold_gained):
+		GameState.gold_gained.connect(_on_gold_gained)
 
 func _find_ally_spawn_hexes(count: int) -> Array[Vector2i]:
 	## Pick up to `count` passable, unoccupied hexes near the hero start.
@@ -349,6 +356,7 @@ func _load_effect_textures() -> void:
 		"vanish":         "res://assets/effects/fx_vanish.png",
 		"shield_bash":    "res://assets/effects/fx_impact.png",
 		"shadow_step":    "res://assets/effects/fx_shadow_step.png",
+		"mana_shield":    "res://assets/effects/fx_mana_shield.png",
 		"lava_heat":      "res://assets/effects/fx_lava_heat.png",
 		"enemy_claw":     "res://assets/effects/fx_impact.png",
 		"enemy_bite":     "res://assets/effects/fx_backstab.png",
@@ -1576,6 +1584,14 @@ func _do_hero_self_ability() -> void:
 			if hnode != null:
 				var tw: Tween = create_tween()
 				tw.tween_property(hnode, "modulate:a", 0.3, 0.3)
+		"mana_shield":
+			# Run 21: Arcanist's class-unique unlock. Absorbs the next N damage
+			# before armor/HP — see Combatant._consume_mana_shield.
+			var absorb: int = int(abl.get("mana_shield_amount", 40))
+			_hero.apply_status(StatusEffect.mana_shield(absorb))
+			SystemVoice.speak("ability_mana_shield")
+			_play_ability_effect(_hero.position, "mana_shield")
+			_flash_hex_area(_hero.position, 0, Color(0.32, 0.62, 1.0, 0.55))
 		_:
 			SystemVoice.speak_direct("Nothing happens. The System is confused too.")
 
@@ -1748,10 +1764,13 @@ func _on_combatant_died(c: Combatant) -> void:
 		# Run 19: achievements + audience favor on enemy death.
 		Achievements.unlock("first_blood")
 		GameState.award_audience(5, "kill")
+		# Run 21: gold drops scale with floor depth (see Shop.gold_for_*).
+		GameState.award_gold(Shop.gold_for_kill(GameState.floor_num), "kill")
 		var is_boss_kill: bool = c.sprite_key.begins_with("boss") or c.is_boss
 		if is_boss_kill:
 			Achievements.unlock("boss_slayer")
 			GameState.award_audience(50, "boss_kill")
+			GameState.award_gold(Shop.gold_for_boss(GameState.floor_num), "boss_kill")
 			if c.is_enraged:
 				Achievements.unlock("enrage_killer")
 		# One-shot detection: if THIS attack's damage met or exceeded target's max HP.
@@ -1849,6 +1868,8 @@ func _on_battle_ended(hero_won: bool, xp_earned: int) -> void:
 		# Run 19: end-of-floor achievement evaluation. Order is intentional —
 		# floor-clear bonus first (always earned), then conditionals.
 		GameState.award_audience(GameState.floor_num * 10, "floor_clear")
+		# Run 21: clearing the floor itself is a payday on top of per-kill drops.
+		GameState.award_gold(Shop.gold_for_clear(GameState.floor_num), "floor_clear")
 		_evaluate_floor_clear_achievements()
 		SystemVoice.speak_direct("All threats eliminated. XP: %d." % xp_earned)
 		get_tree().create_timer(0.5).timeout.connect(func() -> void: _donut_say(_donut_pick("victory")))
@@ -2093,6 +2114,28 @@ func _build_achievement_overlay() -> void:
 	_audience_widget.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	widget.add_child(_audience_widget)
 
+	# Run 21: gold widget sits directly under the audience widget.
+	var gold_panel := PanelContainer.new()
+	gold_panel.position = Vector2(1080.0, 56.0)
+	gold_panel.custom_minimum_size = Vector2(188.0, 32.0)
+	var gsb := StyleBoxFlat.new()
+	gsb.bg_color = Color(0.08, 0.06, 0.12, 0.86)
+	gsb.border_color = Color(0.78, 0.58, 0.10)
+	gsb.set_border_width_all(1)
+	gsb.set_corner_radius_all(4)
+	gsb.set_content_margin_all(6.0)
+	gold_panel.add_theme_stylebox_override("panel", gsb)
+	gold_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_achievement_layer.add_child(gold_panel)
+
+	_gold_widget = Label.new()
+	_gold_widget.text = "◉ GOLD  %d" % GameState.hero_gold
+	_gold_widget.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_gold_widget.add_theme_font_size_override("font_size", 13)
+	_gold_widget.add_theme_color_override("font_color", Color(1.0, 0.86, 0.18))
+	_gold_widget.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	gold_panel.add_child(_gold_widget)
+
 
 func _on_audience_gained(_amount: int, _reason: String) -> void:
 	## Update the widget text and flash gold briefly.
@@ -2106,6 +2149,19 @@ func _on_audience_gained(_amount: int, _reason: String) -> void:
 	_audience_flash_tween = create_tween()
 	_audience_flash_tween.tween_property(_audience_widget, "modulate",
 		Color(1.0, 1.0, 1.0, 1.0), 0.45).set_ease(Tween.EASE_OUT)
+
+
+func _on_gold_gained(_amount: int, _reason: String) -> void:
+	## Run 21: refresh the HUD coin-count and flash gold briefly.
+	if _gold_widget == null:
+		return
+	_gold_widget.text = "◉ GOLD  %d" % GameState.hero_gold
+	if _gold_flash_tween != null and _gold_flash_tween.is_valid():
+		_gold_flash_tween.kill()
+	_gold_widget.modulate = Color(1.6, 1.35, 0.55, 1.0)
+	_gold_flash_tween = create_tween()
+	_gold_flash_tween.tween_property(_gold_widget, "modulate",
+		Color(1.0, 1.0, 1.0, 1.0), 0.40).set_ease(Tween.EASE_OUT)
 
 
 func _on_achievement_unlocked(_id: String, def: Dictionary) -> void:

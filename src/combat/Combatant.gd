@@ -34,13 +34,42 @@ func is_alive() -> bool:
 func take_damage(amount: int, ignore_armor: bool = false) -> int:
 	## Returns actual damage dealt.
 	## ignore_armor=true bypasses armor reduction (for backstab, env damage, etc.)
+	## Run 21: a mana_shield status absorbs damage BEFORE armor, before HP. When
+	## the shield's pool drains, the status expires immediately and any leftover
+	## damage falls through to armor/HP as normal.
+	var remaining: int = _consume_mana_shield(amount)
+	if remaining <= 0:
+		return 0
 	var mitigated: int
 	if ignore_armor:
-		mitigated = amount
+		mitigated = remaining
 	else:
-		mitigated = max(0, amount - armor)
+		mitigated = max(0, remaining - armor)
 	hp = max(0, hp - mitigated)
 	return mitigated
+
+
+func _consume_mana_shield(incoming: int) -> int:
+	## Drain the shield pool first; return any leftover damage.
+	if incoming <= 0:
+		return incoming
+	for i: int in range(status_effects.size()):
+		var eff: Dictionary = status_effects[i]
+		if eff.get("id", "") != "mana_shield":
+			continue
+		var pool: int = int(eff.get("absorb_remaining", 0))
+		if pool <= 0:
+			status_effects.remove_at(i)
+			return incoming
+		if incoming <= pool:
+			eff["absorb_remaining"] = pool - incoming
+			if eff["absorb_remaining"] <= 0:
+				status_effects.remove_at(i)
+			return 0
+		# Pool exhausted; let the overflow continue to armor/HP and drop status.
+		status_effects.remove_at(i)
+		return incoming - pool
+	return incoming
 
 func heal(amount: int) -> int:
 	var actual: int = min(amount, max_hp - hp)

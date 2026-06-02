@@ -10,6 +10,7 @@ const LEVEL_UP_SCENE := "res://scenes/LevelUp.tscn"
 const WIN_SCENE := "res://scenes/WinScreen.tscn"
 const SPONSOR_SCENE := "res://scenes/SponsorOffer.tscn"
 const PATCH_NOTES_SCENE := "res://scenes/PatchNotes.tscn"
+const SHOP_SCENE := "res://scenes/Shop.tscn"
 
 var _current_scene: Node = null
 # Pending data from the last battle, used to pass to VictoryScreen
@@ -79,6 +80,8 @@ func _load_scene(path: String) -> void:
 		_current_scene.sponsor_chosen.connect(_on_sponsor_chosen)
 	if _current_scene.has_signal("patch_notes_dismissed"):
 		_current_scene.patch_notes_dismissed.connect(_on_patch_notes_dismissed)
+	if _current_scene.has_signal("shop_left"):
+		_current_scene.shop_left.connect(_on_shop_left)
 
 func _on_battle_complete(hero_won: bool, xp_earned: int, enemies_killed: int) -> void:
 	if not hero_won:
@@ -134,9 +137,20 @@ func _on_loot_chosen(_loot_id: String) -> void:
 		_pending_next_floor = next_floor
 		_load_scene(PATCH_NOTES_SCENE)
 		return
-	GameState.descend()
+	_route_to_shop_or_descend()
 
 func _on_patch_notes_dismissed() -> void:
 	GameState.patch_notes_seen.append(_pending_next_floor)
 	_pending_next_floor = 0
+	_route_to_shop_or_descend()
+
+func _route_to_shop_or_descend() -> void:
+	## Run 21: between loot/patch-notes and the actual descent, the merchant
+	## may take a turn. Cadence + affordability gating live in Shop.gd.
+	if Shop.should_show_shop(GameState.floor_num, GameState.hero_gold):
+		_load_scene(SHOP_SCENE)
+		return
+	GameState.descend()
+
+func _on_shop_left() -> void:
 	GameState.descend()

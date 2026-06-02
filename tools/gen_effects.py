@@ -277,6 +277,42 @@ def make_shadow_step():
     sparks(img, CX, CY, 14, 14, 28, (200, 60, 255, 220), seed=99)
     return img.filter(ImageFilter.GaussianBlur(0.7))
 
+def make_mana_shield():
+    """Cyan-blue arcane barrier — concentric rings with hex-glyph core.
+
+    Run 21: visual for the Arcanist's class-unique unlock. Sits in the cool
+    end of the palette so it reads as defensive (vs. shadow_step's hot magenta).
+    """
+    img = canvas()
+    d   = ImageDraw.Draw(img)
+    px  = img.load()
+    # Soft cyan glow halo
+    radial_glow(img, CX, CY, 30, (40, 130, 255), 0.55)
+    # Three concentric arcane rings
+    for ring_idx, r_outer in enumerate([28, 22, 16]):
+        thickness = 2
+        alpha_mul = 1.0 - ring_idx * 0.15
+        for r_i in range(r_outer, r_outer - thickness, -1):
+            alpha = int(220 * alpha_mul)
+            d.ellipse([CX - r_i, CY - r_i, CX + r_i, CY + r_i],
+                      outline=(120, 200, 255, alpha))
+    # Six radial spokes (subtle, suggest a glyph)
+    for spoke in range(6):
+        angle = math.radians(spoke * 60)
+        for t_i in range(10, 23):
+            x = int(CX + t_i * math.cos(angle))
+            y = int(CY + t_i * math.sin(angle))
+            if 0 <= x < W and 0 <= y < H:
+                px[x, y] = (180, 230, 255, 180)
+    # Bright inner core
+    for r_i in range(8, 0, -1):
+        t = 1 - r_i / 8
+        d.ellipse([CX - r_i, CY - r_i, CX + r_i, CY + r_i],
+                  fill=(140, 210, 255, int(255 * (0.40 + 0.60 * t))))
+    d.ellipse([CX - 3, CY - 3, CX + 3, CY + 3], fill=(230, 245, 255, 255))
+    sparks(img, CX, CY, 16, 18, 30, (180, 220, 255, 230), seed=131)
+    return img.filter(ImageFilter.GaussianBlur(0.6))
+
 def make_lava_heat():
     """Orange upward flame wisps for lava heat damage."""
     img = canvas()
@@ -317,6 +353,7 @@ EFFECTS = [
     ("fx_taunt.png",        make_taunt),
     ("fx_lava_heat.png",    make_lava_heat),
     ("fx_shadow_step.png",  make_shadow_step),
+    ("fx_mana_shield.png",  make_mana_shield),
 ]
 
 def main():

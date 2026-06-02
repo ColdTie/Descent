@@ -15,3 +15,12 @@ static func fortified(duration: int = 2, armor_bonus: int = 3) -> Dictionary:
 
 static func poisoned(duration: int = 4, dpt: int = 3) -> Dictionary:
 	return {"id": "poisoned", "name": "Poisoned", "duration": duration, "damage_per_turn": dpt, "armor_mod": 0}
+
+## Run 21: Arcanist barrier. Holds a damage pool; Combatant.take_damage() drains
+## it BEFORE armor is applied (and before HP). When the pool hits 0 the effect
+## expires immediately. Long nominal duration is intentional — it only ends
+## when consumed or, defensively, after `duration` of the caster's turns.
+static func mana_shield(absorb: int = 40, duration: int = 10) -> Dictionary:
+	return {"id": "mana_shield", "name": "Mana Shield", "duration": duration,
+		"damage_per_turn": 0, "armor_mod": 0, "absorb_remaining": absorb,
+		"absorb_max": absorb}

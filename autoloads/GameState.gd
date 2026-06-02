@@ -39,6 +39,13 @@ signal audience_gained(amount: int, reason: String)
 var sponsor_offers_taken: int = 0
 var patch_notes_seen: Array[int] = []
 
+# Run 21: gold economy. Earned from kills/bosses/floor clears, spent at the
+# between-floor Shop. `shop_visits` tracks how many shops have appeared this
+# run; the HUD widget animates briefly on every gain.
+signal gold_gained(amount: int, reason: String)
+signal gold_spent(amount: int, item_id: String)
+var shop_visits: int = 0
+
 const XP_PER_LEVEL: int = 100
 const TOTAL_FLOORS: int = 18
 
@@ -59,6 +66,7 @@ func start_run(class_id: String, seed_val: int = -1) -> void:
 	lava_push_kills = 0
 	sponsor_offers_taken = 0
 	patch_notes_seen.clear()
+	shop_visits = 0
 	var cls_data: Dictionary = Classes.get_class_data(class_id)
 	hero_max_hp = cls_data.get("hp", 100)
 	hero_hp = hero_max_hp
@@ -84,6 +92,25 @@ func award_audience(amount: int, reason: String = "") -> void:
 	audience_score_floor += amount
 	audience_gained.emit(amount, reason)
 
+
+func award_gold(amount: int, reason: String = "") -> void:
+	## Run 21: add gold and notify HUD widgets. Negative amounts are ignored;
+	## use spend_gold() for purchases so the signal split stays clean.
+	if amount <= 0:
+		return
+	hero_gold += amount
+	gold_gained.emit(amount, reason)
+
+
+func spend_gold(amount: int, item_id: String = "") -> bool:
+	## Deduct gold for a purchase. Returns false if the hero can't afford it;
+	## the caller (Shop) is responsible for gating the button before calling.
+	if amount <= 0 or hero_gold < amount:
+		return false
+	hero_gold -= amount
+	gold_spent.emit(amount, item_id)
+	return true
+
 func gain_xp(amount: int) -> bool:
 	hero_xp += amount
 	if hero_xp >= hero_level * XP_PER_LEVEL:
@@ -108,7 +135,7 @@ func regen_between_floors() -> int:
 
 func run_score() -> int:
 	## Composite end-of-run score: depth dominates, with bonuses for kills,
-	## bosses, level, and audience favor (Run 19). Used on the win / death
-	## summary screens.
+	## bosses, level, audience favor (Run 19), and hoarded gold (Run 21 —
+	## ×1 so it's a real but secondary contributor; spending is still optimal).
 	return floor_num * 1000 + total_kills * 25 + bosses_slain * 250 \
-		+ hero_level * 100 + audience_score * 2
+		+ hero_level * 100 + audience_score * 2 + hero_gold * 1

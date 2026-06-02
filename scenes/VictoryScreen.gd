@@ -123,7 +123,8 @@ func _build_ui() -> void:
 	# ── Stat cards ────────────────────────────────────────────────────────────
 	var stats_row := HBoxContainer.new()
 	stats_row.alignment = BoxContainer.ALIGNMENT_CENTER
-	stats_row.add_theme_constant_override("separation", 18)
+	# Run 21: tightened separation 18→12 so the 6th (GOLD) card fits.
+	stats_row.add_theme_constant_override("separation", 12)
 	vbox.add_child(stats_row)
 
 	_stat_card(stats_row, "⚔", "ENEMIES",   str(enemies_killed),
@@ -140,6 +141,10 @@ func _build_ui() -> void:
 	_stat_card(stats_row, "★", "AUDIENCE",
 		str(GameState.audience_score_floor),
 		Color(0.96, 0.78, 0.18))
+	# Run 21: gold balance — spent at the between-floor merchant.
+	_stat_card(stats_row, "◉", "GOLD",
+		str(GameState.hero_gold),
+		Color(1.00, 0.80, 0.16))
 
 	# ── Button ────────────────────────────────────────────────────────────────
 	var btn_row := HBoxContainer.new()
@@ -159,7 +164,8 @@ func _stat_card(parent: Node, icon: String, label_text: String,
 		value_text: String, val_color: Color) -> void:
 	var panel := PanelContainer.new()
 	# Run 19: shrunk from 200 → 178 so the new AUDIENCE card fits (5 cards now).
-	panel.custom_minimum_size = Vector2(178.0, 90.0)
+	# Run 21: shrunk again 178 → 156 so the GOLD card (6 cards now) fits.
+	panel.custom_minimum_size = Vector2(156.0, 90.0)
 	var ps := StyleBoxFlat.new()
 	ps.bg_color = Color(0.09, 0.07, 0.13, 0.96)
 	ps.border_color = val_color.darkened(0.42)

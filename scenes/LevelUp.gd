@@ -16,7 +16,9 @@ var _chosen: String = ""
 const CLASS_UNLOCKS: Dictionary = {
 	"brawler":  ["shield_bash"],
 	"rogue":    ["shadow_step", "frost_nova"],
-	"arcanist": ["backstab", "taunt"],
+	# Run 21: arcanist now has a class-unique unlock (mana_shield) ahead of the
+	# generic cross-class options. Order matters — first available wins.
+	"arcanist": ["mana_shield", "backstab", "taunt"],
 }
 
 const UPGRADES: Array[Dictionary] = [

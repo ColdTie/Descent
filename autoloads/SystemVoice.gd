@@ -482,6 +482,37 @@ const LINES: Dictionary = {
 		"Patch v1.13 active. The dungeon's quarterly review demanded this. You are the quarterly review.",
 	],
 
+	# ── Shop interlude (Run 21) ───────────────────────────────────────────────
+	"shop_enter": [
+		"A merchant has set up between floors. The dungeon allows this. The dungeon takes a cut.",
+		"Storefront detected. The merchant accepts only gold and bad decisions.",
+		"Vendor interlude. The System recommends checking the prices. Then checking them again.",
+		"Commerce break. The merchant assures you the prices are fair. The merchant is, statistically, lying.",
+		"A pop-up shop. Convenient. Suspicious. Both, simultaneously.",
+		"The merchant smiles at you. This is not a good sign. Smile back. It's polite.",
+		"Inventory available. The dungeon's vending policy is: cash only, returns never.",
+		"Shopping interlude. The merchant has been waiting. He waits, mostly, for crawlers with too much gold.",
+	],
+
+	"shop_purchase": [
+		"Transaction logged. The merchant is satisfied. The merchant is rarely satisfied.",
+		"Purchase confirmed. Gold transferred. No receipts issued.",
+		"Item acquired. The merchant moves on to the next mark.",
+		"Funds withdrawn. The dungeon notes your liquidity is now slightly worse.",
+		"Sale completed. Your inventory grows. So does the merchant's smug expression.",
+		"Bought. The merchant offers a curt nod. That's the entire customer service experience.",
+	],
+
+	# ── Mana shield ability (Run 21) ──────────────────────────────────────────
+	"ability_mana_shield": [
+		"Arcane barrier engaged. The next blows will not land where you live.",
+		"Mana shield active. The System notes incoming damage is now politely deflected.",
+		"Shield raised. Hostile damage redirected into the void. The void files no complaint.",
+		"Barrier up. Forty points of damage will not, technically, hurt.",
+		"Mana cycled into a shell. Brief. Brittle. Better than nothing.",
+		"Defensive enchantment online. Use the window. It closes.",
+	],
+
 	# ── Achievement unlocked (Run 19) ─────────────────────────────────────────
 	"achievement_unlocked": [
 		"Achievement unlocked. The audience reacts. The dungeon does not.",
