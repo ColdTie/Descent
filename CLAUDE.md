@@ -35,7 +35,7 @@ DESCENT is a turn-based tactical dungeon crawler in the spirit of **Dungeon Craw
 - **Architecture rule**: `BattleEngine._calculate_damage()` returns RAW damage (no armor). `Combatant.take_damage(amount, ignore_armor=false)` applies armor. Don't double-apply armor in both places.
 - `Combatant.take_damage(amount, ignore_armor)` — the `ignore_armor` parameter bypasses the `armor` field reduction (for backstab, env damage, etc.)
 
-## Current State (Run 19 — DCC Reality-Show Layer: Achievements + Audience)
+## Current State (Run 20 — DCC Reality-Show Layer: Sponsors + Patch Notes)
 ### Implemented ✅
 **Run 1 (Bootstrap):**
 - `GameRng`, `GameState`, `SystemVoice` autoloads
@@ -199,6 +199,17 @@ DESCENT is a turn-based tactical dungeon crawler in the spirit of **Dungeon Craw
 - **`ClassSelect.gd`** — portrait filter changed to `LINEAR_WITH_MIPMAPS` to match
 - **`deploy.yml`** — installs `libcairo2` + `cairosvg`, runs `gen_sprites_v5.py`
 
+**Run 20 (DCC Reality-Show Layer — Sponsor Offers + Patch Notes):**
+- **`src/data/Sponsors.gd`** — pure data + threshold math. 10 DCC-flavored sponsor offers (`hyperion_drink`, `big_mikes_meat`, `iron_tassel`, `spectral_cola`, `bopca_insurance`, `gofundit`, `rays_pizza`, `quantec_pet`, `rumnoir_rotgut`, `exitpit_adv`). Each has a `sponsor` brand name, color, icon, description, and an `effects` dict with any of `attack`/`defense`/`speed`/`max_hp`/`heal`/`audience`. `SPONSOR_THRESHOLD = 200`. Static `sponsors_owed(audience, taken)` returns `max(0, audience / 200 - taken)` — clamps at zero so over-counting can never produce phantom offers.
+- **`src/data/PatchNotes.gd`** — pure data. `NOTES` dict maps the floor a hero is *entering* (7 = Obsidian tier; 13 = Void tier) to a patch payload (`version`, `subtitle`, `lines[]`, `closing`). The patch lines use `+` / `-` / `#` prefixes that the PatchNotes scene colors as green/red/accent. Pure flavor — the underlying scaling already happens via `EnemyDefs.make_combatant` and floor-gated abilities; this just narrates the difficulty spike like a live-service balance patch.
+- **`scenes/SponsorOffer.tscn/.gd`** — three-card sponsor pick screen, modelled on LevelUp / LootScreen. Subtitle shows `audience_score`. `_apply_effects()` mutates `GameState.hero_base_stats` / `hero_max_hp` / heals / `award_audience`. On continue, increments `GameState.sponsor_offers_taken` and emits `sponsor_chosen`.
+- **`scenes/PatchNotes.tscn/.gd`** — full-screen mocking dev-blog. Reads target floor via `prepare(data)`; falls back to `GameState.floor_num + 1` defensively. Tier 2 = warm border + amber accents; Tier 3 = void-purple. Click-through emits `patch_notes_dismissed`. Plays `descend` SFX on entry and exit.
+- **`autoloads/GameState.gd`** additions — `sponsor_offers_taken: int` and `patch_notes_seen: Array[int]`, both cleared in `start_run()`.
+- **`scenes/Main.gd`** routing — after VictoryScreen's `floor_cleared`, resolves XP via `gain_xp` up-front into `_pending_leveled`, then checks `Sponsors.sponsors_owed` → if owed, routes to SponsorOffer first; otherwise (or after sponsor accept) calls `_post_sponsor_route()` to fall through to LevelUp / Loot. After loot, before descending, checks `PatchNotes.has_notes_for(next_floor)` AND that the floor isn't already in `patch_notes_seen`; if so routes to PatchNotes scene. `_on_patch_notes_dismissed` appends the floor to `patch_notes_seen` and calls `descend()`. `_load_scene()` now passes `{xp, kills, floor}` to `prepare()` so PatchNotes gets the target floor.
+- **`autoloads/SystemVoice.gd`** additions — new `sponsor_offer` (8 lines), `patch_notes_v2` (6 lines), and `patch_notes_v3` (6 lines) quip pools.
+- **`tests/test_run20.gd`** (16 tests, ~80 assertions) — Sponsors pool schema (size, required keys, unique IDs, allowed effect keys), threshold math (zero / under / at / double / overshoot edge cases), `get_offer` hit + miss, PatchNotes presence for floors 7 and 13, absence for regular floors, schema (`version`/`subtitle`/`lines`/`closing`), and `notes_for(99)` returns empty. Uses `load()` not `preload()` for safety in `--script` test mode.
+- **Test suite total: 447 passed, 0 failed.**
+
 **Run 19 (DCC Reality-Show Layer — Achievements + Audience Score):**
 - **New autoload `Achievements.gd`** (`autoloads/Achievements.gd`) — pure-data + per-run state. `DEFS` dict holds 14 DCC-flavored achievements (`first_blood`, `boss_slayer`, `untouchable`, `crit_streak`, `lava_lord`, `the_descent`, `deep_dweller`, `descended`, `low_hp_hero`, `team_player`, `combo_master`, `headshot`, `enrage_killer`, `speed_run`). Resets on `GameState.run_started`; per-floor counters reset on `floor_changed`. Signal `achievement_unlocked(id, def)` drives the toast UI. Uses `get_node_or_null("/root/GameState")` duck-typing so the script still compiles in `--script` test mode without autoload context.
 - **Audience score** (`GameState`) — `audience_score` (run total), `audience_score_floor` (resets per descent), `lava_push_kills`. Signal `audience_gained(amount, reason)` so HUD widgets can react. New `award_audience(amount, reason)` adds favor and emits. Folded into `run_score()`: now `floor*1000 + kills*25 + bosses*250 + level*100 + audience*2`. Awards: kill +5, crit +10, boss kill +50, lava-push kill +15, floor clear bonus = floor_num × 10, plus each achievement's `audience` field.
@@ -272,7 +283,7 @@ DESCENT is a turn-based tactical dungeon crawler in the spirit of **Dungeon Craw
 - **`BattleEngine.move_toward()`** — Public wrapper around `_move_toward()` for companion AI use.
 - **SystemVoice** — New line when Donut is knocked out.
 
-## Genre Gap Analysis & Direction (audited Run 16, updated Run 19)
+## Genre Gap Analysis & Direction (audited Run 16, updated Run 20)
 Compared against tactical roguelike / DCC-style peers (Slay the Spire, Into the Breach,
 FTL, traditional roguelikes). Status of the "what are we missing" audit:
 
@@ -288,6 +299,8 @@ FTL, traditional roguelikes). Status of the "what are we missing" audit:
 - Class-specific unlockable abilities (mostly) — Runs 12/15
 - Floor-scripted ally NPCs (Marcus + Lina on floor 3) — Run 18
 - DCC reality-show layer: achievements + audience score — Run 19
+- DCC reality-show layer: sponsor offers — Run 20
+- DCC reality-show layer: patch notes between tiers — Run 20
 
 ### 🔜 Highest-value, easiest remaining (do next, roughly in order)
 1. **Background music / ambient loop** — SFX exist now; a low droning ambient loop per
@@ -296,6 +309,7 @@ FTL, traditional roguelikes). Status of the "what are we missing" audit:
 2. **Gold economy + between-floor shop** — `GameState.hero_gold` exists but is never earned
    or spent. Award gold per kill, add a simple Shop screen between floors (buy heals, stat
    boosts, ability recharges, reroll loot). Big DCC flavour ("the dungeon's storefront").
+   Pairs naturally with Run 20's sponsor / patch-note interlude pattern.
 3. **Pause / settings menu (in-battle)** — No way to pause, restart, quit, or change volume
    mid-run. Add an ESC overlay: Resume / Restart Run / Quit to Title + SFX volume slider.
 4. **Arcanist class-specific unlock** — Arcanist still inherits Backstab/Taunt cross-class.
@@ -304,11 +318,9 @@ FTL, traditional roguelikes). Status of the "what are we missing" audit:
    last ~6 events helps readability. Pure-UI, low risk.
 6. **Loot rarity tiers** — Common/Rare/Legendary with color + a Legendary screen flash and
    special quip. Extends the existing LootScreen with minimal new code.
-7. **Sponsor offers** — extend Run 19's audience score: when audience crosses a threshold
-   (e.g. every 200 points), pop a 3-card "sponsor gift" screen with weird DCC-flavoured
-   buffs (debuffs trade-offs included). Re-uses LevelUp's 3-card UI.
-8. **Patch notes between tiers** — System overlay at floors 6→7 and 12→13 with mocking
-   "patch notes" (some flavor, some affecting actual gameplay scaling). Pure-UI overlay.
+7. **Sponsor cooldown / variety** — Run 20 ships 10 sponsors at a flat 200-audience cadence.
+   Could weight rare/legendary sponsors at higher audience thresholds, or thread sponsor
+   stories across multiple offers (e.g. "Big Mike returns" with a follow-up gift).
 
 ### 🟡 Larger / later (note, not yet scoped)
 7. **More floor variety** — Per-tier hazards: Tier 1 crumbling bridges, Tier 2 freeze pools,
@@ -344,8 +356,8 @@ assets/
 
 autoloads/
   GameRng.gd         — seeded RNG singleton
-  GameState.gd       — run-persistent hero state (+run_score, total_kills, bosses_slain, audience_score, lava_push_kills)
-  SystemVoice.gd     — The System commentary pools + signal
+  GameState.gd       — run-persistent hero state (+run_score, total_kills, bosses_slain, audience_score, lava_push_kills, sponsor_offers_taken, patch_notes_seen)
+  SystemVoice.gd     — The System commentary pools + signal (+sponsor_offer, patch_notes_v2, patch_notes_v3 pools as of Run 20)
   AudioManager.gd    — SFX player: preloads WAV pool, play(name, pitch_var, vol_db), SFX toggle
   Achievements.gd    — Run 19: DCC-style achievement defs + per-run unlock state + signal
 
@@ -364,15 +376,20 @@ src/data/
   Abilities.gd       — all ability definitions (+ignore_armor flag on backstab)
   EnemyDefs.gd       — enemy definitions + Combatant factory (+floor_num scaling param)
   Allies.gd          — floor-scripted ally NPCs + Combatant factory (Run 18)
+  Sponsors.gd        — Run 20: DCC sponsor-offer pool + threshold math (sponsors_owed)
+  PatchNotes.gd      — Run 20: per-tier patch-note payloads (floors 7, 13)
 
 scenes/
   Main.tscn/.gd      — root, scene orchestration; boots to TitleScreen, routes through VictoryScreen
+                       Run 20: also routes through SponsorOffer (audience-threshold) and PatchNotes (tiers).
   TitleScreen.tscn/.gd  — main menu: branding, how-to-play, SFX toggle, BEGIN DESCENT
   ClassSelect.tscn/.gd  — class picker front end
   BattleScene.tscn/.gd  — hex battle visual driver (Run 3: charges HUD, lava heat, class glyphs)
   VictoryScreen.tscn/.gd — NEW: post-battle floor clear screen (Run 3)
   LevelUp.tscn/.gd   — upgrade screen; 3 of 6 upgrades per level
   LootScreen.tscn/.gd   — post-battle choose-one loot
+  SponsorOffer.tscn/.gd  — Run 20: 3-card sponsor pick when audience score crosses a threshold
+  PatchNotes.tscn/.gd    — Run 20: mocking "patch notes" overlay at floors 7 and 13
 
 tests/
   run_tests.gd       — headless test runner (SceneTree)
@@ -385,6 +402,7 @@ tests/
   test_run16.gd      — critical hits, boss-floor milestones, score formula (Run 16)
   test_run17_allies.gd — floor-3 ally spawn, factory, engine integration (Run 18)
   test_run19.gd      — achievement DEFS schema + audience-score math (Run 19)
+  test_run20.gd      — Sponsors pool + threshold math + PatchNotes content (Run 20)
 ```
 
 ## Running Tests

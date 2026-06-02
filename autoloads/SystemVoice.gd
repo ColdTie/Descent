@@ -450,6 +450,38 @@ const LINES: Dictionary = {
 		"Loss recorded. The System notes this with something almost like regret.",
 	],
 
+	# ── Sponsor offer (Run 20) ────────────────────────────────────────────────
+	"sponsor_offer": [
+		"A sponsor would like a word. The dungeon is contractually obligated to allow this. It resents the clause.",
+		"Audience favor has attracted commercial interest. The System recommends choosing the gift with the fewer obligations. There are no such gifts.",
+		"Sponsorship interlude. The audience is reminded that the following segment is paid placement.",
+		"A corporate entity has noticed you. This is rarely free. It is also rarely refused.",
+		"The audience demands product placement. Three vendors have responded. Pick one. Smile.",
+		"Sponsor incoming. The dungeon does not endorse this brand. Or any brand. Or you.",
+		"Brand opportunity detected. The System suggests reading the fine print. There is no fine print. There is only the offer.",
+		"An advertiser would like to speak with your audience. Through you. Loudly.",
+	],
+
+	# ── Patch notes: Tier 2 (floor 7) ─────────────────────────────────────────
+	"patch_notes_v2": [
+		"Hot-patch incoming. The dungeon is being rebalanced mid-run. The System apologizes for nothing.",
+		"Patch notes v1.7 deployed. The Obsidian tier has been live-tuned. Adjust accordingly.",
+		"Live patch in progress. The dungeon's management thanks you for your continued participation.",
+		"Tier transition acknowledged. The System has issued revised specifications. You will not enjoy them.",
+		"Maintenance window concluded. Floor 7 is now accepting hero submissions.",
+		"Balance changes deployed. The dungeon assures you it had your best interests in mind. It did not.",
+	],
+
+	# ── Patch notes: Tier 3 (floor 13) ────────────────────────────────────────
+	"patch_notes_v3": [
+		"Final-tier patch deployed. The dungeon has stopped pretending. The patch notes are blunt.",
+		"Patch notes v1.13 live. The Void tier is now hot. So is everything else.",
+		"Late-game balancing applied. The System has removed all references to 'mercy' from its dictionary.",
+		"Endgame patch is live. The dungeon's gloves have come off. The gloves were also on fire.",
+		"Void tier deployed. Survival rate projections: revised downward. Considerably.",
+		"Patch v1.13 active. The dungeon's quarterly review demanded this. You are the quarterly review.",
+	],
+
 	# ── Achievement unlocked (Run 19) ─────────────────────────────────────────
 	"achievement_unlocked": [
 		"Achievement unlocked. The audience reacts. The dungeon does not.",

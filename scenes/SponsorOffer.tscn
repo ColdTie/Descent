@@ -1,0 +1,65 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scenes/SponsorOffer.gd" id="1_so"]
+
+[node name="SponsorOffer" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+script = ExtResource("1_so")
+
+[node name="Background" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+color = Color(0.04, 0.03, 0.07, 1)
+
+[node name="VBox" type="VBoxContainer" parent="."]
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -480.0
+offset_top = -260.0
+offset_right = 480.0
+offset_bottom = 260.0
+theme_override_constants/separation = 18
+alignment = 1
+
+[node name="TitleLabel" type="Label" parent="VBox"]
+layout_mode = 2
+text = "★ SPONSOR INTERLUDE ★"
+horizontal_alignment = 1
+theme_override_font_sizes/font_size = 36
+theme_override_colors/font_color = Color(0.96, 0.78, 0.18, 1)
+
+[node name="SubtitleLabel" type="Label" parent="VBox"]
+layout_mode = 2
+text = "The audience loves you. Or hates you. Same difference."
+horizontal_alignment = 1
+theme_override_font_sizes/font_size = 16
+theme_override_colors/font_color = Color(0.78, 0.74, 0.62, 1)
+
+[node name="SystemLabel" type="Label" parent="VBox"]
+layout_mode = 2
+text = "..."
+horizontal_alignment = 1
+autowrap_mode = 3
+theme_override_font_sizes/font_size = 13
+theme_override_colors/font_color = Color(0.66, 0.66, 0.58, 1)
+
+[node name="Cards" type="HBoxContainer" parent="VBox"]
+layout_mode = 2
+theme_override_constants/separation = 22
+alignment = 1
+
+[node name="ContinueButton" type="Button" parent="VBox"]
+layout_mode = 2
+text = "ACCEPT SPONSORSHIP"
+theme_override_font_sizes/font_size = 18
+theme_override_colors/font_color = Color(0.96, 0.78, 0.18, 1)
+visible = false

@@ -31,6 +31,14 @@ var lava_push_kills: int = 0
 # Run 19: signal fired whenever audience score changes — drives the HUD blip.
 signal audience_gained(amount: int, reason: String)
 
+# Run 20: DCC reality-show layer extension —
+# `sponsor_offers_taken` counts sponsor pop-ups consumed; combined with
+# `Sponsors.SPONSOR_THRESHOLD` it gates the next offer.
+# `patch_notes_seen` tracks which tier-transition patch screens have already
+# played (floors 7, 13). Both reset per run.
+var sponsor_offers_taken: int = 0
+var patch_notes_seen: Array[int] = []
+
 const XP_PER_LEVEL: int = 100
 const TOTAL_FLOORS: int = 18
 
@@ -49,6 +57,8 @@ func start_run(class_id: String, seed_val: int = -1) -> void:
 	audience_score = 0
 	audience_score_floor = 0
 	lava_push_kills = 0
+	sponsor_offers_taken = 0
+	patch_notes_seen.clear()
 	var cls_data: Dictionary = Classes.get_class_data(class_id)
 	hero_max_hp = cls_data.get("hp", 100)
 	hero_hp = hero_max_hp
