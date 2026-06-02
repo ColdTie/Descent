@@ -450,6 +450,17 @@ const LINES: Dictionary = {
 		"Loss recorded. The System notes this with something almost like regret.",
 	],
 
+	# ── Achievement unlocked (Run 19) ─────────────────────────────────────────
+	"achievement_unlocked": [
+		"Achievement unlocked. The audience reacts. The dungeon does not.",
+		"Notification: progress recognized. The System logs this with mild reluctance.",
+		"Milestone reached. The dungeon files a complaint. The complaint is ignored.",
+		"Achievement registered. The audience claps. Don't get used to it.",
+		"Status: recognized. The System updates your file. Briefly.",
+		"Accomplishment confirmed. The dungeon refuses to comment.",
+		"The audience scores the moment. So does the System. So do you. Mostly you.",
+	],
+
 	# ── Win screen (cleared all 18 floors) ────────────────────────────────────
 	"win": [
 		"Floor 18 cleared. The System is surprised. Don't let it go to your head.",

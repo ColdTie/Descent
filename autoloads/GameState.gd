@@ -20,6 +20,17 @@ var hero_base_stats: Dictionary = {}
 var total_kills: int = 0
 var bosses_slain: int = 0
 
+# Run 19: Audience score — DCC reality-show layer. Showy plays earn points
+# (crits, lava kills, low-HP wins, achievements). `audience_score_floor` is the
+# tally for the current floor; `audience_score` is the run total.
+var audience_score: int = 0
+var audience_score_floor: int = 0
+# Run 19: lava-push kill counter for the "Lava Lord" achievement (run-wide).
+var lava_push_kills: int = 0
+
+# Run 19: signal fired whenever audience score changes — drives the HUD blip.
+signal audience_gained(amount: int, reason: String)
+
 const XP_PER_LEVEL: int = 100
 const TOTAL_FLOORS: int = 18
 
@@ -35,6 +46,9 @@ func start_run(class_id: String, seed_val: int = -1) -> void:
 	hero_gold = 0
 	total_kills = 0
 	bosses_slain = 0
+	audience_score = 0
+	audience_score_floor = 0
+	lava_push_kills = 0
 	var cls_data: Dictionary = Classes.get_class_data(class_id)
 	hero_max_hp = cls_data.get("hp", 100)
 	hero_hp = hero_max_hp
@@ -47,7 +61,18 @@ func start_run(class_id: String, seed_val: int = -1) -> void:
 
 func descend() -> void:
 	floor_num += 1
+	audience_score_floor = 0
 	floor_changed.emit(floor_num)
+
+
+func award_audience(amount: int, reason: String = "") -> void:
+	## Add audience favor — emits a signal so HUD widgets can react.
+	## Pure addition; never negative.
+	if amount <= 0:
+		return
+	audience_score += amount
+	audience_score_floor += amount
+	audience_gained.emit(amount, reason)
 
 func gain_xp(amount: int) -> bool:
 	hero_xp += amount
@@ -73,5 +98,7 @@ func regen_between_floors() -> int:
 
 func run_score() -> int:
 	## Composite end-of-run score: depth dominates, with bonuses for kills,
-	## bosses, and level. Used on the win / death summary screens.
-	return floor_num * 1000 + total_kills * 25 + bosses_slain * 250 + hero_level * 100
+	## bosses, level, and audience favor (Run 19). Used on the win / death
+	## summary screens.
+	return floor_num * 1000 + total_kills * 25 + bosses_slain * 250 \
+		+ hero_level * 100 + audience_score * 2

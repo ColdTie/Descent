@@ -5,6 +5,8 @@ extends Control
 signal play_again
 
 func _ready() -> void:
+	# Run 19: finishing the descent is itself an achievement.
+	Achievements.unlock("descended")
 	_build_ui()
 
 func _build_ui() -> void:
@@ -97,9 +99,33 @@ func _build_ui() -> void:
 	stats.alignment = BoxContainer.ALIGNMENT_CENTER
 	vbox.add_child(stats)
 
-	_stat_card(stats, "★", "SCORE",    str(GameState.run_score()),  Color(1.00, 0.84, 0.16))
-	_stat_card(stats, "◆", "LEVEL",    str(GameState.hero_level),   Color(0.38, 0.60, 1.00))
-	_stat_card(stats, "⚔", "KILLS",    str(GameState.total_kills),  Color(0.90, 0.34, 0.20))
+	_stat_card(stats, "★", "SCORE",    str(GameState.run_score()),         Color(1.00, 0.84, 0.16))
+	_stat_card(stats, "◆", "LEVEL",    str(GameState.hero_level),          Color(0.38, 0.60, 1.00))
+	_stat_card(stats, "⚔", "KILLS",    str(GameState.total_kills),         Color(0.90, 0.34, 0.20))
+	_stat_card(stats, "♛", "AUDIENCE", str(GameState.audience_score),      Color(0.96, 0.78, 0.18))
+
+	# Run 19: achievement roster — show what the player earned this run.
+	var ach_count: int = Achievements.unlocked_ids.size()
+	var ach_total: int = Achievements.DEFS.size()
+	var ach_row := Label.new()
+	ach_row.text = "✦  %d / %d achievements unlocked  ✦" % [ach_count, ach_total]
+	ach_row.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	ach_row.add_theme_font_size_override("font_size", 13)
+	ach_row.add_theme_color_override("font_color", Color(0.78, 0.72, 0.50))
+	vbox.add_child(ach_row)
+	if ach_count > 0:
+		var names: Array[String] = []
+		for aid: String in Achievements.unlocked_ids:
+			var def: Dictionary = Achievements.DEFS.get(aid, {})
+			names.append(str(def.get("name", aid)))
+		var names_lbl := Label.new()
+		names_lbl.text = ", ".join(names)
+		names_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		names_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		names_lbl.custom_minimum_size = Vector2(940.0, 0.0)
+		names_lbl.add_theme_font_size_override("font_size", 11)
+		names_lbl.add_theme_color_override("font_color", Color(0.58, 0.55, 0.40))
+		vbox.add_child(names_lbl)
 
 	# ── Button ────────────────────────────────────────────────────────────────
 	var btn_row := HBoxContainer.new()

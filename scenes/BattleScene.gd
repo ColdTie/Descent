@@ -145,6 +145,14 @@ var _donut_rng: RandomNumberGenerator = RandomNumberGenerator.new()
 var _donut_last_line: Dictionary = {}
 var _hero_dead: bool = false
 
+# Run 19: achievement toast queue + per-attack tracking
+var _achievement_layer: CanvasLayer = null
+var _audience_widget: Label = null
+var _audience_flash_tween: Tween = null
+var _pending_toasts: Array[Dictionary] = []
+var _toast_showing: bool = false
+var _attack_pre_hp: int = 0   # snapshot of target HP before _do_hero_attack — for one-shot detection
+
 @onready var _hex_layer: Node2D = $HexLayer
 @onready var _entity_layer: Node2D = $EntityLayer
 @onready var _floor_label: Label = $UILayer/FloorLabel
@@ -169,7 +177,13 @@ func _ready() -> void:
 	_build_donut_hologram()
 	_build_inferno_map()
 	_build_ally_panel()
+	_build_achievement_overlay()
 	_update_hero_hp_label()
+	# Run 19: floor-milestone achievements fire as soon as the floor loads.
+	if GameState.floor_num == 9:
+		Achievements.unlock("the_descent")
+	elif GameState.floor_num == 15:
+		Achievements.unlock("deep_dweller")
 	SystemVoice.speak("floor_enter", [GameState.floor_num])
 	get_tree().create_timer(2.0).timeout.connect(func() -> void: _donut_say(_donut_pick("floor_enter")))
 	# Allies arrival flavor — System banner + Donut quip if any joined this floor.
@@ -293,6 +307,12 @@ func _build_encounter() -> void:
 	_engine.hero_moved.connect(_on_hero_moved)
 	_engine.boss_enraged.connect(_on_boss_enraged)
 	_engine.setup(_all_combatants)
+
+	# Run 19: subscribe to achievement + audience streams for the toast/HUD UI.
+	if not Achievements.achievement_unlocked.is_connected(_on_achievement_unlocked):
+		Achievements.achievement_unlocked.connect(_on_achievement_unlocked)
+	if not GameState.audience_gained.is_connected(_on_audience_gained):
+		GameState.audience_gained.connect(_on_audience_gained)
 
 func _find_ally_spawn_hexes(count: int) -> Array[Vector2i]:
 	## Pick up to `count` passable, unoccupied hexes near the hero start.
@@ -1162,6 +1182,8 @@ func _next_turn() -> void:
 		return
 
 	if active == _hero:
+		# Run 19: count Carl's own turns this floor (for "speed_run").
+		Achievements.note_hero_turn()
 		# Tick ability cooldowns at the start of each hero turn
 		for id: String in _hero_ability_objs:
 			_hero_ability_objs[id].tick_cooldown()
@@ -1391,8 +1413,17 @@ func _do_hero_attack(target: Combatant) -> void:
 			_play_ability_effect(dest, "shadow_step")
 			SystemVoice.speak("shadow_step")
 
+	# Run 19: track ability variety for "combo_master" + capture pre-hit HP
+	# so the death handler can decide whether this was a one-shot ("headshot").
+	Achievements.note_ability_used(_selected_ability)
+	_attack_pre_hp = target.hp
+
 	_play_ability_effect(target.position, _selected_ability)
 	_engine.perform_attack(_hero, target, _selected_ability)
+	# Run 19: _attack_pre_hp is only meaningful for the death emission that
+	# fires *inside* perform_attack (synchronously, before this line runs).
+	# Reset it now so a later poison/lava death can't mis-attribute as a one-shot.
+	_attack_pre_hp = 0
 	match _selected_ability:
 		"backstab":     SystemVoice.speak("ability_backstab")
 		"shield_bash":  SystemVoice.speak("shield_bash")
@@ -1429,6 +1460,13 @@ func _do_hero_attack(target: Combatant) -> void:
 				_show_damage_number(target, lava_dmg, LAVA_HEAT_CLR)
 				if target.is_alive():
 					_hit_flash(target)
+				else:
+					# Run 19: pushing an enemy to its death via lava counts toward
+					# the "Lava Lord" achievement (3 lava-push kills per run).
+					GameState.lava_push_kills += 1
+					GameState.award_audience(15, "lava_kill")
+					if GameState.lava_push_kills >= 3:
+						Achievements.unlock("lava_lord")
 				_update_all_hp_bars()
 				SystemVoice.speak("pushed_into_lava")
 
@@ -1455,6 +1493,9 @@ func _do_hero_aoe_ability(center_hex: Vector2i) -> void:
 	if abl_obj != null and not abl_obj.can_use():
 		SystemVoice.speak("ability_cooldown")
 		return
+
+	# Run 19: count AOE casts toward ability-variety achievement.
+	Achievements.note_ability_used(_selected_ability)
 
 	_player_turn = false
 	_clear_highlights()
@@ -1510,6 +1551,9 @@ func _do_hero_self_ability() -> void:
 	if abl_obj != null and not abl_obj.can_use():
 		SystemVoice.speak("ability_cooldown")
 		return
+
+	# Run 19: self-target casts also count toward "combo_master".
+	Achievements.note_ability_used(_selected_ability)
 
 	_player_turn = false
 	_clear_highlights()
@@ -1669,6 +1713,9 @@ func _on_action_taken(attacker: Combatant, target: Combatant, damage: int, abili
 		AudioManager.play("crit", 0.05)
 		if _battle_rng.randf() < 0.5:
 			SystemVoice.speak("critical_hit")
+		# Run 19: track crits for the streak achievement + audience favor.
+		Achievements.note_crit()
+		GameState.award_audience(10, "crit")
 	else:
 		_show_damage_number(target, damage)
 		# Audio: hero hits vs hero gets hurt
@@ -1686,6 +1733,9 @@ func _on_action_taken(attacker: Combatant, target: Combatant, damage: int, abili
 	# Contextual player-hit commentary — fire ~40% of the time, only for Carl.
 	# (Quips address "you" / Carl directly, so they don't make sense for allies.)
 	if target == _hero and attacker.faction == Combatant.Faction.ENEMY:
+		# Run 19: mark this floor as no-longer-untouchable.
+		if damage > 0:
+			Achievements.note_hero_took_damage()
 		if _battle_rng.randf() < 0.40:
 			SystemVoice.speak("took_hit_comment")
 		if _battle_rng.randf() < 0.28:
@@ -1695,10 +1745,23 @@ func _on_combatant_died(c: Combatant) -> void:
 	if c.faction == Combatant.Faction.ENEMY:
 		_enemies_killed += 1
 		AudioManager.play("kill", 0.1)
+		# Run 19: achievements + audience favor on enemy death.
+		Achievements.unlock("first_blood")
+		GameState.award_audience(5, "kill")
+		var is_boss_kill: bool = c.sprite_key.begins_with("boss") or c.is_boss
+		if is_boss_kill:
+			Achievements.unlock("boss_slayer")
+			GameState.award_audience(50, "boss_kill")
+			if c.is_enraged:
+				Achievements.unlock("enrage_killer")
+		# One-shot detection: if THIS attack's damage met or exceeded target's max HP.
+		if _attack_pre_hp > 0 and _attack_pre_hp >= c.max_hp:
+			Achievements.unlock("headshot")
+		_attack_pre_hp = 0
 		if not _first_kill_done:
 			_first_kill_done = true
 			SystemVoice.speak("first_kill")
-		elif c.sprite_key.begins_with("boss"):
+		elif is_boss_kill:
 			SystemVoice.speak("boss_killed")
 		else:
 			SystemVoice.speak("kill")
@@ -1783,6 +1846,10 @@ func _on_battle_ended(hero_won: bool, xp_earned: int) -> void:
 		_turn_indicator.text = "VICTORY!"
 		_turn_indicator.add_theme_color_override("font_color", Color(1.0, 0.85, 0.1))
 		AudioManager.play("victory")
+		# Run 19: end-of-floor achievement evaluation. Order is intentional —
+		# floor-clear bonus first (always earned), then conditionals.
+		GameState.award_audience(GameState.floor_num * 10, "floor_clear")
+		_evaluate_floor_clear_achievements()
 		SystemVoice.speak_direct("All threats eliminated. XP: %d." % xp_earned)
 		get_tree().create_timer(0.5).timeout.connect(func() -> void: _donut_say(_donut_pick("victory")))
 		# Brief pause then emit battle_complete (routes to VictoryScreen)
@@ -1992,3 +2059,137 @@ func _make_hex_pts(size: float) -> PackedVector2Array:
 		var angle: float = deg_to_rad(60.0 * float(i) - 30.0)
 		pts.append(Vector2(cos(angle) * size, sin(angle) * size))
 	return pts
+
+
+## ─── Run 19: Achievement toast UI + Audience HUD widget ───────────────────────
+
+func _build_achievement_overlay() -> void:
+	## Top-right CanvasLayer holding the audience score widget and stacked
+	## achievement toasts. Layered above everything else so popups never get
+	## hidden by hex tiles or the boss HP bar.
+	_achievement_layer = CanvasLayer.new()
+	_achievement_layer.layer = 5
+	add_child(_achievement_layer)
+
+	# Audience score widget — top-right, always visible, flashes on gain.
+	var widget := PanelContainer.new()
+	widget.position = Vector2(1080.0, 12.0)
+	widget.custom_minimum_size = Vector2(188.0, 38.0)
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(0.08, 0.06, 0.12, 0.86)
+	sb.border_color = Color(0.95, 0.78, 0.18)
+	sb.set_border_width_all(1)
+	sb.set_corner_radius_all(4)
+	sb.set_content_margin_all(6.0)
+	widget.add_theme_stylebox_override("panel", sb)
+	widget.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_achievement_layer.add_child(widget)
+
+	_audience_widget = Label.new()
+	_audience_widget.text = "★ AUDIENCE  %d" % GameState.audience_score_floor
+	_audience_widget.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_audience_widget.add_theme_font_size_override("font_size", 14)
+	_audience_widget.add_theme_color_override("font_color", Color(0.95, 0.82, 0.22))
+	_audience_widget.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	widget.add_child(_audience_widget)
+
+
+func _on_audience_gained(_amount: int, _reason: String) -> void:
+	## Update the widget text and flash gold briefly.
+	if _audience_widget == null:
+		return
+	_audience_widget.text = "★ AUDIENCE  %d" % GameState.audience_score_floor
+	if _audience_flash_tween != null and _audience_flash_tween.is_valid():
+		_audience_flash_tween.kill()
+	# Briefly enlarge + pure-gold flash, then settle back.
+	_audience_widget.modulate = Color(1.6, 1.4, 0.6, 1.0)
+	_audience_flash_tween = create_tween()
+	_audience_flash_tween.tween_property(_audience_widget, "modulate",
+		Color(1.0, 1.0, 1.0, 1.0), 0.45).set_ease(Tween.EASE_OUT)
+
+
+func _on_achievement_unlocked(_id: String, def: Dictionary) -> void:
+	_pending_toasts.append(def)
+	if not _toast_showing:
+		_show_next_toast()
+
+
+func _show_next_toast() -> void:
+	if _pending_toasts.is_empty() or _achievement_layer == null:
+		_toast_showing = false
+		return
+	_toast_showing = true
+	var def: Dictionary = _pending_toasts.pop_front()
+
+	var panel := PanelContainer.new()
+	panel.position = Vector2(1280.0, 56.0)  # off-screen right, slides in
+	panel.custom_minimum_size = Vector2(280.0, 64.0)
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(0.07, 0.05, 0.10, 0.95)
+	sb.border_color = Color(0.96, 0.78, 0.18)
+	sb.set_border_width_all(2)
+	sb.set_corner_radius_all(5)
+	sb.set_content_margin_all(8.0)
+	sb.shadow_color = Color(0.0, 0.0, 0.0, 0.6)
+	sb.shadow_size = 6
+	panel.add_theme_stylebox_override("panel", sb)
+	panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_achievement_layer.add_child(panel)
+
+	var vb := VBoxContainer.new()
+	vb.add_theme_constant_override("separation", 2)
+	panel.add_child(vb)
+
+	var head := Label.new()
+	head.text = "✦ ACHIEVEMENT UNLOCKED"
+	head.add_theme_font_size_override("font_size", 11)
+	head.add_theme_color_override("font_color", Color(0.96, 0.78, 0.18))
+	vb.add_child(head)
+
+	var name_lbl := Label.new()
+	name_lbl.text = def.get("name", "?")
+	name_lbl.add_theme_font_size_override("font_size", 16)
+	name_lbl.add_theme_color_override("font_color", Color(1.0, 0.95, 0.86))
+	vb.add_child(name_lbl)
+
+	var desc_lbl := Label.new()
+	desc_lbl.text = def.get("desc", "")
+	desc_lbl.add_theme_font_size_override("font_size", 11)
+	desc_lbl.add_theme_color_override("font_color", Color(0.75, 0.72, 0.62))
+	desc_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	desc_lbl.custom_minimum_size = Vector2(260.0, 0.0)
+	vb.add_child(desc_lbl)
+
+	# Slide in from the right, hold, slide out — then queue the next toast.
+	var tw: Tween = create_tween()
+	tw.tween_property(panel, "position:x", 988.0, 0.32) \
+		.set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_BACK)
+	tw.tween_interval(2.6)
+	tw.tween_property(panel, "modulate:a", 0.0, 0.45).set_ease(Tween.EASE_IN)
+	tw.tween_callback(panel.queue_free)
+	tw.tween_callback(_show_next_toast)
+
+	AudioManager.play("select", 0.0)
+	if _battle_rng != null and _battle_rng.randf() < 0.50:
+		SystemVoice.speak("achievement_unlocked")
+
+
+func _evaluate_floor_clear_achievements() -> void:
+	## Called at the moment the battle is won. Achievements that depend on the
+	## state of the just-finished floor (no damage taken, low HP, ally survival,
+	## fast clear) are evaluated here.
+	if not Achievements.took_damage_this_floor():
+		Achievements.unlock("untouchable")
+	var hp_ratio: float = float(_hero.hp) / float(max(1, _hero.max_hp))
+	if hp_ratio < 0.20:
+		Achievements.unlock("low_hp_hero")
+	if Achievements.get_hero_turns_this_floor() <= 6:
+		Achievements.unlock("speed_run")
+	if not _allies.is_empty():
+		var all_alive: bool = true
+		for a: Combatant in _allies:
+			if not a.is_alive():
+				all_alive = false
+				break
+		if all_alive:
+			Achievements.unlock("team_player")

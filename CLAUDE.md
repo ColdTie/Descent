@@ -35,7 +35,7 @@ DESCENT is a turn-based tactical dungeon crawler in the spirit of **Dungeon Craw
 - **Architecture rule**: `BattleEngine._calculate_damage()` returns RAW damage (no armor). `Combatant.take_damage(amount, ignore_armor=false)` applies armor. Don't double-apply armor in both places.
 - `Combatant.take_damage(amount, ignore_armor)` — the `ignore_armor` parameter bypasses the `armor` field reduction (for backstab, env damage, etc.)
 
-## Current State (Run 18 — Floor-3 Allies)
+## Current State (Run 19 — DCC Reality-Show Layer: Achievements + Audience)
 ### Implemented ✅
 **Run 1 (Bootstrap):**
 - `GameRng`, `GameState`, `SystemVoice` autoloads
@@ -199,6 +199,25 @@ DESCENT is a turn-based tactical dungeon crawler in the spirit of **Dungeon Craw
 - **`ClassSelect.gd`** — portrait filter changed to `LINEAR_WITH_MIPMAPS` to match
 - **`deploy.yml`** — installs `libcairo2` + `cairosvg`, runs `gen_sprites_v5.py`
 
+**Run 19 (DCC Reality-Show Layer — Achievements + Audience Score):**
+- **New autoload `Achievements.gd`** (`autoloads/Achievements.gd`) — pure-data + per-run state. `DEFS` dict holds 14 DCC-flavored achievements (`first_blood`, `boss_slayer`, `untouchable`, `crit_streak`, `lava_lord`, `the_descent`, `deep_dweller`, `descended`, `low_hp_hero`, `team_player`, `combo_master`, `headshot`, `enrage_killer`, `speed_run`). Resets on `GameState.run_started`; per-floor counters reset on `floor_changed`. Signal `achievement_unlocked(id, def)` drives the toast UI. Uses `get_node_or_null("/root/GameState")` duck-typing so the script still compiles in `--script` test mode without autoload context.
+- **Audience score** (`GameState`) — `audience_score` (run total), `audience_score_floor` (resets per descent), `lava_push_kills`. Signal `audience_gained(amount, reason)` so HUD widgets can react. New `award_audience(amount, reason)` adds favor and emits. Folded into `run_score()`: now `floor*1000 + kills*25 + bosses*250 + level*100 + audience*2`. Awards: kill +5, crit +10, boss kill +50, lava-push kill +15, floor clear bonus = floor_num × 10, plus each achievement's `audience` field.
+- **`BattleScene.gd` integration:**
+  - Top-right CanvasLayer with audience-score widget (`★ AUDIENCE N`, flashes gold on gain) and a slide-in achievement toast queue (`_build_achievement_overlay`, `_show_next_toast`). Toasts auto-dismiss after 2.6s and chain through `_pending_toasts`.
+  - Subscribes to `Achievements.achievement_unlocked` and `GameState.audience_gained` in `_build_encounter` (with `is_connected` guard so reloads don't double-bind).
+  - `_on_action_taken` notes crits (`Achievements.note_crit`) and damage taken by Carl (`note_hero_took_damage`).
+  - `_on_combatant_died` unlocks `first_blood` / `boss_slayer` / `headshot` / `enrage_killer`. Headshot detection uses `_attack_pre_hp` (snapshotted in `_do_hero_attack`, cleared right after `perform_attack` so poison/lava deaths can't false-positive).
+  - `_do_hero_attack`/`_do_hero_aoe_ability`/`_do_hero_self_ability` call `Achievements.note_ability_used(id)` for the `combo_master` 4-ability-per-floor unlock.
+  - Lava-push kills (target dies during push tween into lava): increments `GameState.lava_push_kills`, awards audience, and unlocks `lava_lord` at 3.
+  - `_next_turn` calls `Achievements.note_hero_turn()` so `speed_run` (clear in ≤6 turns) can be evaluated.
+  - `_on_battle_ended` (hero_won) awards floor-clear audience (floor_num × 10) and runs `_evaluate_floor_clear_achievements()` for `untouchable` (no damage), `low_hp_hero` (<20% HP), `speed_run` (≤6 turns), and `team_player` (both allies still alive).
+  - `_ready` fires `the_descent` on floor 9 and `deep_dweller` on floor 15.
+- **`WinScreen.gd`** — unlocks `descended` on entry. New AUDIENCE stat card alongside SCORE/LEVEL/KILLS. Achievement roster row: "✦ N / 14 achievements unlocked ✦" + comma-separated list of earned-name strings.
+- **`VictoryScreen.gd`** — new AUDIENCE stat card showing `audience_score_floor`. All stat cards shrunk from 200→178px wide so 5 cards fit.
+- **`SystemVoice.gd`** — new `achievement_unlocked` quip pool (7 lines, fired ~50% of the time on unlock).
+- **`project.godot`** — registers `Achievements` as autoload #5 after AudioManager.
+- **`tests/test_run19.gd`** (8 test functions, ~120 assertions) — DEFS schema validation (every entry has name/desc/audience, names unique, all 14 core IDs present, `descended` has the largest payout) + score-formula lock-in (11240 for a canonical floor-9 run). Uses `load()` not `preload()` for Achievements.gd so the test file doesn't drag autoload references into compile.
+
 **Run 18 (Floor-3 Allies — Marcus + Lina):**
 - **Two AI-controlled allies join Carl on Floor 3** (the first boss floor, vs. the Dungeon Lord). Survivors he encounters before the first boss fight; they fight one battle and don't persist past it.
   - **Marcus the Steadfast** — knight: 70 HP, 3 armor, speed 11, attack +4. Tankier melee.
@@ -253,7 +272,7 @@ DESCENT is a turn-based tactical dungeon crawler in the spirit of **Dungeon Craw
 - **`BattleEngine.move_toward()`** — Public wrapper around `_move_toward()` for companion AI use.
 - **SystemVoice** — New line when Donut is knocked out.
 
-## Genre Gap Analysis & Direction (audited Run 16, updated Run 18)
+## Genre Gap Analysis & Direction (audited Run 16, updated Run 19)
 Compared against tactical roguelike / DCC-style peers (Slay the Spire, Into the Breach,
 FTL, traditional roguelikes). Status of the "what are we missing" audit:
 
@@ -268,6 +287,7 @@ FTL, traditional roguelikes). Status of the "what are we missing" audit:
 - Floor-scaled enemy abilities — Run 15
 - Class-specific unlockable abilities (mostly) — Runs 12/15
 - Floor-scripted ally NPCs (Marcus + Lina on floor 3) — Run 18
+- DCC reality-show layer: achievements + audience score — Run 19
 
 ### 🔜 Highest-value, easiest remaining (do next, roughly in order)
 1. **Background music / ambient loop** — SFX exist now; a low droning ambient loop per
@@ -284,6 +304,11 @@ FTL, traditional roguelikes). Status of the "what are we missing" audit:
    last ~6 events helps readability. Pure-UI, low risk.
 6. **Loot rarity tiers** — Common/Rare/Legendary with color + a Legendary screen flash and
    special quip. Extends the existing LootScreen with minimal new code.
+7. **Sponsor offers** — extend Run 19's audience score: when audience crosses a threshold
+   (e.g. every 200 points), pop a 3-card "sponsor gift" screen with weird DCC-flavoured
+   buffs (debuffs trade-offs included). Re-uses LevelUp's 3-card UI.
+8. **Patch notes between tiers** — System overlay at floors 6→7 and 12→13 with mocking
+   "patch notes" (some flavor, some affecting actual gameplay scaling). Pure-UI overlay.
 
 ### 🟡 Larger / later (note, not yet scoped)
 7. **More floor variety** — Per-tier hazards: Tier 1 crumbling bridges, Tier 2 freeze pools,
@@ -319,9 +344,10 @@ assets/
 
 autoloads/
   GameRng.gd         — seeded RNG singleton
-  GameState.gd       — run-persistent hero state (+run_score, total_kills, bosses_slain)
+  GameState.gd       — run-persistent hero state (+run_score, total_kills, bosses_slain, audience_score, lava_push_kills)
   SystemVoice.gd     — The System commentary pools + signal
   AudioManager.gd    — SFX player: preloads WAV pool, play(name, pitch_var, vol_db), SFX toggle
+  Achievements.gd    — Run 19: DCC-style achievement defs + per-run unlock state + signal
 
 src/combat/
   Combatant.gd       — pure fighter data class (+take_damage ignore_armor param)
@@ -358,6 +384,7 @@ tests/
   test_run15.gd      — boss enrage, enemy ability unlocks, shadow step (Run 15)
   test_run16.gd      — critical hits, boss-floor milestones, score formula (Run 16)
   test_run17_allies.gd — floor-3 ally spawn, factory, engine integration (Run 18)
+  test_run19.gd      — achievement DEFS schema + audience-score math (Run 19)
 ```
 
 ## Running Tests

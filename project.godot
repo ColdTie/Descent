@@ -21,6 +21,7 @@ GameRng="*res://autoloads/GameRng.gd"
 GameState="*res://autoloads/GameState.gd"
 SystemVoice="*res://autoloads/SystemVoice.gd"
 AudioManager="*res://autoloads/AudioManager.gd"
+Achievements="*res://autoloads/Achievements.gd"
 
 [display]
 

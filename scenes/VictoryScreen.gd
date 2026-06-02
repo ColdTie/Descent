@@ -136,6 +136,10 @@ func _build_ui() -> void:
 	_stat_card(stats_row, "❤", "HP",
 		"%d / %d" % [GameState.hero_hp, GameState.hero_max_hp],
 		Color(0.18, 0.90, 0.22) if hp_ratio > 0.50 else Color(1.0, 0.38, 0.08))
+	# Run 19: audience score for THIS floor — reality-show tally.
+	_stat_card(stats_row, "★", "AUDIENCE",
+		str(GameState.audience_score_floor),
+		Color(0.96, 0.78, 0.18))
 
 	# ── Button ────────────────────────────────────────────────────────────────
 	var btn_row := HBoxContainer.new()
@@ -154,7 +158,8 @@ func _build_ui() -> void:
 func _stat_card(parent: Node, icon: String, label_text: String,
 		value_text: String, val_color: Color) -> void:
 	var panel := PanelContainer.new()
-	panel.custom_minimum_size = Vector2(200.0, 90.0)
+	# Run 19: shrunk from 200 → 178 so the new AUDIENCE card fits (5 cards now).
+	panel.custom_minimum_size = Vector2(178.0, 90.0)
 	var ps := StyleBoxFlat.new()
 	ps.bg_color = Color(0.09, 0.07, 0.13, 0.96)
 	ps.border_color = val_color.darkened(0.42)
