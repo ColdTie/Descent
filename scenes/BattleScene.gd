@@ -683,9 +683,9 @@ func _spawn_entity_node(c: Combatant) -> void:
 		ally_tag.position = Vector2(-30.0, HEX_SIZE * 0.48)
 		root.add_child(ally_tag)
 
-	# HP bar — wide border + background + coloured fill
-	var HP_W: float = 46.0
-	var HP_H: float = 8.0
+	# HP bar — wide border + background + coloured fill + numeric readout (Run 22).
+	var HP_W: float = 50.0
+	var HP_H: float = 11.0
 	var hp_y: float = HEX_SIZE * 0.58
 
 	var hp_border := ColorRect.new()
@@ -706,6 +706,32 @@ func _spawn_entity_node(c: Combatant) -> void:
 	hp_bar.position = Vector2(-HP_W * 0.5, hp_y + 1.0)
 	hp_bar.color = Color(0.18, 0.88, 0.22)
 	root.add_child(hp_bar)
+
+	# Run 22: numeric HP overlay — small "23 / 40" label centred on the bar with
+	# a dark shadow for legibility against any fill color.
+	var hp_text_shadow := Label.new()
+	hp_text_shadow.name = "HPTextShadow"
+	hp_text_shadow.text = "%d / %d" % [c.hp, c.max_hp]
+	hp_text_shadow.size = Vector2(HP_W + 2.0, HP_H + 2.0)
+	hp_text_shadow.position = Vector2(-(HP_W + 2.0) * 0.5 + 1.0, hp_y + 1.0)
+	hp_text_shadow.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	hp_text_shadow.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	hp_text_shadow.add_theme_font_size_override("font_size", 9)
+	hp_text_shadow.add_theme_color_override("font_color", Color(0.0, 0.0, 0.0, 0.85))
+	hp_text_shadow.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	root.add_child(hp_text_shadow)
+
+	var hp_text := Label.new()
+	hp_text.name = "HPText"
+	hp_text.text = "%d / %d" % [c.hp, c.max_hp]
+	hp_text.size = Vector2(HP_W + 2.0, HP_H + 2.0)
+	hp_text.position = Vector2(-(HP_W + 2.0) * 0.5, hp_y)
+	hp_text.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	hp_text.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	hp_text.add_theme_font_size_override("font_size", 9)
+	hp_text.add_theme_color_override("font_color", Color(1.0, 1.0, 1.0, 0.98))
+	hp_text.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	root.add_child(hp_text)
 
 	# Status icons
 	var status_lbl := Label.new()
@@ -1169,13 +1195,40 @@ func _refresh_ability_bar() -> void:
 		btn.add_theme_font_size_override("font_size", 11)
 		btn.disabled = on_cooldown
 
-		# Color: selected = gold, depleted = dim, normal = white
-		if on_cooldown:
-			btn.modulate = Color(0.45, 0.45, 0.45)
-		elif ability_id == _selected_ability:
-			btn.modulate = SELECTED_CLR
-		else:
+		# Run 22: ability buttons now use real styleboxes (gold-frame on the
+		# selected ability, dim grey when on cooldown). Previously just a
+		# subtle `modulate` change — players regularly missed which ability
+		# was armed for the next click.
+		var is_selected: bool = ability_id == _selected_ability and not on_cooldown
+		var depleted_no_charges: bool = (not on_cooldown) and (abl_obj != null) \
+			and abl_obj.max_charges > 0 and abl_obj.current_charges <= 0
+		var sb := StyleBoxFlat.new()
+		sb.set_corner_radius_all(4)
+		sb.set_content_margin_all(6.0)
+		sb.set_border_width_all(2)
+		if on_cooldown or depleted_no_charges:
+			sb.bg_color = Color(0.08, 0.06, 0.10, 0.90)
+			sb.border_color = Color(0.22, 0.20, 0.26)
+			btn.modulate = Color(0.55, 0.55, 0.55)
+			btn.disabled = true
+			btn.add_theme_color_override("font_color", Color(0.65, 0.62, 0.58))
+		elif is_selected:
+			sb.bg_color = Color(0.32, 0.22, 0.04, 0.96)
+			sb.border_color = Color(1.0, 0.84, 0.18)
+			sb.shadow_color = Color(1.0, 0.78, 0.10, 0.45)
+			sb.shadow_size = 6
 			btn.modulate = Color.WHITE
+			btn.add_theme_color_override("font_color", Color(1.0, 0.94, 0.62))
+		else:
+			sb.bg_color = Color(0.11, 0.09, 0.15, 0.92)
+			sb.border_color = Color(0.40, 0.32, 0.18)
+			btn.modulate = Color.WHITE
+			btn.add_theme_color_override("font_color", Color(0.94, 0.90, 0.82))
+		btn.add_theme_stylebox_override("normal", sb)
+		btn.add_theme_stylebox_override("hover", sb)
+		btn.add_theme_stylebox_override("pressed", sb)
+		btn.add_theme_stylebox_override("disabled", sb)
+		btn.add_theme_stylebox_override("focus", sb)
 
 ## ─── Turn Logic ───────────────────────────────────────────────────────────────
 
@@ -1991,9 +2044,18 @@ func _update_hp_bar(c: Combatant) -> void:
 	if hp_bar == null:
 		return
 	var ratio: float = float(c.hp) / float(max(1, c.max_hp))
-	hp_bar.size.x = 46.0 * clampf(ratio, 0.0, 1.0)
+	# Run 22: bar widened 46→50 alongside the entity-node layout bump.
+	hp_bar.size.x = 50.0 * clampf(ratio, 0.0, 1.0)
 	# Green → yellow → red gradient as HP drops
 	hp_bar.color = Color(1.0 - ratio * 0.78, 0.18 + ratio * 0.70, 0.08)
+	# Run 22: refresh numeric overlay so combat damage is legible at a glance.
+	var hp_text: Label = node.get_node_or_null("HPText")
+	var hp_shadow: Label = node.get_node_or_null("HPTextShadow")
+	var text: String = "%d / %d" % [c.hp, c.max_hp]
+	if hp_text != null:
+		hp_text.text = text
+	if hp_shadow != null:
+		hp_shadow.text = text
 
 func _update_status_label(c: Combatant) -> void:
 	var node: Node2D = _entity_nodes.get(c.id)
@@ -2107,7 +2169,7 @@ func _build_achievement_overlay() -> void:
 	_achievement_layer.add_child(widget)
 
 	_audience_widget = Label.new()
-	_audience_widget.text = "★ AUDIENCE  %d" % GameState.audience_score_floor
+	_audience_widget.text = _audience_widget_text()
 	_audience_widget.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_audience_widget.add_theme_font_size_override("font_size", 14)
 	_audience_widget.add_theme_color_override("font_color", Color(0.95, 0.82, 0.22))
@@ -2141,7 +2203,7 @@ func _on_audience_gained(_amount: int, _reason: String) -> void:
 	## Update the widget text and flash gold briefly.
 	if _audience_widget == null:
 		return
-	_audience_widget.text = "★ AUDIENCE  %d" % GameState.audience_score_floor
+	_audience_widget.text = _audience_widget_text()
 	if _audience_flash_tween != null and _audience_flash_tween.is_valid():
 		_audience_flash_tween.kill()
 	# Briefly enlarge + pure-gold flash, then settle back.
@@ -2149,6 +2211,17 @@ func _on_audience_gained(_amount: int, _reason: String) -> void:
 	_audience_flash_tween = create_tween()
 	_audience_flash_tween.tween_property(_audience_widget, "modulate",
 		Color(1.0, 1.0, 1.0, 1.0), 0.45).set_ease(Tween.EASE_OUT)
+
+
+func _audience_widget_text() -> String:
+	## Run 22: show run-total audience plus the threshold for the next sponsor
+	## offer. Format: "★ AUDIENCE  N / T". When all earnable thresholds for
+	## the current `audience_score` are already taken, fall back to the next
+	## multiple — keeps the progression bar honest even after sponsor accepts.
+	var total: int = GameState.audience_score
+	var taken: int = GameState.sponsor_offers_taken
+	var threshold: int = int(Sponsors.SPONSOR_THRESHOLD) * (taken + 1)
+	return "★ AUDIENCE  %d / %d" % [total, threshold]
 
 
 func _on_gold_gained(_amount: int, _reason: String) -> void:
