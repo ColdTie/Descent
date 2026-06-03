@@ -1775,10 +1775,15 @@ func _highlight_hex(hex: Vector2i, color: Color) -> void:
 	_highlight_hexes.append(hex)
 
 func _highlight_move_ring(hex: Vector2i) -> void:
-	## Run 23 (UX): movement marker rendered as a thin pulsing green ring so
-	## it stays legible on top of any subsequent ability-zone fill (red /
-	## orange / blue). Distinct child name "MoveRing" lets the ability code
-	## ALSO paint the same hex if needed without colliding on dedupe.
+	## Run 23 (UX): movement marker rendered as a thin green ring so it stays
+	## legible on top of any subsequent ability-zone fill (red / orange / blue).
+	## Distinct child name "MoveRing" lets the ability code ALSO paint the same
+	## hex if needed without colliding on dedupe.
+	## Run 23 fix: NO looping tween on the ring. The previous pulse tween was
+	## created via BattleScene.create_tween(), so when _clear_highlights queue-
+	## freed the ring its tween survived and kept trying to animate a dead
+	## node every frame — that's what locked the game up after a few turns of
+	## clicking abilities.
 	var poly: Polygon2D = _hex_polys.get(hex)
 	if poly == null:
 		return
@@ -1794,13 +1799,6 @@ func _highlight_move_ring(hex: Vector2i) -> void:
 	ring.joint_mode = Line2D.LINE_JOINT_ROUND
 	ring.z_index = 1   # above ability fills so the green ring is always visible
 	poly.add_child(ring)
-	# Pulse the alpha so it draws the eye even when other highlights are present.
-	var tw: Tween = create_tween()
-	tw.set_loops()
-	tw.tween_property(ring, "default_color:a", 0.55, 0.55) \
-		.set_ease(Tween.EASE_IN_OUT).set_trans(Tween.TRANS_SINE)
-	tw.tween_property(ring, "default_color:a", 0.95, 0.55) \
-		.set_ease(Tween.EASE_IN_OUT).set_trans(Tween.TRANS_SINE)
 	_highlight_hexes.append(hex)
 
 func _clear_highlights() -> void:
