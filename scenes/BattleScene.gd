@@ -133,6 +133,12 @@ var _effect_textures: Dictionary = {}
 
 var _selected_ability: String = "basic_attack"
 var _player_turn: bool = false
+# Per-turn action budget: a hero turn may chain ONE move + ONE basic attack
+# (either order), OR a single ability (which always ends the turn). Flags are
+# reset in _next_turn() when it's Carl's turn again.
+var _moved_this_turn: bool = false
+var _basic_attacked_this_turn: bool = false
+var _end_turn_btn: Button = null
 var _battle_rng: RandomNumberGenerator
 var _enemies_killed: int = 0
 var _first_kill_done: bool = false  # for first_kill quip
@@ -274,19 +280,26 @@ func _build_encounter() -> void:
 	_enemies.clear()
 	# Bosses only appear on milestone floors (every 3rd). Regular floors are waves.
 	var has_boss: bool = EnemyDefs.is_boss_floor(GameState.floor_num)
+	var boss_hexes: Array[Vector2i] = []
 	if has_boss:
-		var boss: Combatant = EnemyDefs.make_boss(GameState.floor_num, _map.boss_spawn, _battle_rng)
-		_enemies.append(boss)
+		var boss_count: int = EnemyDefs.boss_count_for_floor(GameState.floor_num)
+		boss_hexes = _pick_boss_spawn_hexes(boss_count)
+		for bh: Vector2i in boss_hexes:
+			var boss: Combatant = EnemyDefs.make_boss(GameState.floor_num, bh, _battle_rng)
+			_enemies.append(boss)
 
-	var pool: Array[Dictionary] = EnemyDefs.get_enemies_for_floor(GameState.floor_num)
-	for i: int in range(_map.spawn_points.size()):
-		# On boss floors, keep the boss_spawn hex clear for the boss
-		if has_boss and _map.spawn_points[i] == _map.boss_spawn:
-			continue
-		var def: Dictionary = pool[_battle_rng.randi_range(0, pool.size() - 1)]
-		# Pass floor_num for scaling
-		var e: Combatant = EnemyDefs.make_combatant(def, _map.spawn_points[i], _battle_rng, GameState.floor_num)
-		_enemies.append(e)
+	# Some boss floors (Floor 6 Lizard Titans) suppress all regular spawns —
+	# the bosses ARE the encounter.
+	if not (has_boss and EnemyDefs.suppress_regular_enemies(GameState.floor_num)):
+		var pool: Array[Dictionary] = EnemyDefs.get_enemies_for_floor(GameState.floor_num)
+		for i: int in range(_map.spawn_points.size()):
+			# Keep every boss hex clear for the boss(es)
+			if _map.spawn_points[i] in boss_hexes:
+				continue
+			var def: Dictionary = pool[_battle_rng.randi_range(0, pool.size() - 1)]
+			# Pass floor_num for scaling
+			var e: Combatant = EnemyDefs.make_combatant(def, _map.spawn_points[i], _battle_rng, GameState.floor_num)
+			_enemies.append(e)
 
 	# Allies: floor-specific NPCs that join Carl for one battle.
 	# On floor 3 (first boss), two survivors (Marcus + Lina) appear adjacent to hero start.
@@ -321,6 +334,27 @@ func _build_encounter() -> void:
 	# Run 21: gold widget reacts to award_gold from this scene + any spends.
 	if not GameState.gold_gained.is_connected(_on_gold_gained):
 		GameState.gold_gained.connect(_on_gold_gained)
+
+func _pick_boss_spawn_hexes(count: int) -> Array[Vector2i]:
+	## Returns up to `count` passable hexes for boss spawns. First is _map.boss_spawn;
+	## additional bosses fill from the rings around it. Skips lava + duplicates.
+	var result: Array[Vector2i] = [_map.boss_spawn]
+	if count <= 1:
+		return result
+	for radius: int in [1, 2]:
+		for h: Vector2i in HexGrid.ring(_map.boss_spawn, radius):
+			if result.size() >= count:
+				break
+			if h in result:
+				continue
+			if not _map.is_passable(h):
+				continue
+			if h == _map.hero_start:
+				continue
+			result.append(h)
+		if result.size() >= count:
+			break
+	return result
 
 func _find_ally_spawn_hexes(count: int) -> Array[Vector2i]:
 	## Pick up to `count` passable, unoccupied hexes near the hero start.
@@ -391,8 +425,9 @@ func _play_ability_effect(hex: Vector2i, ability_id: String) -> void:
 
 ## ─── Idle Animation ───────────────────────────────────────────────────────────
 
-func _start_idle_bob(sprite: Sprite2D, is_hero: bool) -> void:
+func _start_idle_bob(sprite: Sprite2D, is_hero: bool) -> Tween:
 	## Slow breathing bob: hero moves gently, enemies bounce more assertively.
+	## Returns the looping tween so the caller can kill it on death.
 	var base_y: float  = -24.0
 	var amp:  float  = 2.0 if is_hero else 3.5
 	var period: float  = 1.8 if is_hero else 1.2
@@ -402,6 +437,7 @@ func _start_idle_bob(sprite: Sprite2D, is_hero: bool) -> void:
 		.set_ease(Tween.EASE_IN_OUT).set_trans(Tween.TRANS_SINE)
 	tw.tween_property(sprite, "position:y", base_y + amp * 0.4, period * 0.5) \
 		.set_ease(Tween.EASE_IN_OUT).set_trans(Tween.TRANS_SINE)
+	return tw
 
 ## ─── Cave Atmosphere ──────────────────────────────────────────────────────────
 
@@ -703,7 +739,9 @@ func _spawn_entity_node(c: Combatant) -> void:
 		# Donut (companion) renders much smaller — she's a cat, not a fighter.
 		var sprite_scale: float = 0.55
 		if is_boss:
-			sprite_scale = 0.67
+			# Lizard Titans on Floor 6 are visually massive — bigger sprite,
+			# so the 2-vs-1 feels like a real spike.
+			sprite_scale = 0.90 if c.sprite_key == "boss_lizard_titan" else 0.67
 		elif c.sprite_key == "companion_donut":
 			sprite_scale = 0.22
 		sprite.scale = Vector2(sprite_scale, sprite_scale)
@@ -711,9 +749,13 @@ func _spawn_entity_node(c: Combatant) -> void:
 		sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 		root.add_child(sprite)
 
-		# Idle breathing bob (enemies bounce a bit faster than hero)
+		# Idle breathing bob (enemies bounce a bit faster than hero).
+		# Stash the tween + sprite on the root so _grey_out_entity_delayed
+		# can halt the loop on death — otherwise the corpse keeps floating.
 		var is_hero: bool = c.faction == Combatant.Faction.HERO
-		_start_idle_bob(sprite, is_hero)
+		var bob_tw: Tween = _start_idle_bob(sprite, is_hero)
+		root.set_meta("bob_tween", bob_tw)
+		root.set_meta("bob_sprite", sprite)
 	else:
 		# Fallback: coloured hex + glyph
 		var body := Polygon2D.new()
@@ -1199,6 +1241,7 @@ func _build_ability_bar() -> void:
 	for child: Node in _ability_bar.get_children():
 		child.queue_free()
 	_ability_btns.clear()
+	_end_turn_btn = null
 
 	for ability_id: String in _hero.abilities:
 		var abl: Dictionary = Abilities.get_ability(ability_id)
@@ -1208,10 +1251,23 @@ func _build_ability_bar() -> void:
 		_ability_bar.add_child(btn)
 		_ability_btns[ability_id] = btn
 
+	# End-of-turn button sits at the right of the ability bar. Lit only after
+	# the player has used part of their combo (so they can commit without
+	# being forced to find a target for the leftover basic attack).
+	_end_turn_btn = Button.new()
+	_end_turn_btn.custom_minimum_size = Vector2(118.0, 64.0)
+	_end_turn_btn.text = "END TURN"
+	_end_turn_btn.add_theme_font_size_override("font_size", 12)
+	_end_turn_btn.pressed.connect(_on_end_turn_pressed)
+	_ability_bar.add_child(_end_turn_btn)
+
 	_refresh_ability_bar()
 
 func _refresh_ability_bar() -> void:
 	## Update button labels and disabled state to reflect current charges/cooldowns.
+	# Combo lockout: once the player has moved or basic-attacked this turn,
+	# every ability except Basic Attack is locked out (no move + ability combo).
+	var combo_locked: bool = _moved_this_turn or _basic_attacked_this_turn
 	for ability_id: String in _ability_btns:
 		var btn: Button = _ability_btns[ability_id]
 		var abl: Dictionary = Abilities.get_ability(ability_id)
@@ -1248,10 +1304,23 @@ func _refresh_ability_bar() -> void:
 		var is_selected: bool = ability_id == _selected_ability and not on_cooldown
 		var depleted_no_charges: bool = (not on_cooldown) and (abl_obj != null) \
 			and abl_obj.max_charges > 0 and abl_obj.current_charges <= 0
+		var combo_blocked: bool = combo_locked and ability_id != "basic_attack"
 		var sb := StyleBoxFlat.new()
 		sb.set_corner_radius_all(4)
 		sb.set_content_margin_all(6.0)
 		sb.set_border_width_all(2)
+		if combo_blocked:
+			sb.bg_color = Color(0.06, 0.05, 0.09, 0.90)
+			sb.border_color = Color(0.18, 0.16, 0.22)
+			btn.modulate = Color(0.45, 0.45, 0.45)
+			btn.disabled = true
+			btn.add_theme_color_override("font_color", Color(0.55, 0.52, 0.48))
+			btn.add_theme_stylebox_override("normal", sb)
+			btn.add_theme_stylebox_override("hover", sb)
+			btn.add_theme_stylebox_override("pressed", sb)
+			btn.add_theme_stylebox_override("disabled", sb)
+			btn.add_theme_stylebox_override("focus", sb)
+			continue
 		if on_cooldown or depleted_no_charges:
 			sb.bg_color = Color(0.08, 0.06, 0.10, 0.90)
 			sb.border_color = Color(0.22, 0.20, 0.26)
@@ -1276,6 +1345,46 @@ func _refresh_ability_bar() -> void:
 		btn.add_theme_stylebox_override("disabled", sb)
 		btn.add_theme_stylebox_override("focus", sb)
 
+	# End Turn button: lit/usable only after the player started their combo.
+	if _end_turn_btn != null:
+		var armed: bool = _player_turn and combo_locked
+		_end_turn_btn.disabled = not armed
+		var esb := StyleBoxFlat.new()
+		esb.set_corner_radius_all(4)
+		esb.set_content_margin_all(6.0)
+		esb.set_border_width_all(2)
+		if armed:
+			esb.bg_color = Color(0.32, 0.10, 0.08, 0.96)
+			esb.border_color = Color(0.95, 0.42, 0.22)
+			esb.shadow_color = Color(0.95, 0.42, 0.22, 0.45)
+			esb.shadow_size = 6
+			_end_turn_btn.modulate = Color.WHITE
+			_end_turn_btn.add_theme_color_override("font_color", Color(1.0, 0.86, 0.62))
+		else:
+			esb.bg_color = Color(0.08, 0.06, 0.10, 0.90)
+			esb.border_color = Color(0.22, 0.20, 0.26)
+			_end_turn_btn.modulate = Color(0.55, 0.55, 0.55)
+			_end_turn_btn.add_theme_color_override("font_color", Color(0.65, 0.62, 0.58))
+		_end_turn_btn.add_theme_stylebox_override("normal", esb)
+		_end_turn_btn.add_theme_stylebox_override("hover", esb)
+		_end_turn_btn.add_theme_stylebox_override("pressed", esb)
+		_end_turn_btn.add_theme_stylebox_override("disabled", esb)
+		_end_turn_btn.add_theme_stylebox_override("focus", esb)
+
+func _on_end_turn_pressed() -> void:
+	## Manual end-of-turn — fires after a combo step when the player doesn't
+	## want (or can't) complete the second half.
+	if not _player_turn or _engine.battle_over:
+		return
+	if not (_moved_this_turn or _basic_attacked_this_turn):
+		return  # button shouldn't have been enabled
+	AudioManager.play("select", -0.05)
+	_player_turn = false
+	_clear_highlights()
+	_refresh_ability_bar()
+	_engine.end_turn()
+	_next_turn()
+
 ## ─── Turn Logic ───────────────────────────────────────────────────────────────
 
 func _next_turn() -> void:
@@ -1291,6 +1400,9 @@ func _next_turn() -> void:
 	if active == _hero:
 		# Run 19: count Carl's own turns this floor (for "speed_run").
 		Achievements.note_hero_turn()
+		# Reset the move/attack combo flags — a fresh turn earns both back.
+		_moved_this_turn = false
+		_basic_attacked_this_turn = false
 		# Tick ability cooldowns at the start of each hero turn
 		for id: String in _hero_ability_objs:
 			_hero_ability_objs[id].tick_cooldown()
@@ -1459,6 +1571,9 @@ func _on_hex_input(_viewport: Viewport, event: InputEvent, _shape_idx: int, hex:
 		_do_hero_move(hex)
 
 func _is_valid_move_hex(hex: Vector2i) -> bool:
+	# Combo rule: only 1 move per turn — once spent, no more move hexes are valid.
+	if _moved_this_turn:
+		return false
 	if HexGrid.hex_distance(_hero.position, hex) != 1:
 		return false
 	if not _map.is_passable(hex):
@@ -1478,9 +1593,22 @@ func _do_hero_move(hex: Vector2i) -> void:
 	_engine.move_combatant(_hero, hex)
 	# Visual movement handled by _on_hero_moved signal
 	SystemVoice.speak("move")
+	_moved_this_turn = true
 	await get_tree().create_timer(0.28).timeout
-	_engine.end_turn()
-	_next_turn()
+	# Combo rule: move + basic attack share a turn. If the player has already
+	# basic-attacked this turn, the move completes the combo and the turn ends.
+	# Otherwise hand control back so they can swing once before pressing end.
+	if _basic_attacked_this_turn or _engine.battle_over:
+		_engine.end_turn()
+		_next_turn()
+	else:
+		# Force the cursor back to Basic Attack — abilities are locked out
+		# after a move (per the "no abilities in a combo" rule).
+		_selected_ability = "basic_attack"
+		_player_turn = true
+		_refresh_ability_bar()
+		_update_highlights()
+		_update_turn_hint()
 
 func _find_teleport_hex_near(target: Combatant) -> Vector2i:
 	## Find the closest empty passable hex adjacent to target (for Shadow Step).
@@ -1503,6 +1631,9 @@ func _find_teleport_hex_near(target: Combatant) -> Vector2i:
 	return best
 
 func _do_hero_attack(target: Combatant) -> void:
+	# Combo rule: a basic attack is once per turn. Block re-entry.
+	if _selected_ability == "basic_attack" and _basic_attacked_this_turn:
+		return
 	# Check cooldown/charges before attacking
 	var abl_obj: Ability = _hero_ability_objs.get(_selected_ability)
 	if abl_obj != null and not abl_obj.can_use():
@@ -1588,7 +1719,19 @@ func _do_hero_attack(target: Combatant) -> void:
 				_update_all_hp_bars()
 				SystemVoice.speak("pushed_into_lava")
 
-	if not _engine.battle_over:
+	if _engine.battle_over:
+		return
+	# Combo rule: a basic attack does NOT end the turn if the player still has
+	# their free 1-hex move. Abilities always end the turn.
+	var is_basic: bool = _selected_ability == "basic_attack"
+	if is_basic:
+		_basic_attacked_this_turn = true
+	if is_basic and not _moved_this_turn:
+		_player_turn = true
+		_refresh_ability_bar()
+		_update_highlights()
+		_update_turn_hint()
+	else:
 		_engine.end_turn()
 		await get_tree().create_timer(0.2).timeout
 		_next_turn()
@@ -1775,6 +1918,16 @@ func _update_turn_hint() -> void:
 	# Make sure the label is wide enough for the hint string. The .tscn ships
 	# at 264px; widen to 1040 so the multi-segment hint fits on one line.
 	_turn_indicator.offset_right = 1056.0
+
+	# Combo mode: once Carl has moved or basic-attacked, abilities are locked
+	# and the only legal extra step is the OTHER half of the move/attack combo.
+	if _moved_this_turn and not _basic_attacked_this_turn:
+		_turn_indicator.text = "MOVED  •  click ENEMY for Basic Attack  •  or END TURN"
+		return
+	if _basic_attacked_this_turn and not _moved_this_turn:
+		_turn_indicator.text = "ATTACKED  •  GREEN = move 1 hex  •  or END TURN"
+		return
+
 	var abl: Dictionary = Abilities.get_ability(_selected_ability)
 	var name_s: String = String(abl.get("display_name", _selected_ability))
 	var target: String = String(abl.get("target", "single_enemy"))
@@ -1973,6 +2126,7 @@ func _on_combatant_died(c: Combatant) -> void:
 		var node: Node2D = _entity_nodes.get(c.id)
 		if node != null:
 			node.modulate = DEAD_MODULATE
+			_halt_idle_bob(node)
 		if not _engine.battle_over:
 			_engine.battle_over = true
 			_engine.hero_won = false
@@ -1987,11 +2141,27 @@ func _on_combatant_died(c: Combatant) -> void:
 		_update_ally_hp_label(c)
 
 func _grey_out_entity_delayed(entity_id: String) -> void:
-	## Wait for hit-flash tween to finish, then apply death grey.
+	## Wait for hit-flash tween to finish, then apply death grey AND stop the
+	## idle bob loop so the corpse stops floating up and down.
 	await get_tree().create_timer(0.22).timeout
 	var node: Node2D = _entity_nodes.get(entity_id)
 	if node != null:
 		node.modulate = DEAD_MODULATE
+		_halt_idle_bob(node)
+
+func _halt_idle_bob(node: Node2D) -> void:
+	## Kill the looped bob tween on this entity and snap its sprite back to the
+	## idle rest position so a dead body settles instead of drifting mid-bounce.
+	if node.has_meta("bob_tween"):
+		var tw: Tween = node.get_meta("bob_tween")
+		if tw != null and tw.is_valid():
+			tw.kill()
+		node.remove_meta("bob_tween")
+	if node.has_meta("bob_sprite"):
+		var spr: Sprite2D = node.get_meta("bob_sprite")
+		if spr != null:
+			spr.position = Vector2(0.0, -24.0)
+		node.remove_meta("bob_sprite")
 
 func _on_status_ticked(c: Combatant, damage: int) -> void:
 	if damage > 0:

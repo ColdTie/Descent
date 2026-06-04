@@ -71,6 +71,20 @@ const BOSSES: Array[Dictionary] = [
 		"xp_reward": 150,
 		"sprite_key": "boss_dungeon_lord",
 		"min_floor": 1,
+		"max_floor": 5,
+	},
+	{
+		# Floor 6: the encounter spawns TWO of these and nothing else.
+		# Slightly less HP than a solo tier boss so a 2-on-1 fight stays fair.
+		"id": "lizard_titan",
+		"display_name": "Lizard Titan",
+		"hp": 95,
+		"armor": 3,
+		"speed": 8,
+		"abilities": ["enemy_claw", "enemy_bite"],
+		"xp_reward": 110,
+		"sprite_key": "boss_lizard_titan",
+		"min_floor": 6,
 		"max_floor": 6,
 	},
 	{
@@ -98,6 +112,16 @@ const BOSSES: Array[Dictionary] = [
 		"max_floor": 18,
 	},
 ]
+
+## Floor 6 is a 2-titan duel — no other enemies. Every other boss floor is 1.
+static func boss_count_for_floor(floor_num: int) -> int:
+	if floor_num == 6:
+		return 2
+	return 1
+
+## Boss floors with extras suppressed (only the bosses spawn, no fodder).
+static func suppress_regular_enemies(floor_num: int) -> bool:
+	return floor_num == 6
 
 ## Bosses appear on milestone floors only (every 3rd: 3, 6, 9, 12, 15, 18).
 ## Regular floors are normal enemy waves — this makes boss floors feel special
