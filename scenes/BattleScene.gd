@@ -163,6 +163,10 @@ var _attack_pre_hp: int = 0  # snapshot of target HP before _do_hero_attack — 
 var _gold_widget: Label = null
 var _gold_flash_tween: Tween = null
 
+# Active screen-shake tweens, one per world layer — killed before a new shake
+# starts so back-to-back impacts don't fight each other on the same property.
+var _shake_tweens: Array[Tween] = []
+
 @onready var _hex_layer: Node2D = $HexLayer
 @onready var _entity_layer: Node2D = $EntityLayer
 @onready var _floor_label: Label = $UILayer/FloorLabel
@@ -423,6 +427,17 @@ func _play_ability_effect(hex: Vector2i, ability_id: String) -> void:
 		.set_ease(Tween.EASE_IN)
 	tw.tween_callback(fx.queue_free)
 
+	# Heavy-impact abilities get a brief screen shake for tactile weight.
+	# Light ones (basic_attack, heal, vanish, taunt, mana_shield, lava_heat
+	# ambient, frost shimmer) stay calm — overusing shake numbs the effect.
+	match ability_id:
+		"fireball":
+			_screen_shake(6.5, 0.26)
+		"power_strike", "backstab":
+			_screen_shake(5.0, 0.20)
+		"frost_nova", "shadow_step":
+			_screen_shake(3.5, 0.18)
+
 ## ─── Idle Animation ───────────────────────────────────────────────────────────
 
 func _start_idle_bob(sprite: Sprite2D, is_hero: bool) -> Tween:
@@ -504,12 +519,33 @@ func _draw_hex_grid() -> void:
 		poly.polygon = _make_hex_pts(HEX_SIZE - 2.0)
 		poly.position = world_pos
 		var is_lava: bool = tile_type == "lava"
-		match tile_type:
-			"lava":
-				poly.color = LAVA_COLOR
-			_:
-				var alt: bool = (hex.x + hex.y) % 2 == 0
-				poly.color = FLOOR_COLOR if alt else FLOOR_ALT
+		if is_lava:
+			# Lava keeps a flat fill — the pulse tween animates poly.color directly.
+			poly.color = LAVA_COLOR
+		else:
+			# Stone floor: pick base/alt shade, then nudge per-tile so the floor
+			# isn't a regular checker pattern. Hash drives a small ±brightness wobble.
+			var alt: bool = (hex.x + hex.y) % 2 == 0
+			var base: Color = FLOOR_COLOR if alt else FLOOR_ALT
+			var h: int = absi(hex.x * 73856093 ^ hex.y * 19349663 ^ GameState.run_seed)
+			var nudge: float = (float(h % 1000) / 1000.0) - 0.5  # -0.5..+0.5
+			base = base.lightened(nudge * 0.12)
+			# Vertical gradient via per-vertex colors — top vertices catch the
+			# "overhead light", bottom vertices fall into shadow. Reads as carved
+			# stone instead of a flat-painted tile.
+			# _make_hex_pts order: 0=upper-right, 1=lower-right, 2=bottom,
+			# 3=lower-left, 4=upper-left, 5=top.
+			var top: Color = base.lightened(0.28)
+			var mid: Color = base
+			var bot: Color = base.darkened(0.42)
+			var vc := PackedColorArray()
+			vc.append(top)              # 0 upper-right
+			vc.append(mid.darkened(0.18)) # 1 lower-right
+			vc.append(bot)              # 2 bottom
+			vc.append(mid.darkened(0.18)) # 3 lower-left
+			vc.append(top)              # 4 upper-left
+			vc.append(top.lightened(0.06)) # 5 top
+			poly.vertex_colors = vc
 		_hex_layer.add_child(poly)
 		_hex_polys[hex] = poly
 
@@ -658,33 +694,55 @@ func _spawn_entity_node(c: Combatant) -> void:
 		faction_tint = Color(0.95, 0.22, 0.16)
 
 	if sprite_tex != null:
-		# Soft floor halo: faint faction-tinted fill on the standing hex itself,
-		# so the tile reads as occupied even before the eye finds the sprite.
+		# Floor halo: outer faint hex + inner brighter disk. Stacked, the two
+		# read as a faction-tinted "spotlight" pooling on the standing tile.
 		var floor_halo := Polygon2D.new()
 		floor_halo.polygon = _make_hex_pts(HEX_SIZE - 5.0)
-		var halo_clr := Color(faction_tint.r, faction_tint.g, faction_tint.b, 0.14)
-		floor_halo.color = halo_clr
+		floor_halo.color = Color(faction_tint.r, faction_tint.g, faction_tint.b, 0.08)
 		root.add_child(floor_halo)
+		var halo_core := Polygon2D.new()
+		halo_core.polygon = _make_hex_pts(HEX_SIZE * 0.55)
+		halo_core.color = Color(faction_tint.r, faction_tint.g, faction_tint.b, 0.28)
+		halo_core.position = Vector2(0.0, 2.0)
+		root.add_child(halo_core)
 
-		# Stand ring: thin faction-colored outline drawn on the floor plane.
-		# Makes "this is *my* hex" unmistakable; moves with the entity via tweens.
-		var stand_ring := Line2D.new()
+		# Stand ring: corner brackets at each of the 6 hex corners, pointing
+		# inward along the two adjacent edges. Reads as "selected unit"
+		# framing — way more deliberate than a flat outline. Container is
+		# named "StandRing" so existing code can still find/tween it.
+		var stand_ring := Node2D.new()
 		stand_ring.name = "StandRing"
-		var sr_pts: PackedVector2Array = _make_hex_pts(HEX_SIZE - 6.0)
-		sr_pts.append(sr_pts[0])
-		stand_ring.points = sr_pts
-		stand_ring.width = 2.4 if is_boss else 2.0
-		stand_ring.default_color = Color(faction_tint.r, faction_tint.g, faction_tint.b, 0.85)
-		stand_ring.joint_mode = Line2D.LINE_JOINT_ROUND
+		var sr_pts: PackedVector2Array = _make_hex_pts(HEX_SIZE - 5.5)
+		var bracket_color := Color(faction_tint.r, faction_tint.g, faction_tint.b, 0.95)
+		var bracket_width: float = 2.8 if is_boss else 2.2
+		var bracket_len: float = 7.5 if is_boss else 6.5
+		for i: int in range(6):
+			var corner: Vector2 = sr_pts[i]
+			var prev_c: Vector2 = sr_pts[(i + 5) % 6]
+			var next_c: Vector2 = sr_pts[(i + 1) % 6]
+			var dir_a: Vector2 = (prev_c - corner).normalized() * bracket_len
+			var dir_b: Vector2 = (next_c - corner).normalized() * bracket_len
+			var seg := Line2D.new()
+			var spts := PackedVector2Array()
+			spts.append(corner + dir_a)
+			spts.append(corner)
+			spts.append(corner + dir_b)
+			seg.points = spts
+			seg.width = bracket_width
+			seg.default_color = bracket_color
+			seg.joint_mode = Line2D.LINE_JOINT_ROUND
+			seg.begin_cap_mode = Line2D.LINE_CAP_ROUND
+			seg.end_cap_mode = Line2D.LINE_CAP_ROUND
+			stand_ring.add_child(seg)
 		root.add_child(stand_ring)
 
-		# Subtle pulse on the player hero's stand ring so the eye finds Carl fast.
+		# Subtle pulse on the player hero's brackets so the eye finds Carl fast.
 		if c.faction == Combatant.Faction.HERO and c == _hero:
 			var pulse_tw: Tween = create_tween()
 			pulse_tw.set_loops()
-			pulse_tw.tween_property(stand_ring, "default_color:a", 0.55, 0.95) \
+			pulse_tw.tween_property(stand_ring, "modulate:a", 0.55, 0.95) \
 				.set_ease(Tween.EASE_IN_OUT).set_trans(Tween.TRANS_SINE)
-			pulse_tw.tween_property(stand_ring, "default_color:a", 0.95, 0.95) \
+			pulse_tw.tween_property(stand_ring, "modulate:a", 1.0, 0.95) \
 				.set_ease(Tween.EASE_IN_OUT).set_trans(Tween.TRANS_SINE)
 
 		# Ground shadow: wide-but-shallow ellipse at the feet. We fake the squish
@@ -2064,6 +2122,7 @@ func _on_action_taken(attacker: Combatant, target: Combatant, damage: int, abili
 		# Gold, larger damage number + extra flash + quip for critical hits
 		_show_damage_number(target, damage, Color(1.0, 0.85, 0.1), true)
 		AudioManager.play("crit", 0.05)
+		_screen_shake(4.5, 0.20)
 		if _battle_rng.randf() < 0.5:
 			SystemVoice.speak("critical_hit")
 		# Run 19: track crits for the streak achievement + audience favor.
@@ -2208,6 +2267,7 @@ func _on_boss_enraged(boss: Combatant) -> void:
 				.set_ease(Tween.EASE_IN_OUT).set_trans(Tween.TRANS_SINE)
 	AudioManager.play("enrage")
 	_hit_flash(boss)
+	_screen_shake(9.0, 0.45)
 	_update_boss_hp_bar()
 	var quip: String = SystemVoice.pick("boss_enraged")
 	_show_system_banner("⚠ ENRAGED: %s — %s" % [boss.display_name, quip], 4.0)
@@ -2402,6 +2462,32 @@ func _hit_flash(c: Combatant) -> void:
 	var tw2: Tween = create_tween()
 	tw2.tween_property(node, "scale", Vector2(1.10, 0.88), 0.06)
 	tw2.tween_property(node, "scale", Vector2(1.0,  1.0),  0.12)
+
+func _screen_shake(intensity: float = 5.0, duration: float = 0.22) -> void:
+	## Brief offset oscillation on the world layers (hex + entities) for impact
+	## punch. UILayer is a CanvasLayer so the HUD stays put; Background is the
+	## sibling ColorRect at the BattleScene root and is also unaffected.
+	## Any in-flight shake is killed first so back-to-back impacts don't fight.
+	for old: Tween in _shake_tweens:
+		if old != null and old.is_valid():
+			old.kill()
+	_shake_tweens.clear()
+	var base: Vector2 = Vector2(640.0, 340.0)
+	var offsets: Array[Vector2] = [
+		Vector2(intensity, -intensity * 0.55),
+		Vector2(-intensity * 0.85, intensity * 0.70),
+		Vector2(intensity * 0.55, intensity * 0.40),
+		Vector2(-intensity * 0.30, -intensity * 0.25),
+		Vector2.ZERO,
+	]
+	var step: float = duration / float(offsets.size())
+	for layer: Node2D in [_hex_layer, _entity_layer]:
+		layer.position = base
+		var ltw: Tween = create_tween()
+		for off: Vector2 in offsets:
+			ltw.tween_property(layer, "position", base + off, step) \
+				.set_trans(Tween.TRANS_SINE)
+		_shake_tweens.append(ltw)
 
 func _show_damage_number(c: Combatant, damage: int, color: Color = Color(1.0, 0.25, 0.1),
 		is_crit: bool = false) -> void:
