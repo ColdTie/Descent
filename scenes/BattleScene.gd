@@ -739,9 +739,9 @@ func _spawn_entity_node(c: Combatant) -> void:
 		# Donut (companion) renders much smaller — she's a cat, not a fighter.
 		var sprite_scale: float = 0.55
 		if is_boss:
-			# Lizard Titans on Floor 6 are visually massive — bigger sprite,
-			# so the 2-vs-1 feels like a real spike.
-			sprite_scale = 0.90 if c.sprite_key == "boss_lizard_titan" else 0.67
+			# Lizard Titans on Floor 6 use the regular-mob scale — they read
+			# as wiry predators, not hulks, and there are two of them.
+			sprite_scale = 0.45 if c.sprite_key == "boss_lizard_titan" else 0.67
 		elif c.sprite_key == "companion_donut":
 			sprite_scale = 0.22
 		sprite.scale = Vector2(sprite_scale, sprite_scale)
@@ -805,6 +805,16 @@ func _spawn_entity_node(c: Combatant) -> void:
 	var HP_W: float = 50.0
 	var HP_H: float = 11.0
 	var hp_y: float = HEX_SIZE * 0.58
+
+	# Lizard Titans get a bright cyan outer frame so the duo reads as a unique
+	# encounter at a glance — pairs with the cyan eyes + belly on the sprite.
+	var is_lizard: bool = c.sprite_key == "boss_lizard_titan"
+	if is_lizard:
+		var hp_outline := ColorRect.new()
+		hp_outline.size = Vector2(HP_W + 6.0, HP_H + 6.0)
+		hp_outline.position = Vector2(-(HP_W + 6.0) * 0.5, hp_y - 2.0)
+		hp_outline.color = Color(0.30, 0.78, 1.0)
+		root.add_child(hp_outline)
 
 	var hp_border := ColorRect.new()
 	hp_border.size = Vector2(HP_W + 2.0, HP_H + 2.0)
