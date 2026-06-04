@@ -182,6 +182,7 @@ func _ready() -> void:
 	_build_inferno_map()
 	_build_ally_panel()
 	_build_achievement_overlay()
+	_build_top_left_hud_backing()
 	_update_hero_hp_label()
 	# Run 19: floor-milestone achievements fire as soon as the floor loads.
 	if GameState.floor_num == 9:
@@ -494,6 +495,36 @@ func _draw_hex_grid() -> void:
 		border.default_color = LAVA_BORDER if is_lava else STONE_EDGE
 		poly.add_child(border)
 
+		# Top-edge bevel: thin lighter strip on the upper edges only — gives the
+		# floor tile a chiseled-stone feel under the cave's overhead light.
+		# _make_hex_pts angles: i=0 upper-right, i=4 upper-left, i=5 top.
+		# Skipping for lava (the pulse + border are already busy enough).
+		if not is_lava:
+			var hpts: PackedVector2Array = _make_hex_pts(HEX_SIZE - 2.5)
+			var bevel := Line2D.new()
+			var bvpts := PackedVector2Array()
+			bvpts.append(hpts[4])
+			bvpts.append(hpts[5])
+			bvpts.append(hpts[0])
+			bevel.points = bvpts
+			bevel.width = 1.4
+			bevel.default_color = Color(STONE_EDGE.r, STONE_EDGE.g, STONE_EDGE.b, 0.55).lightened(0.35)
+			bevel.joint_mode = Line2D.LINE_JOINT_ROUND
+			poly.add_child(bevel)
+
+			# Bottom-edge shadow: a slightly darker strip on the lower edges so the
+			# tile reads as raised.
+			var shadow_edge := Line2D.new()
+			var septs := PackedVector2Array()
+			septs.append(hpts[1])
+			septs.append(hpts[2])
+			septs.append(hpts[3])
+			shadow_edge.points = septs
+			shadow_edge.width = 1.2
+			shadow_edge.default_color = Color(0.0, 0.0, 0.0, 0.40)
+			shadow_edge.joint_mode = Line2D.LINE_JOINT_ROUND
+			poly.add_child(shadow_edge)
+
 		# Stone cracks on floor tiles
 		if not is_lava:
 			_add_stone_texture(poly, hex)
@@ -576,15 +607,60 @@ func _spawn_entity_node(c: Combatant) -> void:
 		sprite_tex = load(sprite_path) as Texture2D
 	var is_boss: bool = c.sprite_key.begins_with("boss")
 
+	# Pick the faction tint that drives stand-ring + aura color.
+	var faction_tint: Color
+	if is_boss:
+		faction_tint = Color(0.85, 0.10, 0.95)
+	elif c.sprite_key == "companion_donut":
+		faction_tint = Color(0.95, 0.72, 0.10)
+	elif c.sprite_key.begins_with("ally_"):
+		var ag := _ally_glow_color(c)
+		faction_tint = Color(ag.r, ag.g, ag.b)
+	elif c.faction == Combatant.Faction.HERO:
+		faction_tint = _hero_class_color()
+	else:
+		faction_tint = Color(0.95, 0.22, 0.16)
+
 	if sprite_tex != null:
-		# Ground shadow (drawn first — appears visually behind all other layers)
+		# Soft floor halo: faint faction-tinted fill on the standing hex itself,
+		# so the tile reads as occupied even before the eye finds the sprite.
+		var floor_halo := Polygon2D.new()
+		floor_halo.polygon = _make_hex_pts(HEX_SIZE - 5.0)
+		var halo_clr := Color(faction_tint.r, faction_tint.g, faction_tint.b, 0.14)
+		floor_halo.color = halo_clr
+		root.add_child(floor_halo)
+
+		# Stand ring: thin faction-colored outline drawn on the floor plane.
+		# Makes "this is *my* hex" unmistakable; moves with the entity via tweens.
+		var stand_ring := Line2D.new()
+		stand_ring.name = "StandRing"
+		var sr_pts: PackedVector2Array = _make_hex_pts(HEX_SIZE - 6.0)
+		sr_pts.append(sr_pts[0])
+		stand_ring.points = sr_pts
+		stand_ring.width = 2.4 if is_boss else 2.0
+		stand_ring.default_color = Color(faction_tint.r, faction_tint.g, faction_tint.b, 0.85)
+		stand_ring.joint_mode = Line2D.LINE_JOINT_ROUND
+		root.add_child(stand_ring)
+
+		# Subtle pulse on the player hero's stand ring so the eye finds Carl fast.
+		if c.faction == Combatant.Faction.HERO and c == _hero:
+			var pulse_tw: Tween = create_tween()
+			pulse_tw.set_loops()
+			pulse_tw.tween_property(stand_ring, "default_color:a", 0.55, 0.95) \
+				.set_ease(Tween.EASE_IN_OUT).set_trans(Tween.TRANS_SINE)
+			pulse_tw.tween_property(stand_ring, "default_color:a", 0.95, 0.95) \
+				.set_ease(Tween.EASE_IN_OUT).set_trans(Tween.TRANS_SINE)
+
+		# Ground shadow: wide-but-shallow ellipse at the feet. We fake the squish
+		# by scaling the hex polygon's y.
 		var shadow := Polygon2D.new()
 		shadow.polygon = _make_hex_pts(HEX_SIZE * (0.54 if is_boss else 0.44))
 		shadow.color = Color(0.0, 0.0, 0.0, 0.50)
-		shadow.position = Vector2(0.0, HEX_SIZE * 0.28)
+		shadow.position = Vector2(0.0, HEX_SIZE * 0.30)
+		shadow.scale = Vector2(1.0, 0.55)
 		root.add_child(shadow)
 
-		# Colored glow ring — class color for hero, gold for Donut, blood-red for enemies, void-purple for bosses
+		# Aura glow ring (existing) — sits at upper torso, gives a soft halo around the sprite.
 		var glow_poly := Polygon2D.new()
 		glow_poly.polygon = _make_hex_pts(HEX_SIZE * (0.84 if is_boss else 0.72))
 		glow_poly.position = Vector2(0.0, -12.0)
@@ -2181,6 +2257,26 @@ func _make_hex_pts(size: float) -> PackedVector2Array:
 		var angle: float = deg_to_rad(60.0 * float(i) - 30.0)
 		pts.append(Vector2(cos(angle) * size, sin(angle) * size))
 	return pts
+
+## ─── Top-Left HUD Backing ────────────────────────────────────────────────────
+
+func _build_top_left_hud_backing() -> void:
+	## Stone-styled panel behind the Floor and Turn labels so the top-left HUD
+	## reads as a cohesive widget and matches the audience/gold panels at top-right.
+	var ui: CanvasLayer = $UILayer
+	var bg := Panel.new()
+	bg.position = Vector2(8.0, 8.0)
+	bg.size = Vector2(300.0, 82.0)
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(0.08, 0.06, 0.12, 0.78)
+	sb.border_color = Color(0.95, 0.78, 0.18)
+	sb.set_border_width_all(1)
+	sb.set_corner_radius_all(4)
+	bg.add_theme_stylebox_override("panel", sb)
+	bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	ui.add_child(bg)
+	# Render behind the existing labels in tree order.
+	ui.move_child(bg, 0)
 
 
 ## ─── Run 19: Achievement toast UI + Audience HUD widget ───────────────────────

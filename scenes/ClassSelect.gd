@@ -76,7 +76,7 @@ func _make_class_card(class_id: String) -> PanelContainer:
 	panel.add_theme_stylebox_override("panel", bg)
 
 	var vbox := VBoxContainer.new()
-	vbox.theme_override_constants_separation = 4
+	vbox.add_theme_constant_override("separation", 4)
 	panel.add_child(vbox)
 
 	# ── Portrait image ──────────────────────────────────────────────────────
