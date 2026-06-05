@@ -35,7 +35,7 @@ DESCENT is a turn-based tactical dungeon crawler in the spirit of **Dungeon Craw
 - **Architecture rule**: `BattleEngine._calculate_damage()` returns RAW damage (no armor). `Combatant.take_damage(amount, ignore_armor=false)` applies armor. Don't double-apply armor in both places.
 - `Combatant.take_damage(amount, ignore_armor)` — the `ignore_armor` parameter bypasses the `armor` field reduction (for backstab, env damage, etc.)
 
-## Current State (Run 23 — Move-vs-Ability UX + Right-Click Cancel)
+## Current State (Run 24 — Ambient Music + Pause Menu + Combat Log + Loot Rarity)
 ### Implemented ✅
 **Run 1 (Bootstrap):**
 - `GameRng`, `GameState`, `SystemVoice` autoloads
@@ -198,6 +198,30 @@ DESCENT is a turn-based tactical dungeon crawler in the spirit of **Dungeon Craw
 - **`BattleScene.gd`** — `TEXTURE_FILTER_LINEAR_WITH_MIPMAPS` (was `NEAREST` — NEAREST was for pixel art; SVG art needs anti-aliasing); sprite scale 0.68/0.85 (was 0.95/1.20 — adjusted for 192px source)
 - **`ClassSelect.gd`** — portrait filter changed to `LINEAR_WITH_MIPMAPS` to match
 - **`deploy.yml`** — installs `libcairo2` + `cairosvg`, runs `gen_sprites_v5.py`
+
+**Run 24 (Ambient Music + Pause Menu + Combat Log + Loot Rarity Tiers):**
+- **`tools/gen_music.py`** — new procedural ambient-music generator (stdlib only — `wave`, `struct`, `math`, `random`). Synthesizes four looping 16-bit WAVs into `assets/audio/`: `music_title` (~28s dark cinematic minor-chord pad + bell hits), `music_stone` (~30s warm low drone + slow tribal pulse + sparse harp pluck for floors 1-6), `music_obsidian` (~30s cold F# diminished pad + glassy chimes for floors 7-12), `music_void` (~30s dissonant pad + deep doom bells for floors 13-18). Each track ends with a `loop_crossfade` so the WAV loops seamlessly in `AudioStreamWAV.LOOP_FORWARD` mode.
+- **`autoloads/AudioManager.gd` overhaul** — adds music subsystem alongside SFX:
+  - `MUSIC_NAMES` registry preloaded same as SFX; music tracks get `loop_mode = LOOP_FORWARD` forced at load time so the WAVs loop without gaps.
+  - Two dedicated `AudioStreamPlayer` instances (`_music_a`, `_music_b`) act as a crossfade pair — `play_music(name, fade_s)` ramps the new track up while the old one fades out via `volume_db` tweens.
+  - `stop_music(fade_s)`, `set_music_enabled(on)`, `toggle_music_enabled()`, `set_music_volume_db(db)`, `set_sfx_volume_db(db)`. Music-enabled toggle is sticky across tracks.
+  - `music_for_floor(floor_num)` maps floor → tier track (1-6 stone / 7-12 obsidian / 13-18 void). Used by BattleScene `_ready`.
+  - Calling `play_music()` with the same track already playing is a no-op, so within-tier floor transitions don't restart the loop.
+- **`scenes/BattleScene.gd`** — `_ready()` calls `AudioManager.play_music(AudioManager.music_for_floor(GameState.floor_num), 1.6)` so the tier track crossfades in on every floor. Floors within the same tier keep the same track playing uninterrupted; tier transitions (6→7, 12→13) get a real crossfade.
+- **`scenes/TitleScreen.gd`** — `_ready()` starts `music_title`. New `MUSIC: ON/OFF` button alongside the existing `SFX: ON/OFF` toggle.
+- **`scenes/ClassSelect.gd`** — `_ready()` re-plays `music_title` so the title track resumes after a death/quit returns to class select.
+- **Pause menu (BattleScene)** — `_unhandled_input()` handles `KEY_ESCAPE` and toggles a `CanvasLayer` overlay built by `_build_pause_menu()`. The overlay shows: PAUSED title + System-flavor subtitle, **SFX VOLUME** slider (-40..0 dB, wired to `AudioManager.set_sfx_volume_db`), **MUSIC VOLUME** slider (wired to `set_music_volume_db`), SFX/MUSIC on-off toggles, **RESUME**, and **QUIT TO TITLE**. ESC is suppressed when the run has ended (`_hero_dead` or `_engine.battle_over`) so the death overlay and victory transition own the screen. QUIT TO TITLE emits `GameState.hero_died` so Main's existing routing returns to ClassSelect. Layer 50 sits above HUD + achievement toasts.
+- **Combat log (BattleScene)** — `_build_combat_log()` sits below the gold widget at (1080, 140), 188×174px. Shows the last `COMBAT_LOG_MAX = 6` events (older entries trimmed). Lines come from existing combat hooks: `_on_action_taken` (hits + CRIT lines), `_on_combatant_died` (enemy slain / Carl down / ally fallen), `_on_status_ticked` (status damage), `_on_battle_ended` (floor cleared). Each new line flashes brighter for 0.45s so the eye catches the update. `_short_name(c)` trims multi-word combatant names ("Marcus the Steadfast" → "Marcus"). Hero hits are tinted soft green, enemy hits soft red, crits gold, status damage orange, kills bright gold. `mouse_filter = IGNORE` so the panel never eats clicks.
+- **Loot rarity tiers (`scenes/LootScreen.gd`)** — Run 11's flat 8-item pool expanded with rarity metadata + 4 new items:
+  - `RARITY_COMMON`, `RARITY_RARE`, `RARITY_LEGENDARY` constants with paired `RARITY_COLORS` (grey / blue / orange) and `RARITY_LABELS`.
+  - Every `LOOT_POOL` entry now carries a `rarity` key; new items: `phoenix_feather` (Legendary, full heal), `obsidian_edge` (Rare, +18 Atk), `stoneforged` (Legendary, +8/+4/+30), `duelist_band` (Rare, +4 Atk +4 Spd).
+  - `RARITY_WEIGHTS_BY_TIER[3]` — tier 0 (floors 1-6) is 80/18/2 common/rare/legendary; tier 1 (7-12) is 55/35/10; tier 2 (13-18) is 30/45/25. Deeper floors see more Rare/Legendary cards.
+  - `_generate_choices()` rerolls per slot: pick weighted rarity → draw a non-duplicate item of that rarity (falls back to lower tiers if the chosen pool is exhausted).
+  - Card rendering: rarity name label at top, rarity-color border (4px for Legendary, 2px otherwise), rarity-tinted shadow. Legendary cards pulse their `shadow_size` 8 ↔ 16 on a 1.1s sine loop.
+  - Any Legendary card on the slate triggers `_flash_legendary_aura()` (soft orange screen flash) on screen entry AND on pick, plus a special `SystemVoice.speak_direct` quip.
+  - `_apply_loot` `multi` branch now handles `defense` and `speed` keys (was attack + max_hp only).
+- **`.github/workflows/deploy.yml`** — adds `python3 tools/gen_music.py` to the asset-generation step.
+- **`tests/test_run24.gd`** (12 test functions) — LOOT_POOL schema (id/name/type/desc/rarity present, ids unique, types in apply-handler allowed-list, rarity values in known set, each rarity bucket has ≥1 item), rarity weight invariants (3 tier tables, Legendary grows + Common shrinks with depth, totals positive), audio constants lock-in (MUSIC_NAMES contains all 4 tracks, AUDIO_DIR is `res://`, VOICE_COUNT positive). Wired into `run_tests.gd`. Test suite now exercises pure data only — autoload runtime state isn't touched per `--script` mode rule.
 
 **Run 23 (Move-vs-Ability UX — Persistent Move Rings + Dynamic Hint + Right-Click Cancel):**
 - **Root issue:** With an ability armed, the player could still click an empty adjacent hex to move, but the green move tiles visually merged into (or were dominated by) the ability's fill overlays — and nothing on screen explained that move was still available. The single static "YOUR TURN — Click to move or attack" text didn't disambiguate.
@@ -363,38 +387,34 @@ FTL, traditional roguelikes). Status of the "what are we missing" audit:
 - Arcanist class-specific unlock (Mana Shield) — Run 21
 - HUD polish + ASCII-safe iconography (no missing-glyph boxes) — Run 22
 - Move-vs-ability UX (persistent green rings + dynamic hint + right-click cancel) — Run 23
+- Background music / ambient loop (per-tier procedural tracks) — Run 24
+- Pause / settings menu with SFX & music volume sliders — Run 24
+- Combat log panel — Run 24
+- Loot rarity tiers (Common/Rare/Legendary, screen flash + per-tier weighting) — Run 24
 
 ### 🔜 Highest-value, easiest remaining (do next, roughly in order)
-1. **Background music / ambient loop** — SFX exist now; a low droning ambient loop per
-   tier would massively lift atmosphere. Can be procedurally generated (longer WAV, looped
-   AudioStreamPlayer with `loop`). Medium effort; AudioManager already exists to host it.
-2. **Pause / settings menu (in-battle)** — No way to pause, restart, quit, or change volume
-   mid-run. Add an ESC overlay: Resume / Restart Run / Quit to Title + SFX volume slider.
-3. **Combat log panel** — Only transient System banners exist. A small scrolling log of the
-   last ~6 events helps readability. Pure-UI, low risk.
-4. **Loot rarity tiers** — Common/Rare/Legendary with color + a Legendary screen flash and
-   special quip. Extends the existing LootScreen with minimal new code.
-5. **Sponsor cooldown / variety** — Run 20 ships 10 sponsors at a flat 200-audience cadence.
+1. **Sponsor cooldown / variety** — Run 20 ships 10 sponsors at a flat 200-audience cadence.
    Could weight rare/legendary sponsors at higher audience thresholds, or thread sponsor
    stories across multiple offers (e.g. "Big Mike returns" with a follow-up gift).
-6. **Shop variety / rare items** — Run 21 ships 11 items with a flat 4-card slate. Could
-   gate higher-cost items behind floor depth, weight by rarity, or add a "REROLL" button
-   (costs a small gold premium). Mana Shield HUD widget: show `absorb_remaining` as a
-   floating bar above Carl when active.
+2. **Shop variety / rare items** — Run 21 ships 11 items with a flat 4-card slate. Could
+   gate higher-cost items behind floor depth, weight by rarity (similar to Run 24's loot
+   rarity tiers), or add a "REROLL" button (costs a small gold premium). Mana Shield HUD
+   widget: show `absorb_remaining` as a floating bar above Carl when active.
+3. **Save / resume a run** — Serialize GameState to `user://` so a run survives a refresh
+   (web export supports it). Pairs nicely with the new Quit to Title action.
 
 ### 🟡 Larger / later (note, not yet scoped)
-7. **More floor variety** — Per-tier hazards: Tier 1 crumbling bridges, Tier 2 freeze pools,
+4. **More floor variety** — Per-tier hazards: Tier 1 crumbling bridges, Tier 2 freeze pools,
    Tier 3 void rifts that warp enemies. Needs DungeonMap + BattleScene tile-type support.
-8. **More enemy types for Tier 2/3** — Void Wraith (phases through walls), Bone Colossus
+5. **More enemy types for Tier 2/3** — Void Wraith (phases through walls), Bone Colossus
    (huge HP, slow), Lich (resurrects skeletons).
-9. **Boss signature moves** — Dungeon Lord rallies a dead enemy; Warden ground-slam knockback;
+6. **Boss signature moves** — Dungeon Lord rallies a dead enemy; Warden ground-slam knockback;
    Abyss Keeper void-pull. Per-boss scripted ability in enemy AI.
-10. **Meta-progression / unlocks** — Persistent currency between runs, unlockable classes or
+7. **Meta-progression / unlocks** — Persistent currency between runs, unlockable classes or
     starting perks. Requires save persistence (web: `user://` works in Godot web export).
-11. **Save / resume a run** — Serialize GameState to `user://` so a run survives a refresh.
-12. **Status-effect depth** — Bleed, stun, vulnerability; show stacks/durations on a tooltip.
-13. **Accessibility/options** — Screen shake toggle, colorblind-friendly hex highlights,
-    text size. Cheap goodwill once a settings menu exists (#3).
+8. **Status-effect depth** — Bleed, stun, vulnerability; show stacks/durations on a tooltip.
+9. **Accessibility/options** — Colorblind-friendly hex highlights, text size, screen shake
+    toggle. Run 24's pause menu is a natural home for these settings.
 
 ### Long-term vision
 DESCENT should feel like a **tight, replayable tactical roguelike** wearing a Dungeon Crawler
@@ -412,13 +432,17 @@ assets/
 
 assets/
   audio/       — 16 procedurally-generated WAV SFX (from tools/gen_audio.py, stdlib only)
+                 + 4 looping ambient music WAVs (from tools/gen_music.py, Run 24):
+                 music_title, music_stone, music_obsidian, music_void
   effects/     — 64×64 ability VFX PNGs (from tools/gen_effects.py)
 
 autoloads/
   GameRng.gd         — seeded RNG singleton
   GameState.gd       — run-persistent hero state (+run_score, total_kills, bosses_slain, audience_score, lava_push_kills, sponsor_offers_taken, patch_notes_seen)
   SystemVoice.gd     — The System commentary pools + signal (+sponsor_offer, patch_notes_v2, patch_notes_v3 pools as of Run 20)
-  AudioManager.gd    — SFX player: preloads WAV pool, play(name, pitch_var, vol_db), SFX toggle
+  AudioManager.gd    — SFX + music player: WAV pool, play(name, pitch_var, vol_db),
+                       play_music(name, fade_s), music_for_floor(n), stop_music(fade_s),
+                       SFX/music toggles + volume sliders (Run 24)
   Achievements.gd    — Run 19: DCC-style achievement defs + per-run unlock state + signal
 
 src/combat/
@@ -466,6 +490,7 @@ tests/
   test_run19.gd      — achievement DEFS schema + audience-score math (Run 19)
   test_run20.gd      — Sponsors pool + threshold math + PatchNotes content (Run 20)
   test_run21.gd      — Shop inventory schema + gold helpers + slate determinism + Mana Shield absorb math (Run 21)
+  test_run24.gd      — Loot rarity tier schema + weight invariants + AudioManager music constants (Run 24)
 ```
 
 ## Running Tests

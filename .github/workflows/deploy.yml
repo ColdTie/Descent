@@ -43,6 +43,7 @@ jobs:
           python3 tools/gen_donut.py
           python3 tools/gen_allies.py
           python3 tools/gen_audio.py
+          python3 tools/gen_music.py
 
       - name: Import project assets
         run: |

@@ -12,6 +12,9 @@ var _selected_class: String = ""
 @onready var _system_label: Label  = $VBox/SystemLabel
 
 func _ready() -> void:
+	# ClassSelect can be re-entered after death/quit — make sure the title
+	# track is playing so the run-end music doesn't bleed into the menu.
+	AudioManager.play_music("music_title", 1.2)
 	SystemVoice.speak("class_select")
 	SystemVoice.line_spoken.connect(_on_system_line)
 	_draw_bg_decoration()

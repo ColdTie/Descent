@@ -167,6 +167,16 @@ var _gold_flash_tween: Tween = null
 # starts so back-to-back impacts don't fight each other on the same property.
 var _shake_tweens: Array[Tween] = []
 
+# Run 24: pause overlay + combat log. Pause overlay is a CanvasLayer; ESC
+# toggles it. Combat log is a small scrolling panel of the last ~6 events,
+# anchored top-right under the HP/audience/gold widgets.
+var _pause_layer: CanvasLayer = null
+var _pause_visible: bool = false
+var _combat_log_panel: PanelContainer = null
+var _combat_log_vbox: VBoxContainer = null
+const COMBAT_LOG_MAX: int = 6
+var _quit_to_title_callback: Callable = Callable()
+
 @onready var _hex_layer: Node2D = $HexLayer
 @onready var _entity_layer: Node2D = $EntityLayer
 @onready var _floor_label: Label = $UILayer/FloorLabel
@@ -179,6 +189,9 @@ var _shake_tweens: Array[Tween] = []
 func _ready() -> void:
 	_floor_label.text = "Floor %d / %d" % [GameState.floor_num, GameState.TOTAL_FLOORS]
 	_setup_floor_theme()
+	# Tier-appropriate ambient music loop. Crossfades from whatever was playing
+	# (title track on floor 1, previous tier's loop on the 7/13 transitions).
+	AudioManager.play_music(AudioManager.music_for_floor(GameState.floor_num), 1.6)
 	SystemVoice.line_spoken.connect(_on_system_line)
 	_build_encounter()
 	_load_effect_textures()
@@ -193,6 +206,8 @@ func _ready() -> void:
 	_build_ally_panel()
 	_build_achievement_overlay()
 	_build_top_left_hud_backing()
+	_build_combat_log()
+	_build_pause_menu()
 	_update_hero_hp_label()
 	# Run 19: floor-milestone achievements fire as soon as the floor loads.
 	if GameState.floor_num == 9:
@@ -2128,6 +2143,8 @@ func _on_action_taken(attacker: Combatant, target: Combatant, damage: int, abili
 		# Run 19: track crits for the streak achievement + audience favor.
 		Achievements.note_crit()
 		GameState.award_audience(10, "crit")
+		_combat_log_add("CRIT! %s -> %s for %d" % [_short_name(attacker), _short_name(target), damage],
+			Color(1.0, 0.85, 0.1))
 	else:
 		_show_damage_number(target, damage)
 		# Audio: hero hits vs hero gets hurt
@@ -2135,6 +2152,10 @@ func _on_action_taken(attacker: Combatant, target: Combatant, damage: int, abili
 			AudioManager.play("hurt", 0.06)
 		else:
 			AudioManager.play("hit", 0.08)
+		var line_color: Color = Color(0.78, 0.92, 0.78) if attacker.faction == Combatant.Faction.HERO \
+			else Color(0.95, 0.55, 0.45)
+		_combat_log_add("%s -> %s for %d" % [_short_name(attacker), _short_name(target), damage],
+			line_color)
 
 	_hit_flash(target)
 	_update_hp_bar(target)
@@ -2157,6 +2178,7 @@ func _on_combatant_died(c: Combatant) -> void:
 	if c.faction == Combatant.Faction.ENEMY:
 		_enemies_killed += 1
 		AudioManager.play("kill", 0.1)
+		_combat_log_add("%s slain" % _short_name(c), Color(1.0, 0.78, 0.18))
 		# Run 19: achievements + audience favor on enemy death.
 		Achievements.unlock("first_blood")
 		GameState.award_audience(5, "kill")
@@ -2191,6 +2213,7 @@ func _on_combatant_died(c: Combatant) -> void:
 		if _hero_dead:
 			return
 		_hero_dead = true
+		_combat_log_add("Carl has fallen.", Color(0.95, 0.18, 0.18))
 		_donut_say(_donut_pick("hero_killed"))
 		var node: Node2D = _entity_nodes.get(c.id)
 		if node != null:
@@ -2204,6 +2227,7 @@ func _on_combatant_died(c: Combatant) -> void:
 		_show_death_overlay()
 	else:
 		# Ally fell — battle continues. Mourn them and grey them out.
+		_combat_log_add("%s has fallen." % _short_name(c), Color(0.95, 0.45, 0.42))
 		SystemVoice.speak_direct("%s has fallen. They bought you time. Use it." % c.display_name)
 		_donut_say(_donut_pick("ally_fell"))
 		_grey_out_entity_delayed(c.id)
@@ -2235,6 +2259,8 @@ func _halt_idle_bob(node: Node2D) -> void:
 func _on_status_ticked(c: Combatant, damage: int) -> void:
 	if damage > 0:
 		_show_damage_number(c, damage, Color(1.0, 0.5, 0.0))
+		_combat_log_add("%s takes %d (status)" % [_short_name(c), damage],
+			Color(1.0, 0.55, 0.05))
 	_update_status_label(c)
 	if c.faction == Combatant.Faction.HERO:
 		_sync_hero_alpha()
@@ -2278,6 +2304,7 @@ func _on_battle_ended(hero_won: bool, xp_earned: int) -> void:
 	if hero_won:
 		_turn_indicator.text = "VICTORY!"
 		_turn_indicator.add_theme_color_override("font_color", Color(1.0, 0.85, 0.1))
+		_combat_log_add("Floor %d cleared." % GameState.floor_num, Color(1.0, 0.85, 0.1))
 		AudioManager.play("victory")
 		# Run 19: end-of-floor achievement evaluation. Order is intentional —
 		# floor-clear bonus first (always earned), then conditionals.
@@ -2724,3 +2751,249 @@ func _evaluate_floor_clear_achievements() -> void:
 				break
 		if all_alive:
 			Achievements.unlock("team_player")
+
+
+## ─── Pause Menu (Run 24) ─────────────────────────────────────────────────────
+
+func _unhandled_input(event: InputEvent) -> void:
+	## ESC toggles the pause overlay. Suppressed when the run has ended (the
+	## death overlay / victory transition own the screen at that point).
+	if not (event is InputEventKey):
+		return
+	var k := event as InputEventKey
+	if not (k.pressed and not k.echo):
+		return
+	if k.keycode == KEY_ESCAPE:
+		if _hero_dead or (_engine != null and _engine.battle_over):
+			return
+		_toggle_pause()
+		get_viewport().set_input_as_handled()
+
+
+func _build_pause_menu() -> void:
+	## Build the pause CanvasLayer once and keep it hidden until ESC.
+	## Lives on a high layer so it draws over the HUD and overlays.
+	_pause_layer = CanvasLayer.new()
+	_pause_layer.layer = 50
+	_pause_layer.visible = false
+	add_child(_pause_layer)
+
+	var dim := ColorRect.new()
+	dim.color = Color(0.0, 0.0, 0.0, 0.62)
+	dim.set_anchors_preset(Control.PRESET_FULL_RECT)
+	dim.mouse_filter = Control.MOUSE_FILTER_STOP
+	_pause_layer.add_child(dim)
+
+	var panel := PanelContainer.new()
+	panel.set_anchors_preset(Control.PRESET_CENTER)
+	panel.offset_left = -240.0
+	panel.offset_top = -220.0
+	panel.offset_right = 240.0
+	panel.offset_bottom = 220.0
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(0.07, 0.04, 0.11, 0.98)
+	sb.border_color = Color(0.78, 0.60, 0.12)
+	sb.set_border_width_all(3)
+	sb.set_corner_radius_all(6)
+	sb.set_content_margin_all(24.0)
+	sb.shadow_color = Color(0.0, 0.0, 0.0, 0.85)
+	sb.shadow_size = 14
+	panel.add_theme_stylebox_override("panel", sb)
+	_pause_layer.add_child(panel)
+
+	var vb := VBoxContainer.new()
+	vb.add_theme_constant_override("separation", 12)
+	panel.add_child(vb)
+
+	var title := Label.new()
+	title.text = "PAUSED"
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title.add_theme_font_size_override("font_size", 38)
+	title.add_theme_color_override("font_color", Color(1.0, 0.86, 0.18))
+	vb.add_child(title)
+
+	var sub := Label.new()
+	sub.text = "The dungeon waits. It's patient. It has nowhere to be."
+	sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	sub.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	sub.custom_minimum_size = Vector2(420.0, 0.0)
+	sub.add_theme_font_size_override("font_size", 13)
+	sub.add_theme_color_override("font_color", Color(0.75, 0.72, 0.66))
+	vb.add_child(sub)
+
+	var div := ColorRect.new()
+	div.custom_minimum_size = Vector2(420.0, 1.0)
+	div.color = Color(0.60, 0.20, 0.08, 0.6)
+	div.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	vb.add_child(div)
+
+	# SFX volume slider row
+	vb.add_child(_make_volume_row("SFX VOLUME", AudioManager.master_volume_db,
+		func(v: float) -> void: AudioManager.set_sfx_volume_db(v)))
+	# Music volume slider row
+	vb.add_child(_make_volume_row("MUSIC VOLUME", AudioManager.music_volume_db,
+		func(v: float) -> void: AudioManager.set_music_volume_db(v)))
+
+	# Toggle row: SFX on/off + MUSIC on/off
+	var toggle_row := HBoxContainer.new()
+	toggle_row.alignment = BoxContainer.ALIGNMENT_CENTER
+	toggle_row.add_theme_constant_override("separation", 12)
+	vb.add_child(toggle_row)
+
+	var sfx_btn := Button.new()
+	sfx_btn.text = ("SFX: ON" if AudioManager.sfx_enabled else "SFX: OFF")
+	sfx_btn.custom_minimum_size = Vector2(140.0, 36.0)
+	sfx_btn.pressed.connect(_on_pause_toggle_sfx.bind(sfx_btn))
+	toggle_row.add_child(sfx_btn)
+
+	var music_btn := Button.new()
+	music_btn.text = ("MUSIC: ON" if AudioManager.music_enabled else "MUSIC: OFF")
+	music_btn.custom_minimum_size = Vector2(170.0, 36.0)
+	music_btn.pressed.connect(_on_pause_toggle_music.bind(music_btn))
+	toggle_row.add_child(music_btn)
+
+	# Action buttons
+	var resume_btn := Button.new()
+	resume_btn.text = "RESUME"
+	resume_btn.custom_minimum_size = Vector2(320.0, 44.0)
+	resume_btn.add_theme_font_size_override("font_size", 18)
+	resume_btn.add_theme_color_override("font_color", Color(0.45, 1.0, 0.45))
+	resume_btn.pressed.connect(_toggle_pause)
+	vb.add_child(resume_btn)
+
+	var quit_btn := Button.new()
+	quit_btn.text = "QUIT TO TITLE"
+	quit_btn.custom_minimum_size = Vector2(320.0, 36.0)
+	quit_btn.add_theme_font_size_override("font_size", 14)
+	quit_btn.add_theme_color_override("font_color", Color(0.95, 0.5, 0.45))
+	quit_btn.pressed.connect(_quit_to_title)
+	vb.add_child(quit_btn)
+
+
+func _make_volume_row(label_text: String, initial_db: float, on_changed: Callable) -> HBoxContainer:
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 12)
+
+	var lbl := Label.new()
+	lbl.text = label_text
+	lbl.custom_minimum_size = Vector2(160.0, 0.0)
+	lbl.add_theme_font_size_override("font_size", 14)
+	lbl.add_theme_color_override("font_color", Color(0.86, 0.82, 0.70))
+	row.add_child(lbl)
+
+	var slider := HSlider.new()
+	slider.min_value = -40.0
+	slider.max_value = 0.0
+	slider.step = 1.0
+	slider.value = clamp(initial_db, -40.0, 0.0)
+	slider.custom_minimum_size = Vector2(220.0, 28.0)
+	slider.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	slider.value_changed.connect(on_changed)
+	row.add_child(slider)
+	return row
+
+
+func _toggle_pause() -> void:
+	if _pause_layer == null:
+		return
+	_pause_visible = not _pause_visible
+	_pause_layer.visible = _pause_visible
+	# Halting the SceneTree pause would freeze our tween-driven UI; instead we
+	# rely on _player_turn / _engine.battle_over to gate input from the grid.
+	# The pause overlay itself blocks clicks via its full-screen dim ColorRect.
+	if _pause_visible:
+		AudioManager.play("select", -0.04)
+	else:
+		AudioManager.play("select", 0.02)
+
+
+func _on_pause_toggle_sfx(btn: Button) -> void:
+	var on: bool = AudioManager.toggle_enabled()
+	btn.text = "SFX: ON" if on else "SFX: OFF"
+	if on:
+		AudioManager.play("select")
+
+
+func _on_pause_toggle_music(btn: Button) -> void:
+	var on: bool = AudioManager.toggle_music_enabled()
+	btn.text = "MUSIC: ON" if on else "MUSIC: OFF"
+	AudioManager.play("select")
+
+
+func _quit_to_title() -> void:
+	## Tear down the run and return to TitleScreen. Routed through Main via
+	## GameState.hero_died (existing handler routes to ClassSelect).
+	AudioManager.play("select")
+	if _pause_layer != null:
+		_pause_layer.visible = false
+	AudioManager.stop_music(0.5)
+	GameState.hero_hp = 0
+	GameState.hero_died.emit()
+
+
+## ─── Combat Log (Run 24) ─────────────────────────────────────────────────────
+
+func _build_combat_log() -> void:
+	## A small scrolling log of the last COMBAT_LOG_MAX events. Sits in the
+	## top-right HUD column under the gold widget. Pure-UI; populated by
+	## `_combat_log_add()` from existing combat hooks.
+	_combat_log_panel = PanelContainer.new()
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(0.04, 0.03, 0.07, 0.78)
+	sb.border_color = Color(0.55, 0.42, 0.18, 0.85)
+	sb.set_border_width_all(1)
+	sb.set_corner_radius_all(4)
+	sb.set_content_margin_all(8.0)
+	_combat_log_panel.add_theme_stylebox_override("panel", sb)
+	_combat_log_panel.position = Vector2(1080.0, 140.0)
+	_combat_log_panel.size = Vector2(188.0, 174.0)
+	_combat_log_panel.custom_minimum_size = Vector2(188.0, 174.0)
+	_combat_log_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	$UILayer.add_child(_combat_log_panel)
+
+	var outer := VBoxContainer.new()
+	outer.add_theme_constant_override("separation", 4)
+	_combat_log_panel.add_child(outer)
+
+	var header := Label.new()
+	header.text = "COMBAT LOG"
+	header.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	header.add_theme_font_size_override("font_size", 11)
+	header.add_theme_color_override("font_color", Color(0.95, 0.78, 0.18))
+	outer.add_child(header)
+
+	_combat_log_vbox = VBoxContainer.new()
+	_combat_log_vbox.add_theme_constant_override("separation", 2)
+	outer.add_child(_combat_log_vbox)
+
+
+func _combat_log_add(text: String, color: Color = Color(0.82, 0.82, 0.78)) -> void:
+	## Append a line; trim to COMBAT_LOG_MAX entries.
+	if _combat_log_vbox == null:
+		return
+	var lbl := Label.new()
+	lbl.text = text
+	lbl.add_theme_font_size_override("font_size", 11)
+	lbl.add_theme_color_override("font_color", color)
+	lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_combat_log_vbox.add_child(lbl)
+	while _combat_log_vbox.get_child_count() > COMBAT_LOG_MAX:
+		var first: Node = _combat_log_vbox.get_child(0)
+		_combat_log_vbox.remove_child(first)
+		first.queue_free()
+	# Brief brightness flash so the eye catches the new entry.
+	lbl.modulate = Color(1.4, 1.4, 1.4, 1.0)
+	var tw: Tween = create_tween()
+	tw.tween_property(lbl, "modulate", Color(1.0, 1.0, 1.0, 1.0), 0.45)
+
+
+func _short_name(c: Combatant) -> String:
+	## Trim long combatant names for the log column.
+	if c == null:
+		return "?"
+	var n: String = c.display_name
+	var space_idx: int = n.find(" ")
+	if space_idx > 0 and n.length() > 10:
+		return n.substr(0, space_idx)
+	return n

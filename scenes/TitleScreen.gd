@@ -5,6 +5,7 @@ extends Control
 signal start_game
 
 func _ready() -> void:
+	AudioManager.play_music("music_title", 2.0)
 	_build_ui()
 
 func _build_ui() -> void:
@@ -116,11 +117,18 @@ func _build_ui() -> void:
 	btn_row.add_child(begin_btn)
 
 	var sfx_btn := Button.new()
-	sfx_btn.text = "SFX: ON"
-	sfx_btn.custom_minimum_size = Vector2(150.0, 60.0)
+	sfx_btn.text = "SFX: ON" if AudioManager.sfx_enabled else "SFX: OFF"
+	sfx_btn.custom_minimum_size = Vector2(130.0, 60.0)
 	sfx_btn.add_theme_font_size_override("font_size", 16)
 	sfx_btn.pressed.connect(_on_toggle_sfx.bind(sfx_btn))
 	btn_row.add_child(sfx_btn)
+
+	var music_btn := Button.new()
+	music_btn.text = "MUSIC: ON" if AudioManager.music_enabled else "MUSIC: OFF"
+	music_btn.custom_minimum_size = Vector2(150.0, 60.0)
+	music_btn.add_theme_font_size_override("font_size", 16)
+	music_btn.pressed.connect(_on_toggle_music.bind(music_btn))
+	btn_row.add_child(music_btn)
 
 func _on_begin() -> void:
 	AudioManager.play("select")
@@ -131,3 +139,8 @@ func _on_toggle_sfx(btn: Button) -> void:
 	btn.text = "SFX: ON" if on else "SFX: OFF"
 	if on:
 		AudioManager.play("select")
+
+func _on_toggle_music(btn: Button) -> void:
+	var on: bool = AudioManager.toggle_music_enabled()
+	btn.text = "MUSIC: ON" if on else "MUSIC: OFF"
+	AudioManager.play("select")
