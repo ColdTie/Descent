@@ -138,6 +138,11 @@ var _player_turn: bool = false
 # reset in _next_turn() when it's Carl's turn again.
 var _moved_this_turn: bool = false
 var _basic_attacked_this_turn: bool = false
+# Run 24: generic "any attack landed this turn" flag. Set by basic attacks,
+# single-target abilities, AOE abilities, and self-target abilities. Used in
+# _do_hero_move so the rule "move + any attack ends the turn" is explicit
+# and robust to future abilities that might not auto-end the turn.
+var _attacked_this_turn: bool = false
 var _end_turn_btn: Button = null
 var _battle_rng: RandomNumberGenerator
 var _enemies_killed: int = 0
@@ -1486,6 +1491,7 @@ func _next_turn() -> void:
 		# Reset the move/attack combo flags — a fresh turn earns both back.
 		_moved_this_turn = false
 		_basic_attacked_this_turn = false
+		_attacked_this_turn = false
 		# Tick ability cooldowns at the start of each hero turn
 		for id: String in _hero_ability_objs:
 			_hero_ability_objs[id].tick_cooldown()
@@ -1678,10 +1684,11 @@ func _do_hero_move(hex: Vector2i) -> void:
 	SystemVoice.speak("move")
 	_moved_this_turn = true
 	await get_tree().create_timer(0.28).timeout
-	# Combo rule: move + basic attack share a turn. If the player has already
-	# basic-attacked this turn, the move completes the combo and the turn ends.
-	# Otherwise hand control back so they can swing once before pressing end.
-	if _basic_attacked_this_turn or _engine.battle_over:
+	# Combo rule (Run 24): move + ANY attack ends the turn automatically.
+	# Previously only `_basic_attacked_this_turn` was checked. Now any attack
+	# that landed (basic OR ability) auto-ends the turn after the move so the
+	# player never has to click END TURN after a move+attack combo.
+	if _attacked_this_turn or _basic_attacked_this_turn or _engine.battle_over:
 		_engine.end_turn()
 		_next_turn()
 	else:
@@ -1809,6 +1816,9 @@ func _do_hero_attack(target: Combatant) -> void:
 	var is_basic: bool = _selected_ability == "basic_attack"
 	if is_basic:
 		_basic_attacked_this_turn = true
+	# Run 24: generic "attacked this turn" flag — any single-target attack
+	# (basic or ability) sets it so a follow-up move auto-ends the turn.
+	_attacked_this_turn = true
 	if is_basic and not _moved_this_turn:
 		_player_turn = true
 		_refresh_ability_bar()
@@ -1882,6 +1892,8 @@ func _do_hero_aoe_ability(center_hex: Vector2i) -> void:
 	if abl_obj != null:
 		abl_obj.use()
 
+	# Run 24: AOE counts as an attack for the move/attack combo flag.
+	_attacked_this_turn = true
 	_update_all_hp_bars()
 	_update_hero_hp_label()
 	_refresh_ability_bar()
