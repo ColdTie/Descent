@@ -503,6 +503,16 @@ const LINES: Dictionary = {
 		"Bought. The merchant offers a curt nod. That's the entire customer service experience.",
 	],
 
+	# ── Shop reroll (Run 25) ──────────────────────────────────────────────────
+	"shop_reroll": [
+		"Inventory refreshed. The merchant pretends the previous slate never existed.",
+		"Reroll processed. The dungeon notes your indecision with mild contempt.",
+		"New slate served. The merchant's prices recalibrate to your wallet.",
+		"Cards reshuffled. The odds of a Legendary remain, statistically, garbage.",
+		"Stock refreshed. The merchant suspects you're stalling. He is correct.",
+		"Refresh fee collected. The merchant did not move. Yet your gold did.",
+	],
+
 	# ── Mana shield ability (Run 21) ──────────────────────────────────────────
 	"ability_mana_shield": [
 		"Arcane barrier engaged. The next blows will not land where you live.",

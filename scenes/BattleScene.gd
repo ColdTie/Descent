@@ -913,6 +913,33 @@ func _spawn_entity_node(c: Combatant) -> void:
 	hp_bar.color = Color(0.18, 0.88, 0.22)
 	root.add_child(hp_bar)
 
+	# Run 25: Mana Shield bar (sits just above the HP bar). All nodes are
+	# created hidden — `_update_mana_shield_indicator()` toggles visibility
+	# and width whenever the hero gains, drains, or loses the buff.
+	var SH_H: float = 5.0
+	var sh_y: float = hp_y - SH_H - 3.0
+	var sh_border := ColorRect.new()
+	sh_border.name = "ShieldBorder"
+	sh_border.size = Vector2(HP_W + 2.0, SH_H + 2.0)
+	sh_border.position = Vector2(-(HP_W + 2.0) * 0.5, sh_y)
+	sh_border.color = Color(0.05, 0.07, 0.16)
+	sh_border.visible = false
+	root.add_child(sh_border)
+	var sh_bg := ColorRect.new()
+	sh_bg.name = "ShieldBg"
+	sh_bg.size = Vector2(HP_W, SH_H)
+	sh_bg.position = Vector2(-HP_W * 0.5, sh_y + 1.0)
+	sh_bg.color = Color(0.08, 0.12, 0.26)
+	sh_bg.visible = false
+	root.add_child(sh_bg)
+	var sh_bar := ColorRect.new()
+	sh_bar.name = "ShieldBar"
+	sh_bar.size = Vector2(HP_W, SH_H)
+	sh_bar.position = Vector2(-HP_W * 0.5, sh_y + 1.0)
+	sh_bar.color = Color(0.46, 0.74, 1.0)
+	sh_bar.visible = false
+	root.add_child(sh_bar)
+
 	# Status icons
 	var status_lbl := Label.new()
 	status_lbl.name = "StatusLabel"
@@ -1940,6 +1967,9 @@ func _do_hero_self_ability() -> void:
 			SystemVoice.speak("ability_mana_shield")
 			_play_ability_effect(_hero.position, "mana_shield")
 			_flash_hex_area(_hero.position, 0, Color(0.32, 0.62, 1.0, 0.55))
+			# Run 25: surface the absorb bar immediately so the player sees the
+			# buff went up rather than waiting until the next damage tick.
+			_update_mana_shield_indicator(_hero)
 		_:
 			SystemVoice.speak_direct("Nothing happens. The System is confused too.")
 
@@ -2172,6 +2202,7 @@ func _on_action_taken(attacker: Combatant, target: Combatant, damage: int, abili
 	_hit_flash(target)
 	_update_hp_bar(target)
 	_update_status_label(target)
+	_update_mana_shield_indicator(target)
 	_update_boss_hp_bar()
 	if target.sprite_key.begins_with("ally_"):
 		_update_ally_hp_label(target)
@@ -2431,10 +2462,44 @@ func _update_all_hp_bars() -> void:
 	for c: Combatant in _all_combatants:
 		_update_hp_bar(c)
 		_update_status_label(c)
+		_update_mana_shield_indicator(c)
 	_update_boss_hp_bar()
 	_sync_hero_alpha()
 	for a: Combatant in _allies:
 		_update_ally_hp_label(a)
+
+
+func _update_mana_shield_indicator(c: Combatant) -> void:
+	## Run 25: show a blue absorb bar above this combatant's HP bar while the
+	## mana_shield status is active. Hidden when the buff isn't present.
+	## Width tracks `absorb_remaining / absorb_max`, so it visibly drains
+	## as damage is absorbed. Single source of truth = StatusEffect dict.
+	var node: Node2D = _entity_nodes.get(c.id)
+	if node == null:
+		return
+	var border: ColorRect = node.get_node_or_null("ShieldBorder")
+	var bg: ColorRect = node.get_node_or_null("ShieldBg")
+	var bar: ColorRect = node.get_node_or_null("ShieldBar")
+	if border == null or bg == null or bar == null:
+		return
+	var remaining: int = 0
+	var max_pool: int = 0
+	for eff: Dictionary in c.status_effects:
+		if eff.get("id", "") != "mana_shield":
+			continue
+		remaining = int(eff.get("absorb_remaining", 0))
+		max_pool = int(eff.get("absorb_max", remaining))
+		break
+	if remaining <= 0 or max_pool <= 0:
+		border.visible = false
+		bg.visible = false
+		bar.visible = false
+		return
+	border.visible = true
+	bg.visible = true
+	bar.visible = true
+	var ratio: float = clampf(float(remaining) / float(max_pool), 0.0, 1.0)
+	bar.size.x = bg.size.x * ratio
 
 func _update_hp_bar(c: Combatant) -> void:
 	var node: Node2D = _entity_nodes.get(c.id)

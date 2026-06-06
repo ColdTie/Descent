@@ -7,20 +7,42 @@ extends Control
 ##
 ## Unlike LootScreen / SponsorOffer (pick-one), the shop is multi-purchase:
 ## the player may buy any items they can afford, then click LEAVE to descend.
+##
+## Run 25: rarity tiers (Common/Rare/Legendary) + REROLL button. Each card
+## now renders with a rarity label, rarity-colored border (4px for Legendary),
+## and a tinted shadow. Legendary cards pulse + trigger a soft orange screen
+## flash on entry. The REROLL button below the cards spends an escalating
+## amount of gold to redraw the entire slate.
 
 signal shop_left
 
+const RARITY_COLORS: Dictionary = {
+	"common":  Color(0.72, 0.72, 0.74),
+	"rare":  Color(0.42, 0.72, 1.00),
+	"legendary": Color(1.00, 0.55, 0.10),
+}
+
+const RARITY_LABELS: Dictionary = {
+	"common":  "COMMON",
+	"rare":  "RARE",
+	"legendary": "LEGENDARY",
+}
+
 var _slate: Array[Dictionary] = []
 var _purchased: Dictionary = {}  # id -> true once bought (greys the card)
+var _reroll_count: int = 0       # Run 25: number of rerolls used this visit
 var _gold_label: Label = null
 var _system_label: Label = null
 var _cards_container: HBoxContainer = null
 var _leave_button: Button = null
+var _reroll_button: Button = null
 
 
 func _ready() -> void:
 	GameState.shop_visits += 1
 	_build_ui()
+	_roll_initial_slate()
+	_rebuild_cards()
 	AudioManager.play("select")
 	SystemVoice.speak("shop_enter")
 	SystemVoice.line_spoken.connect(func(text: String, _d: float) -> void:
@@ -46,9 +68,9 @@ func _build_ui() -> void:
 	var outer := PanelContainer.new()
 	outer.set_anchors_preset(Control.PRESET_CENTER)
 	outer.offset_left  = -560.0
-	outer.offset_top  = -290.0
+	outer.offset_top  = -310.0
 	outer.offset_right  =  560.0
-	outer.offset_bottom =  290.0
+	outer.offset_bottom =  310.0
 	var s := StyleBoxFlat.new()
 	s.bg_color = Color(0.06, 0.04, 0.10, 0.98)
 	s.border_color = Color(0.76, 0.58, 0.12)
@@ -102,20 +124,18 @@ func _build_ui() -> void:
 	_cards_container.alignment = BoxContainer.ALIGNMENT_CENTER
 	vbox.add_child(_cards_container)
 
-	# Match the LootScreen / SponsorOffer pattern: duplicate, shuffle via the
-	# seeded GameRng autoload, take the slate-size prefix. (Shop.slate(rng)
-	# exists for headless tests where we need a private rng.)
-	var pool: Array[Dictionary] = Shop.INVENTORY.duplicate()
-	GameRng.shuffle(pool)
-	for item: Dictionary in pool.slice(0, Shop.SLATE_SIZE):
-		_slate.append(item)
-	for item2: Dictionary in _slate:
-		_cards_container.add_child(_make_card(item2))
-
-	# Leave button row
+	# Reroll + Leave button row (Run 25)
 	var btn_row := HBoxContainer.new()
 	btn_row.alignment = BoxContainer.ALIGNMENT_CENTER
+	btn_row.add_theme_constant_override("separation", 20)
 	vbox.add_child(btn_row)
+
+	_reroll_button = Button.new()
+	_reroll_button.custom_minimum_size = Vector2(220.0, 52.0)
+	_reroll_button.add_theme_font_size_override("font_size", 15)
+	_reroll_button.add_theme_color_override("font_color", Color(0.82, 0.92, 1.00))
+	_reroll_button.pressed.connect(_on_reroll_pressed)
+	btn_row.add_child(_reroll_button)
 
 	_leave_button = Button.new()
 	_leave_button.text = "  LEAVE & DESCEND  "
@@ -130,24 +150,78 @@ func _gold_text() -> String:
 	return "$  GOLD: %d" % GameState.hero_gold
 
 
+func _roll_initial_slate() -> void:
+	## Use a deterministic per-floor rng so the slate is reproducible per seed,
+	## mirroring how LootScreen rolls. Mixing in shop_visits ensures consecutive
+	## visits aren't identical. floor_num is the floor the player CLEARED.
+	var rng := RandomNumberGenerator.new()
+	rng.seed = GameState.run_seed ^ (GameState.floor_num * 7919) ^ (GameState.shop_visits * 1543)
+	_slate = Shop.slate(rng, GameState.floor_num)
+	_check_legendary_aura()
+
+
+func _reroll_slate() -> void:
+	## Run 25: redraw the slate with a fresh seed that includes the reroll
+	## count so repeated rerolls within one visit don't loop the same items.
+	var rng := RandomNumberGenerator.new()
+	rng.seed = GameState.run_seed ^ (GameState.floor_num * 7919) \
+		^ (GameState.shop_visits * 1543) ^ (_reroll_count * 6151)
+	_slate = Shop.slate(rng, GameState.floor_num)
+	# Reset purchased state — a reroll is a fresh slate so previous "PURCHASED"
+	# greys don't carry over. Items already bought are gone from inventory of
+	# THIS slate anyway; if the same id rolls again it's a new card.
+	_purchased.clear()
+	_check_legendary_aura()
+
+
+func _check_legendary_aura() -> void:
+	## Run 25: flash the screen when at least one Legendary item is on offer.
+	for it: Dictionary in _slate:
+		if String(it.get("rarity", "common")) == "legendary":
+			_flash_legendary_aura()
+			return
+
+
+func _rebuild_cards() -> void:
+	if _cards_container == null:
+		return
+	for child: Node in _cards_container.get_children():
+		_cards_container.remove_child(child)
+		child.queue_free()
+	for item: Dictionary in _slate:
+		_cards_container.add_child(_make_card(item))
+	_refresh_reroll_button()
+
+
 func _make_card(item: Dictionary) -> PanelContainer:
 	var col: Color = item.get("color", Color(0.95, 0.78, 0.10))
+	var rarity: String = String(item.get("rarity", "common"))
+	var border_col: Color = RARITY_COLORS.get(rarity, col)
+	var border_w: int = 4 if rarity == "legendary" else 2
 
 	var panel := PanelContainer.new()
-	panel.custom_minimum_size = Vector2(244.0, 220.0)
+	panel.custom_minimum_size = Vector2(244.0, 240.0)
 	var ps := StyleBoxFlat.new()
 	ps.bg_color = Color(0.08, 0.06, 0.12, 0.97)
-	ps.border_color = col.darkened(0.30)
-	ps.set_border_width_all(2)
+	ps.border_color = border_col
+	ps.set_border_width_all(border_w)
 	ps.set_corner_radius_all(5)
 	ps.set_content_margin_all(14.0)
-	ps.shadow_color = Color(0.0, 0.0, 0.0, 0.65)
-	ps.shadow_size = 6
+	ps.shadow_color = Color(border_col.r * 0.45, border_col.g * 0.45, border_col.b * 0.45, 0.70)
+	ps.shadow_size = 10 if rarity == "legendary" else 6
 	panel.add_theme_stylebox_override("panel", ps)
 
 	var vb := VBoxContainer.new()
 	vb.add_theme_constant_override("separation", 6)
 	panel.add_child(vb)
+
+	# Rarity label (Run 25)
+	var rarity_lbl := Label.new()
+	rarity_lbl.text = RARITY_LABELS.get(rarity, "COMMON")
+	rarity_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	rarity_lbl.add_theme_font_size_override("font_size", 11)
+	rarity_lbl.add_theme_color_override("font_color", border_col)
+	vb.add_child(rarity_lbl)
 
 	# Icon + name row
 	var header := HBoxContainer.new()
@@ -164,13 +238,13 @@ func _make_card(item: Dictionary) -> PanelContainer:
 	var name_lbl := Label.new()
 	name_lbl.text = item.get("name", "Item")
 	name_lbl.add_theme_font_size_override("font_size", 16)
-	name_lbl.add_theme_color_override("font_color", col.lightened(0.15))
+	name_lbl.add_theme_color_override("font_color", border_col.lightened(0.15))
 	header.add_child(name_lbl)
 
 	# Divider
 	var div := ColorRect.new()
 	div.custom_minimum_size = Vector2(210.0, 1.0)
-	div.color = col.darkened(0.42)
+	div.color = border_col.darkened(0.42)
 	div.mouse_filter = MOUSE_FILTER_IGNORE
 	vb.add_child(div)
 
@@ -201,6 +275,15 @@ func _make_card(item: Dictionary) -> PanelContainer:
 	btn.pressed.connect(_on_buy_pressed.bind(item, panel, ps, btn))
 	vb.add_child(btn)
 
+	# Pulsing shadow for Legendary cards — same idiom as LootScreen.
+	if rarity == "legendary":
+		var tw: Tween = create_tween()
+		tw.set_loops()
+		tw.tween_property(ps, "shadow_size", 16, 1.1) \
+			.set_ease(Tween.EASE_IN_OUT).set_trans(Tween.TRANS_SINE)
+		tw.tween_property(ps, "shadow_size", 8, 1.1) \
+			.set_ease(Tween.EASE_IN_OUT).set_trans(Tween.TRANS_SINE)
+
 	_refresh_card_state(item, panel, ps, btn)
 	return panel
 
@@ -210,6 +293,9 @@ func _refresh_card_state(item: Dictionary, panel: PanelContainer,
 	## Disable when bought or unaffordable; bought cards grey out.
 	var id: String = String(item.get("id", ""))
 	var cost: int = int(item.get("cost", 0))
+	var rarity: String = String(item.get("rarity", "common"))
+	var border_col: Color = RARITY_COLORS.get(rarity, item.get("color",
+		Color(0.95, 0.78, 0.10)))
 	if _purchased.get(id, false):
 		btn.disabled = true
 		btn.text = "PURCHASED"
@@ -223,8 +309,7 @@ func _refresh_card_state(item: Dictionary, panel: PanelContainer,
 	else:
 		btn.disabled = false
 		btn.text = "BUY"
-		var col: Color = item.get("color", Color(0.95, 0.78, 0.10))
-		ps.border_color = col.darkened(0.30)
+		ps.border_color = border_col
 		panel.modulate = Color(1.0, 1.0, 1.0)
 
 
@@ -237,10 +322,44 @@ func _on_buy_pressed(item: Dictionary, panel: PanelContainer,
 	if not GameState.spend_gold(cost, id):
 		return
 	_purchased[id] = true
-	AudioManager.play("select", 0.05)
+	var rarity: String = String(item.get("rarity", "common"))
+	if rarity == "legendary":
+		AudioManager.play("victory", 0.0, -4.0)
+		_flash_legendary_aura()
+		SystemVoice.speak_direct("Legendary purchase. The merchant's smile is, regrettably, sincere.")
+	else:
+		AudioManager.play("select", 0.05)
 	_apply_effects(item)
-	SystemVoice.speak("shop_purchase")
+	if rarity != "legendary":
+		SystemVoice.speak("shop_purchase")
 	_refresh_all_cards()
+
+
+func _on_reroll_pressed() -> void:
+	## Run 25: spend escalating gold to redraw the slate.
+	var cost: int = Shop.reroll_cost(_reroll_count)
+	if GameState.hero_gold < cost:
+		return
+	if not GameState.spend_gold(cost, "shop_reroll"):
+		return
+	_reroll_count += 1
+	AudioManager.play("ability", 0.08)
+	SystemVoice.speak("shop_reroll")
+	_reroll_slate()
+	_rebuild_cards()
+
+
+func _refresh_reroll_button() -> void:
+	if _reroll_button == null:
+		return
+	var cost: int = Shop.reroll_cost(_reroll_count)
+	_reroll_button.text = "  REROLL  ($ %d)  " % cost
+	if GameState.hero_gold < cost:
+		_reroll_button.disabled = true
+		_reroll_button.add_theme_color_override("font_color", Color(0.55, 0.55, 0.55))
+	else:
+		_reroll_button.disabled = false
+		_reroll_button.add_theme_color_override("font_color", Color(0.82, 0.92, 1.00))
 
 
 func _refresh_all_cards() -> void:
@@ -260,6 +379,21 @@ func _refresh_all_cards() -> void:
 		if btn == null or ps == null:
 			continue
 		_refresh_card_state(item, panel, ps, btn)
+	_refresh_reroll_button()
+
+
+func _flash_legendary_aura() -> void:
+	## Soft orange screen flash so a Legendary slate feels special.
+	var flash := ColorRect.new()
+	flash.color = Color(1.0, 0.55, 0.10, 0.0)
+	flash.set_anchors_preset(Control.PRESET_FULL_RECT)
+	flash.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(flash)
+	move_child(flash, get_child_count() - 1)
+	var tw: Tween = create_tween()
+	tw.tween_property(flash, "color:a", 0.36, 0.20)
+	tw.tween_property(flash, "color:a", 0.0, 0.85)
+	tw.tween_callback(flash.queue_free)
 
 
 func _apply_effects(item: Dictionary) -> void:
@@ -301,6 +435,7 @@ func _apply_effects(item: Dictionary) -> void:
 func _on_gold_spent(_amount: int, _item_id: String) -> void:
 	if _gold_label != null:
 		_gold_label.text = _gold_text()
+	_refresh_reroll_button()
 
 
 func _on_leave_pressed() -> void:

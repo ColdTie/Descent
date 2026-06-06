@@ -35,7 +35,7 @@ DESCENT is a turn-based tactical dungeon crawler in the spirit of **Dungeon Craw
 - **Architecture rule**: `BattleEngine._calculate_damage()` returns RAW damage (no armor). `Combatant.take_damage(amount, ignore_armor=false)` applies armor. Don't double-apply armor in both places.
 - `Combatant.take_damage(amount, ignore_armor)` — the `ignore_armor` parameter bypasses the `armor` field reduction (for backstab, env damage, etc.)
 
-## Current State (Run 24 — Ambient Music + Pause Menu + Combat Log + Loot Rarity)
+## Current State (Run 25 — Shop Rarity Tiers + Reroll + Mana Shield HUD Bar)
 ### Implemented ✅
 **Run 1 (Bootstrap):**
 - `GameRng`, `GameState`, `SystemVoice` autoloads
@@ -198,6 +198,16 @@ DESCENT is a turn-based tactical dungeon crawler in the spirit of **Dungeon Craw
 - **`BattleScene.gd`** — `TEXTURE_FILTER_LINEAR_WITH_MIPMAPS` (was `NEAREST` — NEAREST was for pixel art; SVG art needs anti-aliasing); sprite scale 0.68/0.85 (was 0.95/1.20 — adjusted for 192px source)
 - **`ClassSelect.gd`** — portrait filter changed to `LINEAR_WITH_MIPMAPS` to match
 - **`deploy.yml`** — installs `libcairo2` + `cairosvg`, runs `gen_sprites_v5.py`
+
+**Run 25 (Shop Rarity Tiers + Reroll + Mana Shield HUD Bar):**
+- **`src/data/Shop.gd`** — Run 24's loot-rarity pattern ported to the merchant. Every INVENTORY item now carries an explicit `rarity` field (`common`/`rare`/`legendary`). Added three new Legendaries (`shop_phoenix_ampoule` 300g, `shop_god_blade` 280g, `shop_warden_scale` 260g) and one Rare (`shop_seers_charm` 115g) — Legendary costs sit well above the Common average so they actually feel like a splurge. New `RARITY_WEIGHTS_BY_TIER` table (80/18/2 → 55/35/10 → 30/45/25, mirroring Loot's curve) drives `_pick_rarity_for_slot()` and `_draw_item_of_rarity()`. The static `slate(rng, floor_num)` now rolls each slot's rarity weighted by floor tier, then draws a non-duplicate item of that rarity (falls through to other buckets if a tier is exhausted). Old `slate(rng)` callers still work via the `floor_num: int = 1` default.
+- **Reroll helper** (`src/data/Shop.gd`) — `REROLL_BASE_COST = 25`, `REROLL_STEP_COST = 20`, `reroll_cost(n)` = `25 + 20·n`. Linear ramp so spam-rerolling drains gold fast but the first reroll is cheap enough to feel inviting. Defensive clamp at `n < 0`.
+- **`scenes/Shop.gd` rarity rendering** — every card now shows a top rarity label (COMMON/RARE/LEGENDARY in the rarity color), a rarity-colored border (4px for Legendary, 2px otherwise), and a tinted shadow (10px shadow + 8↔16 pulse loop for Legendary). Card height bumped 220→240 so the rarity label has room. Any Legendary on the slate triggers a soft orange screen flash on entry (and again on Legendary purchase) — same idiom as LootScreen. Buy presses on a Legendary play the `victory` SFX at -4dB instead of the regular `select` ping, plus a special `speak_direct` quip ("Legendary purchase. The merchant's smile is, regrettably, sincere.").
+- **Reroll button** (`scenes/Shop.gd`) — new button sits in the bottom row next to LEAVE & DESCEND, labeled `REROLL ($N)` where N is the current cost. Spends gold via `GameState.spend_gold`, increments `_reroll_count`, plays the `ability` SFX, fires a `shop_reroll` quip, then rebuilds the slate with a reroll-aware seed (`run_seed ^ floor·7919 ^ visits·1543 ^ rerolls·6151`) so consecutive rerolls don't loop the same items. Goes disabled + grey-text when the hero can't afford the next reroll. `_purchased` clears on each reroll so previously-greyed cards don't carry over to the fresh slate.
+- **Initial slate seeding fixed** (`scenes/Shop.gd`) — old code used `GameRng.shuffle()` which mutates the global autoload rng and produced an unweighted shuffle. Replaced with a per-visit seeded `RandomNumberGenerator` keyed on `run_seed ^ floor·7919 ^ visits·1543`, so the same run+visit always shows the same slate (deterministic + reproducible) and the per-tier weighting is honored.
+- **Mana Shield HUD bar** (`scenes/BattleScene.gd`) — new thin blue bar sits 3px above every combatant's HP bar (`ShieldBorder` + `ShieldBg` + `ShieldBar` ColorRects on the entity root, all created hidden). `_update_mana_shield_indicator(c)` scans the combatant's `status_effects` for `mana_shield`, computes `absorb_remaining / absorb_max`, and toggles the three rects + scales the fill width accordingly. Hooks: called from `_update_all_hp_bars()` (every batch refresh), from `_on_action_taken()` after `_update_hp_bar(target)` (so the bar drains immediately when damage is absorbed), and from the `"mana_shield"` branch of `_do_hero_self_ability()` (so the bar shows up the instant the buff lands instead of waiting for the next damage tick). Pure read of the StatusEffect dict — no extra state, expiry handled automatically when `_consume_mana_shield()` drops the effect.
+- **`autoloads/SystemVoice.gd`** — new `shop_reroll` quip pool (6 lines, fired on every reroll click).
+- **`tests/test_run25.gd`** (21 test functions): rarity schema (every item has rarity, values are in the allowed set, at least one of each rarity), Legendary cost > Common avg invariant, weight-table shape (3 tiers, Legendary climbs + Common shrinks with depth, all tiers have positive total weight), slate generation (SLATE_SIZE returned, items unique within a slate, deterministic across reseeds), statistical floor-1-skews-common + floor-18-skews-rare-plus checks (60 trials each), reroll cost ramp (positive base/step, monotonically increasing, `reroll_cost(0)` == base, negative input clamps to base), and floor tier boundary lock-in (1/6 → 0, 7/12 → 1, 13/18 → 2). Wired into `run_tests.gd`.
 
 **Run 24 (Ambient Music + Pause Menu + Combat Log + Loot Rarity Tiers):**
 - **`tools/gen_music.py`** — new procedural ambient-music generator (stdlib only — `wave`, `struct`, `math`, `random`). Synthesizes four looping 16-bit WAVs into `assets/audio/`: `music_title` (~28s dark cinematic minor-chord pad + bell hits), `music_stone` (~30s warm low drone + slow tribal pulse + sparse harp pluck for floors 1-6), `music_obsidian` (~30s cold F# diminished pad + glassy chimes for floors 7-12), `music_void` (~30s dissonant pad + deep doom bells for floors 13-18). Each track ends with a `loop_crossfade` so the WAV loops seamlessly in `AudioStreamWAV.LOOP_FORWARD` mode.
@@ -391,17 +401,19 @@ FTL, traditional roguelikes). Status of the "what are we missing" audit:
 - Pause / settings menu with SFX & music volume sliders — Run 24
 - Combat log panel — Run 24
 - Loot rarity tiers (Common/Rare/Legendary, screen flash + per-tier weighting) — Run 24
+- Shop rarity tiers (Common/Rare/Legendary, tier-weighted slate, screen flash) — Run 25
+- Shop reroll button (escalating gold cost) — Run 25
+- Mana Shield HUD bar (per-entity, drains on hit, hides on expiry) — Run 25
 
 ### 🔜 Highest-value, easiest remaining (do next, roughly in order)
 1. **Sponsor cooldown / variety** — Run 20 ships 10 sponsors at a flat 200-audience cadence.
    Could weight rare/legendary sponsors at higher audience thresholds, or thread sponsor
    stories across multiple offers (e.g. "Big Mike returns" with a follow-up gift).
-2. **Shop variety / rare items** — Run 21 ships 11 items with a flat 4-card slate. Could
-   gate higher-cost items behind floor depth, weight by rarity (similar to Run 24's loot
-   rarity tiers), or add a "REROLL" button (costs a small gold premium). Mana Shield HUD
-   widget: show `absorb_remaining` as a floating bar above Carl when active.
-3. **Save / resume a run** — Serialize GameState to `user://` so a run survives a refresh
-   (web export supports it). Pairs nicely with the new Quit to Title action.
+2. **Save / resume a run** — Serialize GameState to `user://` so a run survives a refresh
+   (web export supports it). Pairs nicely with the Quit to Title action from Run 24.
+3. **Shop "extras"** — A "lock" button (preserve a slot through reroll), an occasional
+   surprise-Legendary "the merchant takes a shine to you" event, or a one-per-run
+   "buyback" of the last item the player skipped.
 
 ### 🟡 Larger / later (note, not yet scoped)
 4. **More floor variety** — Per-tier hazards: Tier 1 crumbling bridges, Tier 2 freeze pools,
@@ -463,6 +475,7 @@ src/data/
   Sponsors.gd        — Run 20: DCC sponsor-offer pool + threshold math (sponsors_owed)
   PatchNotes.gd      — Run 20: per-tier patch-note payloads (floors 7, 13)
   Shop.gd            — Run 21: merchant inventory + gold-economy helpers (slate/gold_for_*/should_show_shop)
+                       Run 25: rarity tiers on every item + per-tier weighted `slate(rng, floor_num)` + `reroll_cost(n)`
 
 scenes/
   Main.tscn/.gd      — root, scene orchestration; boots to TitleScreen, routes through VictoryScreen
@@ -491,6 +504,7 @@ tests/
   test_run20.gd      — Sponsors pool + threshold math + PatchNotes content (Run 20)
   test_run21.gd      — Shop inventory schema + gold helpers + slate determinism + Mana Shield absorb math (Run 21)
   test_run24.gd      — Loot rarity tier schema + weight invariants + AudioManager music constants (Run 24)
+  test_run25.gd      — Shop rarity tier schema + weighted slate + reroll cost ramp + floor-tier boundaries (Run 25)
 ```
 
 ## Running Tests

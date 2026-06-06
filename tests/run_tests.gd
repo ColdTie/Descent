@@ -23,6 +23,7 @@ func _run_all() -> void:
 	_run_suite("Run20 (Sponsors+PatchNotes)", TestRun20.new())
 	_run_suite("Run21 (Shop+Gold+ManaShield)", TestRun21.new())
 	_run_suite("Run24 (LootRarity+Music)", TestRun24.new())
+	_run_suite("Run25 (ShopRarity+Reroll)", TestRun25.new())
 
 func _run_suite(name: String, suite: Object) -> void:
 	print("\n--- %s ---" % name)
