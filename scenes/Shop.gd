@@ -13,6 +13,11 @@ extends Control
 ## and a tinted shadow. Legendary cards pulse + trigger a soft orange screen
 ## flash on entry. The REROLL button below the cards spends an escalating
 ## amount of gold to redraw the entire slate.
+##
+## Run 26: per-card LOCK toggle. Locked slots survive REROLL at their original
+## position; the unlocked slots draw fresh items. Locking is free — its cost
+## is opportunity (you can't replace what you've pinned). Locks auto-clear on
+## purchase (no point pinning what you already own).
 
 signal shop_left
 
@@ -28,9 +33,12 @@ const RARITY_LABELS: Dictionary = {
 	"legendary": "LEGENDARY",
 }
 
+const LOCK_GLOW_COLOR: Color = Color(1.00, 0.86, 0.18)
+
 var _slate: Array[Dictionary] = []
 var _purchased: Dictionary = {}  # id -> true once bought (greys the card)
 var _reroll_count: int = 0       # Run 25: number of rerolls used this visit
+var _locked_slots: Dictionary = {}  # Run 26: slot_index -> true preserves the item through reroll
 var _gold_label: Label = null
 var _system_label: Label = null
 var _cards_container: HBoxContainer = null
@@ -161,15 +169,43 @@ func _roll_initial_slate() -> void:
 
 
 func _reroll_slate() -> void:
-	## Run 25: redraw the slate with a fresh seed that includes the reroll
+	## Run 25/26: redraw the slate with a fresh seed that includes the reroll
 	## count so repeated rerolls within one visit don't loop the same items.
+	## Run 26: locked slot indices keep their original item and position; the
+	## other slots draw fresh items (with locked ids excluded from the pool).
 	var rng := RandomNumberGenerator.new()
 	rng.seed = GameState.run_seed ^ (GameState.floor_num * 7919) \
 		^ (GameState.shop_visits * 1543) ^ (_reroll_count * 6151)
-	_slate = Shop.slate(rng, GameState.floor_num)
+
+	var locked_items: Array[Dictionary] = []
+	var locked_positions: Array[int] = []
+	for i: int in range(_slate.size()):
+		if _locked_slots.get(i, false):
+			locked_items.append(_slate[i])
+			locked_positions.append(i)
+
+	var fresh: Array[Dictionary] = Shop.slate(rng, GameState.floor_num, locked_items)
+
+	# Reorder: locked items go back to their original slot indices; the rest
+	# of the slate fills from the freshly-drawn items (which start at offset
+	# `locked_items.size()` in `fresh` because slate() puts locked first).
+	var locked_set: Dictionary = {}
+	for p: int in locked_positions:
+		locked_set[p] = true
+	var locked_iter: int = 0
+	var fresh_iter: int = locked_items.size()
+	var out: Array[Dictionary] = []
+	for i: int in range(Shop.SLATE_SIZE):
+		if locked_set.has(i) and locked_iter < locked_items.size():
+			out.append(locked_items[locked_iter])
+			locked_iter += 1
+		elif fresh_iter < fresh.size():
+			out.append(fresh[fresh_iter])
+			fresh_iter += 1
+	_slate = out
 	# Reset purchased state — a reroll is a fresh slate so previous "PURCHASED"
-	# greys don't carry over. Items already bought are gone from inventory of
-	# THIS slate anyway; if the same id rolls again it's a new card.
+	# greys don't carry over. Locked items can't have been purchased (lock
+	# auto-clears on buy), so this is safe.
 	_purchased.clear()
 	_check_legendary_aura()
 
@@ -188,12 +224,12 @@ func _rebuild_cards() -> void:
 	for child: Node in _cards_container.get_children():
 		_cards_container.remove_child(child)
 		child.queue_free()
-	for item: Dictionary in _slate:
-		_cards_container.add_child(_make_card(item))
+	for i: int in range(_slate.size()):
+		_cards_container.add_child(_make_card(_slate[i], i))
 	_refresh_reroll_button()
 
 
-func _make_card(item: Dictionary) -> PanelContainer:
+func _make_card(item: Dictionary, slot_idx: int) -> PanelContainer:
 	var col: Color = item.get("color", Color(0.95, 0.78, 0.10))
 	var rarity: String = String(item.get("rarity", "common"))
 	var border_col: Color = RARITY_COLORS.get(rarity, col)
@@ -215,13 +251,26 @@ func _make_card(item: Dictionary) -> PanelContainer:
 	vb.add_theme_constant_override("separation", 6)
 	panel.add_child(vb)
 
-	# Rarity label (Run 25)
+	# Rarity + lock-badge row (Run 25 rarity, Run 26 lock badge)
+	var rarity_row := HBoxContainer.new()
+	rarity_row.alignment = BoxContainer.ALIGNMENT_CENTER
+	rarity_row.add_theme_constant_override("separation", 8)
+	vb.add_child(rarity_row)
+
 	var rarity_lbl := Label.new()
 	rarity_lbl.text = RARITY_LABELS.get(rarity, "COMMON")
 	rarity_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	rarity_lbl.add_theme_font_size_override("font_size", 11)
 	rarity_lbl.add_theme_color_override("font_color", border_col)
-	vb.add_child(rarity_lbl)
+	rarity_row.add_child(rarity_lbl)
+
+	var lock_badge := Label.new()
+	lock_badge.name = "LockBadge"
+	lock_badge.text = "[LOCKED]"
+	lock_badge.add_theme_font_size_override("font_size", 11)
+	lock_badge.add_theme_color_override("font_color", LOCK_GLOW_COLOR)
+	lock_badge.visible = _locked_slots.get(slot_idx, false)
+	rarity_row.add_child(lock_badge)
 
 	# Icon + name row
 	var header := HBoxContainer.new()
@@ -267,13 +316,27 @@ func _make_card(item: Dictionary) -> PanelContainer:
 	cost_lbl.add_theme_color_override("font_color", Color(1.0, 0.86, 0.18))
 	vb.add_child(cost_lbl)
 
-	# Buy button
+	# BUY + LOCK row (Run 26: lock toggle)
+	var btn_row := HBoxContainer.new()
+	btn_row.alignment = BoxContainer.ALIGNMENT_CENTER
+	btn_row.add_theme_constant_override("separation", 6)
+	vb.add_child(btn_row)
+
 	var btn := Button.new()
+	btn.name = "BuyButton"
 	btn.text = "BUY"
+	btn.custom_minimum_size = Vector2(120.0, 34.0)
 	btn.add_theme_font_size_override("font_size", 14)
 	btn.add_theme_color_override("font_color", col)
-	btn.pressed.connect(_on_buy_pressed.bind(item, panel, ps, btn))
-	vb.add_child(btn)
+	btn.pressed.connect(_on_buy_pressed.bind(slot_idx))
+	btn_row.add_child(btn)
+
+	var lock_btn := Button.new()
+	lock_btn.name = "LockButton"
+	lock_btn.custom_minimum_size = Vector2(80.0, 34.0)
+	lock_btn.add_theme_font_size_override("font_size", 12)
+	lock_btn.pressed.connect(_on_lock_pressed.bind(slot_idx))
+	btn_row.add_child(lock_btn)
 
 	# Pulsing shadow for Legendary cards — same idiom as LootScreen.
 	if rarity == "legendary":
@@ -284,24 +347,50 @@ func _make_card(item: Dictionary) -> PanelContainer:
 		tw.tween_property(ps, "shadow_size", 8, 1.1) \
 			.set_ease(Tween.EASE_IN_OUT).set_trans(Tween.TRANS_SINE)
 
-	_refresh_card_state(item, panel, ps, btn)
+	_refresh_card_state(slot_idx)
 	return panel
 
 
-func _refresh_card_state(item: Dictionary, panel: PanelContainer,
-		ps: StyleBoxFlat, btn: Button) -> void:
+func _card_panel(slot_idx: int) -> PanelContainer:
+	if _cards_container == null or slot_idx >= _cards_container.get_child_count():
+		return null
+	return _cards_container.get_child(slot_idx) as PanelContainer
+
+
+func _card_node(slot_idx: int, node_name: String) -> Node:
+	var panel: PanelContainer = _card_panel(slot_idx)
+	if panel == null:
+		return null
+	return panel.find_child(node_name, true, false)
+
+
+func _refresh_card_state(slot_idx: int) -> void:
 	## Disable when bought or unaffordable; bought cards grey out.
+	## Run 26: also refresh the lock button text/colour and lock-glow accent.
+	var panel: PanelContainer = _card_panel(slot_idx)
+	if panel == null or slot_idx >= _slate.size():
+		return
+	var item: Dictionary = _slate[slot_idx]
+	var ps: StyleBoxFlat = panel.get_theme_stylebox("panel") as StyleBoxFlat
+	var btn: Button = _card_node(slot_idx, "BuyButton") as Button
+	var lock_btn: Button = _card_node(slot_idx, "LockButton") as Button
+	var lock_badge: Label = _card_node(slot_idx, "LockBadge") as Label
+	if ps == null or btn == null:
+		return
+
 	var id: String = String(item.get("id", ""))
 	var cost: int = int(item.get("cost", 0))
 	var rarity: String = String(item.get("rarity", "common"))
 	var border_col: Color = RARITY_COLORS.get(rarity, item.get("color",
 		Color(0.95, 0.78, 0.10)))
-	if _purchased.get(id, false):
+	var locked: bool = _locked_slots.get(slot_idx, false)
+	var purchased: bool = _purchased.get(id, false)
+
+	if purchased:
 		btn.disabled = true
 		btn.text = "PURCHASED"
 		panel.modulate = Color(0.42, 0.42, 0.42)
-		return
-	if GameState.hero_gold < cost:
+	elif GameState.hero_gold < cost:
 		btn.disabled = true
 		btn.text = "TOO POOR"
 		ps.border_color = Color(0.30, 0.28, 0.36)
@@ -309,12 +398,31 @@ func _refresh_card_state(item: Dictionary, panel: PanelContainer,
 	else:
 		btn.disabled = false
 		btn.text = "BUY"
-		ps.border_color = border_col
+		ps.border_color = LOCK_GLOW_COLOR if locked else border_col
 		panel.modulate = Color(1.0, 1.0, 1.0)
 
+	if lock_btn != null:
+		if purchased:
+			lock_btn.disabled = true
+			lock_btn.text = "-"
+			lock_btn.add_theme_color_override("font_color", Color(0.45, 0.45, 0.45))
+		elif locked:
+			lock_btn.disabled = false
+			lock_btn.text = "UNLOCK"
+			lock_btn.add_theme_color_override("font_color", LOCK_GLOW_COLOR)
+		else:
+			lock_btn.disabled = false
+			lock_btn.text = "LOCK"
+			lock_btn.add_theme_color_override("font_color", Color(0.78, 0.74, 0.62))
 
-func _on_buy_pressed(item: Dictionary, panel: PanelContainer,
-		ps: StyleBoxFlat, btn: Button) -> void:
+	if lock_badge != null:
+		lock_badge.visible = locked
+
+
+func _on_buy_pressed(slot_idx: int) -> void:
+	if slot_idx >= _slate.size():
+		return
+	var item: Dictionary = _slate[slot_idx]
 	var id: String = String(item.get("id", ""))
 	var cost: int = int(item.get("cost", 0))
 	if _purchased.get(id, false):
@@ -322,6 +430,9 @@ func _on_buy_pressed(item: Dictionary, panel: PanelContainer,
 	if not GameState.spend_gold(cost, id):
 		return
 	_purchased[id] = true
+	# Run 26: a purchased slot can't usefully stay locked — the next reroll
+	# would just preserve a PURCHASED card. Clear the lock automatically.
+	_locked_slots[slot_idx] = false
 	var rarity: String = String(item.get("rarity", "common"))
 	if rarity == "legendary":
 		AudioManager.play("victory", 0.0, -4.0)
@@ -333,6 +444,22 @@ func _on_buy_pressed(item: Dictionary, panel: PanelContainer,
 	if rarity != "legendary":
 		SystemVoice.speak("shop_purchase")
 	_refresh_all_cards()
+
+
+func _on_lock_pressed(slot_idx: int) -> void:
+	## Run 26: toggle the lock on a slot so it survives the next reroll.
+	## No-op on purchased cards (the button is disabled in that state).
+	if slot_idx >= _slate.size():
+		return
+	var id: String = String((_slate[slot_idx] as Dictionary).get("id", ""))
+	if _purchased.get(id, false):
+		return
+	var now_locked: bool = not _locked_slots.get(slot_idx, false)
+	_locked_slots[slot_idx] = now_locked
+	AudioManager.play("select", 0.04)
+	if now_locked:
+		SystemVoice.speak("shop_lock")
+	_refresh_card_state(slot_idx)
 
 
 func _on_reroll_pressed() -> void:
@@ -363,22 +490,10 @@ func _refresh_reroll_button() -> void:
 
 
 func _refresh_all_cards() -> void:
-	## After any purchase, redraw every card (affordability may have changed)
-	## and re-run the disable rules.
+	## After any purchase or lock toggle, redraw every card (affordability may
+	## have changed) and re-run the disable rules.
 	for i: int in range(_slate.size()):
-		var item: Dictionary = _slate[i]
-		var panel: PanelContainer = _cards_container.get_child(i) as PanelContainer
-		if panel == null:
-			continue
-		var ps: StyleBoxFlat = panel.get_theme_stylebox("panel") as StyleBoxFlat
-		var vb: VBoxContainer = panel.get_child(0) as VBoxContainer
-		if vb == null:
-			continue
-		# Buy button is the last child of the card's vbox.
-		var btn: Button = vb.get_child(vb.get_child_count() - 1) as Button
-		if btn == null or ps == null:
-			continue
-		_refresh_card_state(item, panel, ps, btn)
+		_refresh_card_state(i)
 	_refresh_reroll_button()
 
 

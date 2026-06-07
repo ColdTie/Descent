@@ -35,8 +35,17 @@ DESCENT is a turn-based tactical dungeon crawler in the spirit of **Dungeon Craw
 - **Architecture rule**: `BattleEngine._calculate_damage()` returns RAW damage (no armor). `Combatant.take_damage(amount, ignore_armor=false)` applies armor. Don't double-apply armor in both places.
 - `Combatant.take_damage(amount, ignore_armor)` — the `ignore_armor` parameter bypasses the `armor` field reduction (for backstab, env damage, etc.)
 
-## Current State (Run 25 — Shop Rarity Tiers + Reroll + Mana Shield HUD Bar)
+## Current State (Run 26 — Shop Lock Slots)
 ### Implemented ✅
+**Run 26 (Shop Lock Slots):**
+- **`src/data/Shop.gd` `slate(rng, floor_num, locked = [])`** — third arg lets the caller carry items forward through a reroll. Locked items are placed at the START of the returned array and excluded from fresh random draws (no duplicates, no slot inflation). Default empty-array keeps all existing 2-arg callers byte-identical (Run 25's tests still pass without modification). Defensive guards: a `{}` or duplicate-id entry in `locked` is silently dropped; overflow beyond `SLATE_SIZE` truncates rather than crashing. The while-loop also breaks rather than infinite-looping if INVENTORY is exhausted partway through (defensive — current INVENTORY size is well above SLATE_SIZE so this only matters if items get removed).
+- **`scenes/Shop.gd` per-card LOCK toggle** — each card now has a `BUY` + `LOCK` button row at the bottom. `_locked_slots: Dictionary` maps slot index → bool. Clicking LOCK pins that slot through any subsequent REROLL; clicking UNLOCK clears it. Locking is FREE (its cost is opportunity — you can't replace what you've pinned). Lock auto-clears on purchase (no point locking what you already own). Visual cues on a locked card: amber `[LOCKED]` badge appears next to the rarity label, the panel border switches to the warm `LOCK_GLOW_COLOR` (`#ffdb2e`), and the lock button label flips to `UNLOCK` in the same amber.
+- **`_reroll_slate()` locked-aware** — collects locked items + their original slot positions, calls `Shop.slate(rng, floor, locked_items)` to draw fresh items excluding the locked ids, then reorders so locked positions keep their original cards and unlocked positions fill from the fresh draw in order. `_purchased` still clears on every reroll; locked items can't have been purchased (lock auto-clears on buy), so the clear is safe.
+- **`scenes/Shop.gd` card-lookup refactor** — replaced the fragile "last child of vbox is the buy button" walk with explicit node names (`BuyButton`, `LockButton`, `LockBadge`). Added `_card_panel(slot_idx)` and `_card_node(slot_idx, name)` helpers. `_refresh_card_state(slot_idx)` now does a single lookup per card and handles purchased / locked / too-poor states in one place. `_refresh_all_cards()` is now a 3-line iterator.
+- **`autoloads/SystemVoice.gd`** — new `shop_lock` quip pool (6 lines, fired only on the LOCK direction of the toggle so the audio chatter doesn't fire twice per click).
+- **`tests/test_run26.gd`** (9 test functions, ~80 assertions): default-arg backwards-compat against Run 25 fixtures (same seed + no locked == same slate), single-locked / multi-locked placement contract (locked items at index 0/1...), 50-seed no-duplication invariant when one item is locked, in-slate uniqueness with multiple locks, all-locked degenerate case (slate == locked input), overflow truncation, locked-id dedupe, and empty-dict / malformed entry safety. Wired into `run_tests.gd`.
+- **Test suite total: 886 passed, 0 failed** (up from 818 in Run 25).
+
 **Run 1 (Bootstrap):**
 - `GameRng`, `GameState`, `SystemVoice` autoloads
 - `Combatant`, `BattleEngine`, `Ability`, `StatusEffect` pure combat classes
@@ -404,6 +413,7 @@ FTL, traditional roguelikes). Status of the "what are we missing" audit:
 - Shop rarity tiers (Common/Rare/Legendary, tier-weighted slate, screen flash) — Run 25
 - Shop reroll button (escalating gold cost) — Run 25
 - Mana Shield HUD bar (per-entity, drains on hit, hides on expiry) — Run 25
+- Shop slot LOCK toggle (preserves a card through reroll) — Run 26
 
 ### 🔜 Highest-value, easiest remaining (do next, roughly in order)
 1. **Sponsor cooldown / variety** — Run 20 ships 10 sponsors at a flat 200-audience cadence.
@@ -411,9 +421,9 @@ FTL, traditional roguelikes). Status of the "what are we missing" audit:
    stories across multiple offers (e.g. "Big Mike returns" with a follow-up gift).
 2. **Save / resume a run** — Serialize GameState to `user://` so a run survives a refresh
    (web export supports it). Pairs nicely with the Quit to Title action from Run 24.
-3. **Shop "extras"** — A "lock" button (preserve a slot through reroll), an occasional
+3. **Shop "extras" — remaining** — Lock landed in Run 26. Still on the table: an occasional
    surprise-Legendary "the merchant takes a shine to you" event, or a one-per-run
-   "buyback" of the last item the player skipped.
+   "buyback" of the last loot card the player skipped.
 
 ### 🟡 Larger / later (note, not yet scoped)
 4. **More floor variety** — Per-tier hazards: Tier 1 crumbling bridges, Tier 2 freeze pools,
@@ -476,6 +486,7 @@ src/data/
   PatchNotes.gd      — Run 20: per-tier patch-note payloads (floors 7, 13)
   Shop.gd            — Run 21: merchant inventory + gold-economy helpers (slate/gold_for_*/should_show_shop)
                        Run 25: rarity tiers on every item + per-tier weighted `slate(rng, floor_num)` + `reroll_cost(n)`
+                       Run 26: `slate()` accepts optional `locked` arg — locked items carry through reroll
 
 scenes/
   Main.tscn/.gd      — root, scene orchestration; boots to TitleScreen, routes through VictoryScreen
@@ -505,6 +516,7 @@ tests/
   test_run21.gd      — Shop inventory schema + gold helpers + slate determinism + Mana Shield absorb math (Run 21)
   test_run24.gd      — Loot rarity tier schema + weight invariants + AudioManager music constants (Run 24)
   test_run25.gd      — Shop rarity tier schema + weighted slate + reroll cost ramp + floor-tier boundaries (Run 25)
+  test_run26.gd      — Shop slate `locked` arg: placement, no duplication, overflow + defensive cases (Run 26)
 ```
 
 ## Running Tests

@@ -513,6 +513,16 @@ const LINES: Dictionary = {
 		"Refresh fee collected. The merchant did not move. Yet your gold did.",
 	],
 
+	# ── Shop lock (Run 26) ────────────────────────────────────────────────────
+	"shop_lock": [
+		"Slot pinned. The merchant respects commitment. He respects gold more.",
+		"Locked. The next reroll will spare this card. Your wallet, less so.",
+		"Reserved. The merchant assumes you've made peace with the cost.",
+		"Item earmarked. The dungeon assumes you'll regret this specifically.",
+		"Locked in. The merchant's lock is decorative. The price is not.",
+		"Pinned. The System notes your resolve. Statistically, it won't last.",
+	],
+
 	# ── Mana shield ability (Run 21) ──────────────────────────────────────────
 	"ability_mana_shield": [
 		"Arcane barrier engaged. The next blows will not land where you live.",

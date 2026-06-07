@@ -245,14 +245,28 @@ static func _draw_item_of_rarity(rarity: String, exclude: Dictionary,
 	return pool[rng.randi_range(0, pool.size() - 1)]
 
 
-static func slate(rng: RandomNumberGenerator, floor_num: int = 1) -> Array[Dictionary]:
+static func slate(rng: RandomNumberGenerator, floor_num: int = 1,
+		locked: Array[Dictionary] = []) -> Array[Dictionary]:
 	## Return SLATE_SIZE distinct items rolled with per-tier rarity weighting.
 	## Caller-provided rng + floor_num keeps this deterministic in tests and
 	## per-run seeds. Falls back through lower rarity tiers when a chosen
 	## bucket is exhausted, so the slate is always full when possible.
+	##
+	## Run 26: `locked` lets the caller carry items forward through a reroll.
+	## Locked items are placed at the START of the returned array and excluded
+	## from fresh random draws (no duplicates). The Shop scene reorders them
+	## back into their original slot positions before rendering.
 	var picked_ids: Dictionary = {}
 	var out: Array[Dictionary] = []
-	for _slot: int in range(SLATE_SIZE):
+	for lk: Dictionary in locked:
+		if out.size() >= SLATE_SIZE:
+			break
+		var lk_id: String = String(lk.get("id", ""))
+		if lk_id == "" or picked_ids.has(lk_id):
+			continue
+		picked_ids[lk_id] = true
+		out.append(lk)
+	while out.size() < SLATE_SIZE:
 		var target: String = _pick_rarity_for_slot(rng, floor_num)
 		var item: Dictionary = _draw_item_of_rarity(target, picked_ids, rng)
 		if item.is_empty():
@@ -265,7 +279,7 @@ static func slate(rng: RandomNumberGenerator, floor_num: int = 1) -> Array[Dicti
 				if not item.is_empty():
 					break
 		if item.is_empty():
-			continue
+			break  # inventory exhausted — return partial slate rather than loop forever
 		picked_ids[item.get("id", "")] = true
 		out.append(item)
 	return out
