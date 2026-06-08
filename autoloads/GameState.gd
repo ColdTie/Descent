@@ -46,6 +46,17 @@ signal gold_gained(amount: int, reason: String)
 signal gold_spent(amount: int, item_id: String)
 var shop_visits: int = 0
 
+# Run 27: inventory tracking — ids of shop items the hero currently owns.
+# Drives the stats + items HUD panel; recorded by Shop on purchase.
+var hero_inventory: Array[String] = []
+signal inventory_changed
+
+# Run 27: per-run battle animation speed multiplier. 1.0 = default,
+# 1.5 = quick, 2.0 = blitz. All BattleScene inter-action waits and key
+# movement tweens divide their durations by this value. Persists across
+# floors within a run; reset on `start_run()`.
+var battle_speed: float = 1.0
+
 const XP_PER_LEVEL: int = 100
 const TOTAL_FLOORS: int = 18
 
@@ -67,6 +78,8 @@ func start_run(class_id: String, seed_val: int = -1) -> void:
 	sponsor_offers_taken = 0
 	patch_notes_seen.clear()
 	shop_visits = 0
+	hero_inventory.clear()
+	battle_speed = 1.0
 	var cls_data: Dictionary = Classes.get_class_data(class_id)
 	hero_max_hp = cls_data.get("hp", 100)
 	hero_hp = hero_max_hp
@@ -110,6 +123,22 @@ func spend_gold(amount: int, item_id: String = "") -> bool:
 	hero_gold -= amount
 	gold_spent.emit(amount, item_id)
 	return true
+
+func record_purchase(item_id: String) -> void:
+	## Run 27: track a shop purchase in the hero's inventory list so the HUD
+	## panel can render owned items. Pure list append + signal — no item
+	## effects (those still flow through Shop._apply_effects).
+	if item_id == "":
+		return
+	hero_inventory.append(item_id)
+	inventory_changed.emit()
+
+
+func set_battle_speed(mult: float) -> void:
+	## Run 27: clamp + apply the per-run animation-speed multiplier.
+	## Pause menu calls this; BattleScene reads it through `_dur()`.
+	battle_speed = clamp(mult, 0.5, 3.0)
+
 
 func gain_xp(amount: int) -> bool:
 	hero_xp += amount

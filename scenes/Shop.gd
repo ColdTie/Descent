@@ -430,6 +430,9 @@ func _on_buy_pressed(slot_idx: int) -> void:
 	if not GameState.spend_gold(cost, id):
 		return
 	_purchased[id] = true
+	# Run 27: log the purchase so the BattleScene stats/inventory panel can
+	# render it on the next floor. Pure list append; no side effects.
+	GameState.record_purchase(id)
 	# Run 26: a purchased slot can't usefully stay locked — the next reroll
 	# would just preserve a PURCHASED card. Clear the lock automatically.
 	_locked_slots[slot_idx] = false

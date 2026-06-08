@@ -131,6 +131,14 @@ var _hero_ability_objs: Dictionary = {}
 # VFX: preloaded effect textures keyed by ability_id
 var _effect_textures: Dictionary = {}
 
+# Run 27: animation-speed multiplier — read from GameState.battle_speed at
+# runtime via `_dur()`. 1.0 = normal, 1.5 = quick, 2.0 = blitz.
+func _dur(secs: float) -> float:
+	## Scale a duration by the current battle-speed setting. Pure helper.
+	var bs: float = max(0.25, GameState.battle_speed)
+	return secs / bs
+
+
 var _selected_ability: String = "basic_attack"
 var _player_turn: bool = false
 # Per-turn action budget: a hero turn may chain ONE move + ONE basic attack
@@ -177,6 +185,10 @@ var _shake_tweens: Array[Tween] = []
 # anchored top-right under the HP/audience/gold widgets.
 var _pause_layer: CanvasLayer = null
 var _pause_visible: bool = false
+var _speed_buttons: Array[Button] = []  # Run 27: battle-speed selector buttons
+var _stats_panel: PanelContainer = null  # Run 27: hero stats + owned-items HUD panel
+var _stats_label: Label = null
+var _inventory_label: Label = null
 var _combat_log_panel: PanelContainer = null
 var _combat_log_vbox: VBoxContainer = null
 const COMBAT_LOG_MAX: int = 6
@@ -212,7 +224,10 @@ func _ready() -> void:
 	_build_achievement_overlay()
 	_build_top_left_hud_backing()
 	_build_combat_log()
+	_build_stats_panel()
 	_build_pause_menu()
+	if not GameState.is_connected("inventory_changed", _on_inventory_changed):
+		GameState.inventory_changed.connect(_on_inventory_changed)
 	_update_hero_hp_label()
 	# Run 19: floor-milestone achievements fire as soon as the floor loads.
 	if GameState.floor_num == 9:
@@ -1098,9 +1113,12 @@ func _build_donut_hologram() -> void:
 		var tex := load(sprite_path) as Texture2D
 		var sprite_rect := TextureRect.new()
 		sprite_rect.texture = tex
+		# Run 27: without EXPAND_IGNORE_SIZE, TextureRect uses the texture's
+		# native 192×192 and `size` is just a hint — Donut bled past the panel.
+		sprite_rect.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 		sprite_rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-		sprite_rect.position = Vector2(PX + PW * 0.5 - 38.0, PY + 20.0)
-		sprite_rect.size = Vector2(76.0, 76.0)
+		sprite_rect.position = Vector2(PX + PW * 0.5 - 50.0, PY + 22.0)
+		sprite_rect.size = Vector2(100.0, 100.0)
 		sprite_rect.modulate = Color(0.45, 1.0, 0.92, 0.90)
 		sprite_rect.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 		sprite_rect.z_index = 13
@@ -1365,6 +1383,19 @@ func _build_ability_bar() -> void:
 		btn.pressed.connect(_on_ability_btn.bind(ability_id))
 		_ability_bar.add_child(btn)
 		_ability_btns[ability_id] = btn
+		# Run 27: render the existing fx_*.png as a button icon. The icon sits
+		# above the label (top alignment); the text remains beneath via the
+		# vertical_icon_alignment override. mouse_filter is kept default so the
+		# whole button still receives clicks (Control's default forwards from
+		# children to the button).
+		var icon_tex: Texture2D = _effect_textures.get(ability_id)
+		if icon_tex != null:
+			btn.icon = icon_tex
+			btn.expand_icon = true
+			btn.add_theme_constant_override("icon_max_width", 28)
+			btn.vertical_icon_alignment = VERTICAL_ALIGNMENT_TOP
+			btn.icon_alignment = HORIZONTAL_ALIGNMENT_CENTER
+			btn.alignment = HORIZONTAL_ALIGNMENT_CENTER
 
 	# End-of-turn button sits at the right of the ability bar. Lit only after
 	# the player has used part of their combo (so they can commit without
@@ -1550,13 +1581,15 @@ func _next_turn() -> void:
 		_clear_highlights()
 		_turn_indicator.text = "%s's Turn" % active.display_name
 		_turn_indicator.add_theme_color_override("font_color", Color(0.96, 0.82, 0.28))
-		await get_tree().create_timer(0.45).timeout
+		# Run 27: tightened from 0.45→0.22, scaled by battle_speed
+		await get_tree().create_timer(_dur(0.22)).timeout
 		if not _engine.battle_over:
 			_resolve_ally_turn(active)
 			_sync_entity_positions()
 			_update_all_hp_bars()
 			_engine.end_turn()
-			await get_tree().create_timer(0.22).timeout
+			# Run 27: tightened from 0.22→0.10, scaled by battle_speed
+			await get_tree().create_timer(_dur(0.10)).timeout
 			_next_turn()
 	else:
 		# Apply lava heat to enemies too — makes lava tactically meaningful
@@ -1568,7 +1601,8 @@ func _next_turn() -> void:
 		_clear_highlights()
 		_turn_indicator.text = "%s's Turn" % active.display_name
 		_turn_indicator.add_theme_color_override("font_color", Color(1.0, 0.35, 0.35))
-		await get_tree().create_timer(0.55).timeout
+		# Run 27: tightened from 0.55→0.28, scaled by battle_speed
+		await get_tree().create_timer(_dur(0.28)).timeout
 		if not _engine.battle_over:
 			_engine.enemy_ai_action(active, _map)
 			_sync_entity_positions()
@@ -1579,7 +1613,8 @@ func _next_turn() -> void:
 				var adj_enemies: int = _count_adjacent_enemies()
 				if adj_enemies >= 3 and _battle_rng.randf() < 0.50:
 					SystemVoice.speak("surrounded")
-			await get_tree().create_timer(0.25).timeout
+			# Run 27: tightened from 0.25→0.12, scaled by battle_speed
+			await get_tree().create_timer(_dur(0.12)).timeout
 			_next_turn()
 
 func _resolve_ally_turn(ally: Combatant) -> void:
@@ -1710,7 +1745,7 @@ func _do_hero_move(hex: Vector2i) -> void:
 	# Visual movement handled by _on_hero_moved signal
 	SystemVoice.speak("move")
 	_moved_this_turn = true
-	await get_tree().create_timer(0.28).timeout
+	await get_tree().create_timer(_dur(0.18)).timeout
 	# Combo rule (Run 24): move + ANY attack ends the turn automatically.
 	# Previously only `_basic_attacked_this_turn` was checked. Now any attack
 	# that landed (basic OR ability) auto-ends the turn after the move so the
@@ -1774,7 +1809,7 @@ func _do_hero_attack(target: Combatant) -> void:
 				var tw: Tween = create_tween()
 				tw.set_ease(Tween.EASE_OUT)
 				tw.set_trans(Tween.TRANS_BACK)
-				tw.tween_property(hero_node, "position", HexGrid.hex_to_pixel(dest, HEX_SIZE), 0.18)
+				tw.tween_property(hero_node, "position", HexGrid.hex_to_pixel(dest, HEX_SIZE), _dur(0.18))
 				await tw.finished
 			_play_ability_effect(dest, "shadow_step")
 			SystemVoice.speak("shadow_step")
@@ -1853,7 +1888,7 @@ func _do_hero_attack(target: Combatant) -> void:
 		_update_turn_hint()
 	else:
 		_engine.end_turn()
-		await get_tree().create_timer(0.2).timeout
+		await get_tree().create_timer(_dur(0.12)).timeout
 		_next_turn()
 
 func _animate_push(c: Combatant, path: Array[Vector2i]) -> void:
@@ -1865,7 +1900,7 @@ func _animate_push(c: Combatant, path: Array[Vector2i]) -> void:
 		var tw: Tween = create_tween()
 		tw.set_ease(Tween.EASE_OUT)
 		tw.set_trans(Tween.TRANS_QUART)
-		tw.tween_property(node, "position", HexGrid.hex_to_pixel(hex, HEX_SIZE), 0.12)
+		tw.tween_property(node, "position", HexGrid.hex_to_pixel(hex, HEX_SIZE), _dur(0.10))
 		await tw.finished
 
 func _do_hero_aoe_ability(center_hex: Vector2i) -> void:
@@ -1925,7 +1960,7 @@ func _do_hero_aoe_ability(center_hex: Vector2i) -> void:
 	_update_hero_hp_label()
 	_refresh_ability_bar()
 	_engine.end_turn()
-	await get_tree().create_timer(0.35).timeout
+	await get_tree().create_timer(_dur(0.20)).timeout
 	_next_turn()
 
 func _do_hero_self_ability() -> void:
@@ -1980,7 +2015,7 @@ func _do_hero_self_ability() -> void:
 	_update_hero_hp_label()
 	_refresh_ability_bar()
 	_engine.end_turn()
-	await get_tree().create_timer(0.3).timeout
+	await get_tree().create_timer(_dur(0.18)).timeout
 	_next_turn()
 
 func _flash_hex_area(center: Vector2i, radius: int, color: Color) -> void:
@@ -2315,7 +2350,7 @@ func _on_hero_moved(combatant: Combatant, _from_hex: Vector2i, to_hex: Vector2i)
 		var tw: Tween = create_tween()
 		tw.set_ease(Tween.EASE_OUT)
 		tw.set_trans(Tween.TRANS_QUART)
-		tw.tween_property(node, "position", HexGrid.hex_to_pixel(to_hex, HEX_SIZE), 0.22)
+		tw.tween_property(node, "position", HexGrid.hex_to_pixel(to_hex, HEX_SIZE), _dur(0.18))
 
 func _on_boss_enraged(boss: Combatant) -> void:
 	## Boss phase 2 trigger: swap glow to crimson-orange, play hit flash, quip.
@@ -2456,7 +2491,7 @@ func _sync_entity_positions() -> void:
 		if node.position.distance_to(target_pos) > 1.0:
 			var tw: Tween = create_tween()
 			tw.set_ease(Tween.EASE_OUT)
-			tw.tween_property(node, "position", target_pos, 0.25)
+			tw.tween_property(node, "position", target_pos, _dur(0.18))
 
 func _update_all_hp_bars() -> void:
 	for c: Combatant in _all_combatants:
@@ -2911,6 +2946,35 @@ func _build_pause_menu() -> void:
 	vb.add_child(_make_volume_row("MUSIC VOLUME", AudioManager.music_volume_db,
 		func(v: float) -> void: AudioManager.set_music_volume_db(v)))
 
+	# Run 27: battle-speed selector — 1× / 1.5× / 2×. Persists in GameState.
+	var speed_row := HBoxContainer.new()
+	speed_row.alignment = BoxContainer.ALIGNMENT_CENTER
+	speed_row.add_theme_constant_override("separation", 8)
+	vb.add_child(speed_row)
+
+	var speed_lbl := Label.new()
+	speed_lbl.text = "BATTLE SPEED"
+	speed_lbl.custom_minimum_size = Vector2(160.0, 0.0)
+	speed_lbl.add_theme_font_size_override("font_size", 14)
+	speed_lbl.add_theme_color_override("font_color", Color(0.86, 0.82, 0.70))
+	speed_row.add_child(speed_lbl)
+
+	var speed_options: Array = [
+		{"label": "1x", "value": 1.0},
+		{"label": "1.5x", "value": 1.5},
+		{"label": "2x", "value": 2.0},
+	]
+	for opt: Dictionary in speed_options:
+		var btn := Button.new()
+		btn.text = String(opt["label"])
+		btn.custom_minimum_size = Vector2(64.0, 32.0)
+		btn.add_theme_font_size_override("font_size", 13)
+		btn.pressed.connect(_on_battle_speed_pressed.bind(float(opt["value"])))
+		btn.set_meta("speed_value", float(opt["value"]))
+		_speed_buttons.append(btn)
+		speed_row.add_child(btn)
+	_refresh_speed_buttons()
+
 	# Toggle row: SFX on/off + MUSIC on/off
 	var toggle_row := HBoxContainer.new()
 	toggle_row.alignment = BoxContainer.ALIGNMENT_CENTER
@@ -3008,7 +3072,129 @@ func _quit_to_title() -> void:
 	GameState.hero_died.emit()
 
 
+func _on_battle_speed_pressed(value: float) -> void:
+	## Run 27: pause-menu speed selector. Updates the run-wide multiplier and
+	## refreshes the row so the selected option pops.
+	GameState.set_battle_speed(value)
+	AudioManager.play("select", 0.04)
+	_refresh_speed_buttons()
+
+
+func _refresh_speed_buttons() -> void:
+	## Highlight whichever speed button matches GameState.battle_speed.
+	for btn: Button in _speed_buttons:
+		if btn == null:
+			continue
+		var val: float = float(btn.get_meta("speed_value", 1.0))
+		var selected: bool = is_equal_approx(val, GameState.battle_speed)
+		var sb := StyleBoxFlat.new()
+		sb.set_corner_radius_all(3)
+		sb.set_content_margin_all(4.0)
+		sb.set_border_width_all(2)
+		if selected:
+			sb.bg_color = Color(0.30, 0.20, 0.04, 0.96)
+			sb.border_color = Color(1.0, 0.84, 0.18)
+			btn.add_theme_color_override("font_color", Color(1.0, 0.94, 0.62))
+		else:
+			sb.bg_color = Color(0.10, 0.08, 0.14, 0.92)
+			sb.border_color = Color(0.40, 0.32, 0.18)
+			btn.add_theme_color_override("font_color", Color(0.86, 0.82, 0.70))
+		btn.add_theme_stylebox_override("normal", sb)
+		btn.add_theme_stylebox_override("hover", sb)
+		btn.add_theme_stylebox_override("pressed", sb)
+		btn.add_theme_stylebox_override("focus", sb)
+
+
 ## ─── Combat Log (Run 24) ─────────────────────────────────────────────────────
+
+## ─── Stats + Inventory Panel (Run 27) ────────────────────────────────────────
+
+func _build_stats_panel() -> void:
+	## Compact left-edge HUD showing core hero stats (ATK / DEF / SPD) plus a
+	## bulleted list of shop items the hero has purchased this run. Sits above
+	## the Donut hologram so the player can answer "what am I working with?"
+	## without leaving the battle screen.
+	_stats_panel = PanelContainer.new()
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(0.04, 0.03, 0.07, 0.84)
+	sb.border_color = Color(0.55, 0.42, 0.18, 0.85)
+	sb.set_border_width_all(1)
+	sb.set_corner_radius_all(4)
+	sb.set_content_margin_all(8.0)
+	_stats_panel.add_theme_stylebox_override("panel", sb)
+	_stats_panel.position = Vector2(8.0, 308.0)
+	_stats_panel.size = Vector2(176.0, 156.0)
+	_stats_panel.custom_minimum_size = Vector2(176.0, 156.0)
+	_stats_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	$UILayer.add_child(_stats_panel)
+
+	var outer := VBoxContainer.new()
+	outer.add_theme_constant_override("separation", 4)
+	_stats_panel.add_child(outer)
+
+	var header := Label.new()
+	header.text = "CARL — LOADOUT"
+	header.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	header.add_theme_font_size_override("font_size", 11)
+	header.add_theme_color_override("font_color", Color(0.95, 0.78, 0.18))
+	outer.add_child(header)
+
+	_stats_label = Label.new()
+	_stats_label.add_theme_font_size_override("font_size", 11)
+	_stats_label.add_theme_color_override("font_color", Color(0.86, 0.90, 0.96))
+	outer.add_child(_stats_label)
+
+	var div := ColorRect.new()
+	div.custom_minimum_size = Vector2(160.0, 1.0)
+	div.color = Color(0.55, 0.42, 0.18, 0.45)
+	outer.add_child(div)
+
+	_inventory_label = Label.new()
+	_inventory_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_inventory_label.add_theme_font_size_override("font_size", 10)
+	_inventory_label.add_theme_color_override("font_color", Color(0.86, 0.82, 0.66))
+	_inventory_label.custom_minimum_size = Vector2(160.0, 0.0)
+	outer.add_child(_inventory_label)
+
+	_refresh_stats_panel()
+
+
+func _refresh_stats_panel() -> void:
+	if _stats_label == null or _inventory_label == null:
+		return
+	var atk: int = int(GameState.hero_base_stats.get("attack", 0))
+	var def: int = int(GameState.hero_base_stats.get("defense", 0))
+	var spd: int = int(GameState.hero_base_stats.get("speed", 10))
+	_stats_label.text = "ATK  %d\nDEF  %d\nSPD  %d" % [atk, def, spd]
+	if GameState.hero_inventory.is_empty():
+		_inventory_label.text = "ITEMS\n(none yet)"
+		_inventory_label.add_theme_color_override("font_color",
+			Color(0.55, 0.55, 0.50))
+	else:
+		# Render distinct items with a "× N" suffix for duplicates so the
+		# panel doesn't grow unbounded over a long run.
+		var counts: Dictionary = {}
+		var order: Array[String] = []
+		for it_id: String in GameState.hero_inventory:
+			if not counts.has(it_id):
+				counts[it_id] = 0
+				order.append(it_id)
+			counts[it_id] = int(counts[it_id]) + 1
+		var lines: Array[String] = ["ITEMS"]
+		for it_id in order:
+			var item: Dictionary = Shop.get_item(it_id)
+			var nm: String = String(item.get("name", it_id))
+			var n: int = int(counts[it_id])
+			lines.append("- %s%s" % [nm, ("  x %d" % n) if n > 1 else ""])
+		_inventory_label.text = "\n".join(lines)
+		_inventory_label.add_theme_color_override("font_color",
+			Color(0.92, 0.86, 0.66))
+
+
+func _on_inventory_changed() -> void:
+	## GameState.inventory_changed handler — kept tiny on purpose.
+	_refresh_stats_panel()
+
 
 func _build_combat_log() -> void:
 	## A small scrolling log of the last COMBAT_LOG_MAX events. Sits in the
