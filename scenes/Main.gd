@@ -35,16 +35,68 @@ func _go_to_title() -> void:
 func _go_to_class_select() -> void:
 	_load_scene(CLASS_SELECT_SCENE)
 
+func _on_new_run_requested() -> void:
+	# Run 28: starting a brand-new run from the title screen — drop any
+	# stale save so it can't reappear if the player escapes back to title
+	# before reaching the first checkpoint.
+	GameState.clear_save_on_disk()
+	_go_to_class_select()
+
 func _on_run_started() -> void:
 	GameState.descend()
 
 func _on_floor_changed(_floor_num: int) -> void:
+	# Run 28: every floor entry is a stable checkpoint — combat hasn't started
+	# yet, HP regen between floors has already applied, and any pending
+	# upgrades/loot/shop choices are committed. Persist before loading the
+	# scene so a crash/refresh during BattleScene init still has a save.
+	_persist_run()
 	_load_scene(BATTLE_SCENE)
 
 func _on_hero_died() -> void:
-	# Show death text via SystemVoice, then back to class select
+	# Run 28: hero died — clear the save so the title screen doesn't offer
+	# CONTINUE on a dead run. Then back to class select.
+	GameState.clear_save_on_disk()
 	await get_tree().create_timer(2.5).timeout
 	_go_to_class_select()
+
+
+func _persist_run() -> void:
+	## Run 28: snapshot GameState + Achievements.unlocked_ids to disk. Best
+	## effort — silent if file I/O fails (the game keeps running unsaved).
+	var ach: Node = get_node_or_null("/root/Achievements")
+	var extra: Dictionary = {}
+	if ach != null:
+		var ids: Array = ach.get("unlocked_ids")
+		if ids != null:
+			extra["unlocked_achievements"] = ids.duplicate()
+	GameState.write_save_to_disk(extra)
+
+
+func _resume_from_save() -> void:
+	## Run 28: TitleScreen → CONTINUE. Read the save, apply it to GameState
+	## and Achievements, then drop into the saved floor's BattleScene.
+	var data: Dictionary = GameState.read_save_from_disk()
+	if data.is_empty():
+		_go_to_class_select()
+		return
+	if not GameState.apply_snapshot(data):
+		_go_to_class_select()
+		return
+	# Reseed RNG from the saved run seed so floor generation is at least
+	# self-consistent across resumes within a single saved run.
+	GameRng.reseed(GameState.run_seed)
+	# Restore achievement unlocks before _load_scene → BattleScene fires the
+	# floor_changed signal (which resets per-floor counters, not unlocks).
+	var ach: Node = get_node_or_null("/root/Achievements")
+	if ach != null:
+		var saved_ids: Variant = data.get("unlocked_achievements", [])
+		if saved_ids is Array:
+			var typed_ids: Array[String] = []
+			for v: Variant in saved_ids:
+				typed_ids.append(String(v))
+			ach.unlocked_ids = typed_ids
+	_load_scene(BATTLE_SCENE)
 
 func _load_scene(path: String) -> void:
 	if _current_scene != null:
@@ -75,7 +127,9 @@ func _load_scene(path: String) -> void:
 	if _current_scene.has_signal("play_again"):
 		_current_scene.play_again.connect(_go_to_class_select)
 	if _current_scene.has_signal("start_game"):
-		_current_scene.start_game.connect(_go_to_class_select)
+		_current_scene.start_game.connect(_on_new_run_requested)
+	if _current_scene.has_signal("continue_run"):
+		_current_scene.continue_run.connect(_resume_from_save)
 	if _current_scene.has_signal("sponsor_chosen"):
 		_current_scene.sponsor_chosen.connect(_on_sponsor_chosen)
 	if _current_scene.has_signal("patch_notes_dismissed"):
@@ -126,6 +180,8 @@ func _on_upgrade_chosen(_upgrade_id: String) -> void:
 func _on_loot_chosen(_loot_id: String) -> void:
 	# Check win condition before descending
 	if GameState.floor_num >= GameState.TOTAL_FLOORS:
+		# Run 28: run complete — clear the save so CONTINUE doesn't dangle.
+		GameState.clear_save_on_disk()
 		_load_scene(WIN_SCENE)
 		return
 	# Small HP regen between floors

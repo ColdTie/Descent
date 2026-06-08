@@ -60,11 +60,24 @@ var battle_speed: float = 1.0
 const XP_PER_LEVEL: int = 100
 const TOTAL_FLOORS: int = 18
 
+# Run 28: save / resume. A run snapshot is written every time the player drops
+# into a fresh floor (a stable checkpoint — combat hasn't started yet) and
+# cleared on death / win. Resume restarts the saved floor at full snapshotted
+# state. JSON because the web export's `user://` is IndexedDB, and JSON
+# round-trips cleanly without touching Godot resource imports.
+const SAVE_PATH: String = "user://descent_save.json"
+const SAVE_VERSION: int = 1
+
 func start_run(class_id: String, seed_val: int = -1) -> void:
 	if seed_val < 0:
 		seed_val = randi()
 	run_seed = seed_val
-	GameRng.reseed(seed_val)
+	# Duck-typed autoload lookup so this script still compiles under
+	# `--script` test mode where autoloads aren't registered (matches the
+	# pattern used in Achievements.gd).
+	var gr: Node = get_node_or_null("/root/GameRng")
+	if gr != null:
+		gr.call("reseed", seed_val)
 	floor_num = 0
 	hero_class = class_id
 	hero_xp = 0
@@ -168,3 +181,142 @@ func run_score() -> int:
 	## ×1 so it's a real but secondary contributor; spending is still optimal).
 	return floor_num * 1000 + total_kills * 25 + bosses_slain * 250 \
 		+ hero_level * 100 + audience_score * 2 + hero_gold * 1
+
+
+# ── Run 28: Save / Resume ──────────────────────────────────────────────────
+
+func snapshot() -> Dictionary:
+	## Pure: serialize current run-relevant state into a JSON-safe Dictionary.
+	## No file I/O; tests use this directly. Achievement state is also folded
+	## in by the caller (Main.gd) before persistence, since Achievements is a
+	## separate autoload.
+	var inv_copy: Array = []
+	for s: String in hero_inventory:
+		inv_copy.append(s)
+	var ab_copy: Array = []
+	for s: String in hero_abilities:
+		ab_copy.append(s)
+	var pn_copy: Array = []
+	for n: int in patch_notes_seen:
+		pn_copy.append(n)
+	return {
+		"version": SAVE_VERSION,
+		"run_seed": run_seed,
+		"floor_num": floor_num,
+		"hero_class": hero_class,
+		"hero_hp": hero_hp,
+		"hero_max_hp": hero_max_hp,
+		"hero_xp": hero_xp,
+		"hero_level": hero_level,
+		"hero_gold": hero_gold,
+		"hero_abilities": ab_copy,
+		"hero_base_stats": hero_base_stats.duplicate(true),
+		"hero_inventory": inv_copy,
+		"battle_speed": battle_speed,
+		"total_kills": total_kills,
+		"bosses_slain": bosses_slain,
+		"audience_score": audience_score,
+		"lava_push_kills": lava_push_kills,
+		"sponsor_offers_taken": sponsor_offers_taken,
+		"patch_notes_seen": pn_copy,
+		"shop_visits": shop_visits,
+	}
+
+
+func apply_snapshot(data: Dictionary) -> bool:
+	## Pure: restore state from a snapshot Dictionary. Returns false on
+	## malformed input (missing hero_class is the canonical "not a real save"
+	## marker). Defensive int() casts because JSON round-trips numbers as
+	## floats — assigning a float to a `: int` field would silently truncate
+	## but coercing first keeps the types honest for downstream callers.
+	if data == null or data.is_empty():
+		return false
+	var cls: String = String(data.get("hero_class", ""))
+	if cls == "":
+		return false
+	run_seed = int(data.get("run_seed", 0))
+	floor_num = int(data.get("floor_num", 1))
+	hero_class = cls
+	hero_hp = int(data.get("hero_hp", 0))
+	hero_max_hp = int(data.get("hero_max_hp", 0))
+	hero_xp = int(data.get("hero_xp", 0))
+	hero_level = int(data.get("hero_level", 1))
+	hero_gold = int(data.get("hero_gold", 0))
+	battle_speed = float(data.get("battle_speed", 1.0))
+	total_kills = int(data.get("total_kills", 0))
+	bosses_slain = int(data.get("bosses_slain", 0))
+	audience_score = int(data.get("audience_score", 0))
+	audience_score_floor = 0
+	lava_push_kills = int(data.get("lava_push_kills", 0))
+	sponsor_offers_taken = int(data.get("sponsor_offers_taken", 0))
+	shop_visits = int(data.get("shop_visits", 0))
+	hero_abilities.clear()
+	for a: Variant in data.get("hero_abilities", []):
+		hero_abilities.append(String(a))
+	hero_inventory.clear()
+	for it: Variant in data.get("hero_inventory", []):
+		hero_inventory.append(String(it))
+	patch_notes_seen.clear()
+	for n: Variant in data.get("patch_notes_seen", []):
+		patch_notes_seen.append(int(n))
+	# hero_base_stats: JSON parses numbers as floats; rebuild as ints since
+	# downstream combat math treats them as integer attack/defense/speed.
+	hero_base_stats = {}
+	var raw_stats: Dictionary = data.get("hero_base_stats", {})
+	for k: Variant in raw_stats.keys():
+		hero_base_stats[String(k)] = int(raw_stats[k])
+	return true
+
+
+func write_save_to_disk(extra: Dictionary = {}) -> bool:
+	## Persist current run + caller-supplied extras (e.g. achievement state).
+	## Returns false on I/O failure; the caller treats that as best-effort and
+	## continues — losing a save shouldn't break the game.
+	var data: Dictionary = snapshot()
+	for k: Variant in extra.keys():
+		data[String(k)] = extra[k]
+	var f: FileAccess = FileAccess.open(SAVE_PATH, FileAccess.WRITE)
+	if f == null:
+		return false
+	f.store_string(JSON.stringify(data))
+	f.close()
+	return true
+
+
+func read_save_from_disk() -> Dictionary:
+	## Returns the parsed save dict, or {} if no save / unreadable / malformed.
+	## Defensive: a corrupted file shouldn't surface "CONTINUE" on the title.
+	if not FileAccess.file_exists(SAVE_PATH):
+		return {}
+	var f: FileAccess = FileAccess.open(SAVE_PATH, FileAccess.READ)
+	if f == null:
+		return {}
+	var raw: String = f.get_as_text()
+	f.close()
+	var parsed: Variant = JSON.parse_string(raw)
+	if parsed == null or not (parsed is Dictionary):
+		return {}
+	var d: Dictionary = parsed as Dictionary
+	# Version gate: if a future format ever breaks compat, refuse the load
+	# rather than half-apply it.
+	if int(d.get("version", 0)) != SAVE_VERSION:
+		return {}
+	if String(d.get("hero_class", "")) == "":
+		return {}
+	return d
+
+
+func has_save_on_disk() -> bool:
+	return not read_save_from_disk().is_empty()
+
+
+func clear_save_on_disk() -> void:
+	## Idempotent — safe to call when no file exists.
+	if not FileAccess.file_exists(SAVE_PATH):
+		return
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(SAVE_PATH))
+	# globalize_path doesn't resolve user:// on web; try the protocol path too.
+	if FileAccess.file_exists(SAVE_PATH):
+		var da: DirAccess = DirAccess.open("user://")
+		if da != null:
+			da.remove("descent_save.json")

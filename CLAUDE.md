@@ -35,8 +35,27 @@ DESCENT is a turn-based tactical dungeon crawler in the spirit of **Dungeon Craw
 - **Architecture rule**: `BattleEngine._calculate_damage()` returns RAW damage (no armor). `Combatant.take_damage(amount, ignore_armor=false)` applies armor. Don't double-apply armor in both places.
 - `Combatant.take_damage(amount, ignore_armor)` — the `ignore_armor` parameter bypasses the `armor` field reduction (for backstab, env damage, etc.)
 
-## Current State (Run 27 — Loadout HUD + Ability Icons + Turn Speed + Donut Fix)
+## Current State (Run 28 — Save / Resume a Run)
 ### Implemented ✅
+**Run 28 (Save / Resume a Run):**
+- **`autoloads/GameState.gd`** — pure snapshot/apply helpers + JSON file I/O for resuming a run:
+  - `snapshot() -> Dictionary` serializes every run-relevant field (floor, class, HP/XP/level, gold, abilities, inventory, base stats, audience score, lava-push counter, sponsor offers, patch notes seen, shop visits, battle speed, run seed). Arrays are deep-copied so a downstream mutation can't poison the live state.
+  - `apply_snapshot(data) -> bool` mirror that restores all fields with defensive `int()`/`float()`/`String()` coercion (JSON round-trips numbers as floats — assigning a 1.0 straight into a `: int` field would silently truncate). Rejects empty dicts and blank `hero_class` as "not a real save". Resets `audience_score_floor` to 0 so the floor-bonus tally doesn't double-count points from before the save.
+  - `write_save_to_disk(extra) -> bool` / `read_save_from_disk() -> Dictionary` / `has_save_on_disk()` / `clear_save_on_disk()` — file I/O around `user://descent_save.json` (web export's IndexedDB-backed path). `read_save_from_disk` is the single defensive gate: missing file, unparseable JSON, mismatched `SAVE_VERSION`, or missing `hero_class` all return `{}` so a corrupt file can't surface CONTINUE.
+  - `SAVE_VERSION` const for future format breaks. Bumping it auto-invalidates pre-existing saves.
+  - **`start_run()` duck-types the `GameRng` autoload** (matching the Achievements.gd pattern) so the file compiles under `--script` test mode and the snapshot helpers can be tested headlessly.
+- **`scenes/Main.gd`** — checkpoint cadence + resume routing:
+  - `_persist_run()` snapshots GameState + folds in `Achievements.unlocked_ids` (since Achievements is a separate autoload) and writes once per floor. Called from `_on_floor_changed()` — every floor entry is the stable checkpoint (combat hasn't started, HP regen has applied, all between-floor picks are committed).
+  - `_resume_from_save()` reads disk → `apply_snapshot()` → reseeds `GameRng` with the saved `run_seed` → rehydrates `Achievements.unlocked_ids` → loads BattleScene directly. Falls back to ClassSelect on any error (defense in depth — failing to resume shouldn't strand the player).
+  - `_on_hero_died()` calls `clear_save_on_disk()` so the title screen doesn't dangle CONTINUE on a dead run.
+  - `_on_loot_chosen()` clears the save when `floor_num >= TOTAL_FLOORS` (win condition).
+  - New `_on_new_run_requested()` clears any stale save when the player clicks NEW RUN, so backing out to title mid-run-before-first-checkpoint can't leave a phantom CONTINUE.
+- **`scenes/TitleScreen.gd`** — new `continue_run` signal + button:
+  - On `_build_ui`, calls `GameState.read_save_from_disk()` once. If non-empty, prepends a green `CONTINUE  ·  <Class>  ·  Floor N` button that emits `continue_run`. The "BEGIN DESCENT" button relabels to "NEW RUN" so the action distinction reads at a glance.
+  - No save → original "BEGIN DESCENT" only. Layout pixel-identical to pre-Run-28 for fresh players.
+- **`tests/test_run28.gd`** (18 test functions, ~50 assertions): snapshot field coverage (version + every scalar + every array), arrays-are-independent-copies invariant, full snapshot↔apply roundtrip, `audience_score_floor` reset behavior, JSON.stringify→parse_string round-trip via `apply_snapshot`, defensive cases for empty dict / missing hero_class / blank class string, minimal-snapshot tolerance, end-to-end disk I/O roundtrip including the extra-fields plumbing for achievement state, "no file present" returns `{}`, and the `SAVE_VERSION` mismatch gate.
+- **Test suite total: 952 passed, 0 failed** (up from 886 in Run 27).
+
 **Run 27 (Loadout HUD + Ability Icons + Turn Speed + Donut Fix):**
 - **Faster turns (≈ 45% baseline + per-run multiplier)** — the pre-Run-27 enemy turn rhythm was 0.55s (pre-action wait) + animation + 0.25s (post-action wait) ≈ 1.05s per enemy; with 4–5 enemies that's a 4–5s round. New baselines: 0.28 / 0.18 / 0.12 — total ≈ 0.58s/enemy at default speed (a 45% reduction). Hero move tweens trimmed too (0.18 → wrapped, push tween 0.12 → 0.10, ally move 0.25 → 0.18). All scaled through a new `_dur(secs)` helper that divides by `GameState.battle_speed`, so a 2× pick gets the player down to ~0.29s/enemy (a ~72% cut from the original).
 - **Pause-menu Battle Speed selector** (`scenes/BattleScene.gd`) — new row in the pause menu with three buttons: `1x` / `1.5x` / `2x`. Selected pip pops with the warm gold stylebox idiom used elsewhere. Calls `GameState.set_battle_speed(value)` which `clamp()`s to [0.5, 3.0] defensively. Persists across floors within the run; reset on `start_run()`. No SceneTree.paused weirdness — the multiplier just affects `_dur()` reads going forward.
@@ -427,14 +446,13 @@ FTL, traditional roguelikes). Status of the "what are we missing" audit:
 - Shop reroll button (escalating gold cost) — Run 25
 - Mana Shield HUD bar (per-entity, drains on hit, hides on expiry) — Run 25
 - Shop slot LOCK toggle (preserves a card through reroll) — Run 26
+- Save / resume a run (per-floor JSON checkpoint on `user://`, CONTINUE button on title) — Run 28
 
 ### 🔜 Highest-value, easiest remaining (do next, roughly in order)
 1. **Sponsor cooldown / variety** — Run 20 ships 10 sponsors at a flat 200-audience cadence.
    Could weight rare/legendary sponsors at higher audience thresholds, or thread sponsor
    stories across multiple offers (e.g. "Big Mike returns" with a follow-up gift).
-2. **Save / resume a run** — Serialize GameState to `user://` so a run survives a refresh
-   (web export supports it). Pairs nicely with the Quit to Title action from Run 24.
-3. **Shop "extras" — remaining** — Lock landed in Run 26. Still on the table: an occasional
+2. **Shop "extras" — remaining** — Lock landed in Run 26. Still on the table: an occasional
    surprise-Legendary "the merchant takes a shine to you" event, or a one-per-run
    "buyback" of the last loot card the player skipped.
 
@@ -530,6 +548,7 @@ tests/
   test_run24.gd      — Loot rarity tier schema + weight invariants + AudioManager music constants (Run 24)
   test_run25.gd      — Shop rarity tier schema + weighted slate + reroll cost ramp + floor-tier boundaries (Run 25)
   test_run26.gd      — Shop slate `locked` arg: placement, no duplication, overflow + defensive cases (Run 26)
+  test_run28.gd      — Save/Resume: snapshot↔apply roundtrip, JSON safety, defensive cases, disk I/O smoke, version gate (Run 28)
 ```
 
 ## Running Tests

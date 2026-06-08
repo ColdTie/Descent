@@ -25,6 +25,7 @@ func _run_all() -> void:
 	_run_suite("Run24 (LootRarity+Music)", TestRun24.new())
 	_run_suite("Run25 (ShopRarity+Reroll)", TestRun25.new())
 	_run_suite("Run26 (ShopLockSlots)", TestRun26.new())
+	_run_suite("Run28 (Save/Resume)", TestRun28.new())
 
 func _run_suite(name: String, suite: Object) -> void:
 	print("\n--- %s ---" % name)

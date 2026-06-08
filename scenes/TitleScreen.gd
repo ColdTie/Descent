@@ -3,6 +3,9 @@ extends Control
 ## Branding, a System intro quip, how-to-play, an SFX toggle, and BEGIN DESCENT.
 
 signal start_game
+# Run 28: emitted when the player clicks CONTINUE on an existing save.
+# Main.gd handles routing back into the saved floor.
+signal continue_run
 
 func _ready() -> void:
 	AudioManager.play_music("music_title", 2.0)
@@ -108,9 +111,25 @@ func _build_ui() -> void:
 	btn_row.add_theme_constant_override("separation", 18)
 	vbox.add_child(btn_row)
 
+	# Run 28: if a saved run exists, surface CONTINUE first so the dominant
+	# action on return is "pick up where you left off". The button shows the
+	# saved class + floor for at-a-glance confirmation.
+	var save_data: Dictionary = GameState.read_save_from_disk()
+	if not save_data.is_empty():
+		var cont_btn := Button.new()
+		var saved_class: String = String(save_data.get("hero_class", ""))
+		var saved_floor: int = int(save_data.get("floor_num", 1))
+		var class_display: String = saved_class.capitalize() if saved_class != "" else "Hero"
+		cont_btn.text = "CONTINUE  ·  %s  ·  Floor %d" % [class_display, saved_floor]
+		cont_btn.custom_minimum_size = Vector2(360.0, 60.0)
+		cont_btn.add_theme_font_size_override("font_size", 18)
+		cont_btn.add_theme_color_override("font_color", Color(0.55, 0.95, 0.60))
+		cont_btn.pressed.connect(_on_continue)
+		btn_row.add_child(cont_btn)
+
 	var begin_btn := Button.new()
-	begin_btn.text = "BEGIN DESCENT"
-	begin_btn.custom_minimum_size = Vector2(320.0, 60.0)
+	begin_btn.text = "NEW RUN" if not save_data.is_empty() else "BEGIN DESCENT"
+	begin_btn.custom_minimum_size = Vector2(220.0, 60.0) if not save_data.is_empty() else Vector2(320.0, 60.0)
 	begin_btn.add_theme_font_size_override("font_size", 22)
 	begin_btn.add_theme_color_override("font_color", Color(1.0, 0.86, 0.12))
 	begin_btn.pressed.connect(_on_begin)
@@ -133,6 +152,12 @@ func _build_ui() -> void:
 func _on_begin() -> void:
 	AudioManager.play("select")
 	start_game.emit()
+
+func _on_continue() -> void:
+	# Run 28: resume a saved run. Main.gd handles applying the snapshot and
+	# routing to BattleScene.
+	AudioManager.play("select")
+	continue_run.emit()
 
 func _on_toggle_sfx(btn: Button) -> void:
 	var on: bool = AudioManager.toggle_enabled()
