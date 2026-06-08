@@ -3111,9 +3111,9 @@ func _refresh_speed_buttons() -> void:
 
 func _build_stats_panel() -> void:
 	## Compact left-edge HUD showing core hero stats (ATK / DEF / SPD) plus a
-	## bulleted list of shop items the hero has purchased this run. Sits above
-	## the Donut hologram so the player can answer "what am I working with?"
-	## without leaving the battle screen.
+	## bulleted list of shop items the hero has purchased this run. Sits in
+	## the empty band between the TurnIndicator (y=84) and where the Donut
+	## speech bubble appears (y=345 when visible), so neither covers it.
 	_stats_panel = PanelContainer.new()
 	var sb := StyleBoxFlat.new()
 	sb.bg_color = Color(0.04, 0.03, 0.07, 0.84)
@@ -3122,9 +3122,9 @@ func _build_stats_panel() -> void:
 	sb.set_corner_radius_all(4)
 	sb.set_content_margin_all(8.0)
 	_stats_panel.add_theme_stylebox_override("panel", sb)
-	_stats_panel.position = Vector2(8.0, 308.0)
-	_stats_panel.size = Vector2(176.0, 156.0)
-	_stats_panel.custom_minimum_size = Vector2(176.0, 156.0)
+	_stats_panel.position = Vector2(8.0, 92.0)
+	_stats_panel.size = Vector2(176.0, 230.0)
+	_stats_panel.custom_minimum_size = Vector2(176.0, 230.0)
 	_stats_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	$UILayer.add_child(_stats_panel)
 
