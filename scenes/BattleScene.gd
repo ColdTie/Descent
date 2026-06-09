@@ -1750,7 +1750,13 @@ func _do_hero_move(hex: Vector2i) -> void:
 	# Previously only `_basic_attacked_this_turn` was checked. Now any attack
 	# that landed (basic OR ability) auto-ends the turn after the move so the
 	# player never has to click END TURN after a move+attack combo.
-	if _attacked_this_turn or _basic_attacked_this_turn or _engine.battle_over:
+	#
+	# Run 29: if the move landed with no living enemy adjacent, there's no
+	# basic-attack target left (abilities are locked after a move per the
+	# combo rule), so the only legal action would be END TURN. Skip the
+	# manual click and end the turn now — pure UX win, no rules change.
+	var no_attack_target: bool = _count_adjacent_enemies() == 0
+	if _attacked_this_turn or _basic_attacked_this_turn or _engine.battle_over or no_attack_target:
 		_engine.end_turn()
 		_next_turn()
 	else:
