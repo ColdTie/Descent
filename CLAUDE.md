@@ -35,8 +35,29 @@ DESCENT is a turn-based tactical dungeon crawler in the spirit of **Dungeon Craw
 - **Architecture rule**: `BattleEngine._calculate_damage()` returns RAW damage (no armor). `Combatant.take_damage(amount, ignore_armor=false)` applies armor. Don't double-apply armor in both places.
 - `Combatant.take_damage(amount, ignore_armor)` — the `ignore_armor` parameter bypasses the `armor` field reduction (for backstab, env damage, etc.)
 
-## Current State (Run 28 — Save / Resume a Run)
+## Current State (Run 29 — Sponsor Variety + Rarity + Story Arcs)
 ### Implemented ✅
+**Run 29 (Sponsor Variety + Rarity + Story Arcs):**
+- **`src/data/Sponsors.gd`** — sponsor pool now follows the same rarity idiom as Loot (Run 24) and Shop (Run 25):
+  - New `RARITY_COMMON/RARE/LEGENDARY` constants, `RARITY_COLORS` + `RARITY_LABELS` mirroring LootScreen so the card chrome reads at a glance.
+  - Every existing sponsor (10) gained a `rarity` field. Stats-only sponsors stay Common (`hyperion_drink`, `iron_tassel`, `gofundit`, `rays_pizza`); meaningful-tradeoff sponsors are Rare (`big_mikes_meat`, `spectral_cola`, `bopca_insurance`, `quantec_pet`, `rumnoir_rotgut`, `exitpit_adv`).
+  - 4 new sponsors: `tiny_carl_plush` (Common, +8 max HP / +40 audience), `godking_industries` (Legendary, +10 ATK / +3 DEF / +20 max HP / full heal), `neo_blood_co` (Legendary, +40 max HP / +5 ATK / -2 SPD), and `big_mikes_return` (Legendary, requires_taken: `big_mikes_meat` — the DCC reality-show callback gag).
+  - **`RARITY_WEIGHTS_BY_TAKEN`** — 4-bucket table indexed by how many sponsors the player has accepted so far. Legendary share climbs monotonically (3% → 8% → 17% → 30%) and Common shrinks (70% → 55% → 38% → 22%) as the player's "show arc" deepens, same shape as LootScreen's depth-tiered table. `taken_tier(n)` does the 0 / 1-2 / 3-4 / 5+ bucketing with a negative-input guard.
+  - **`slate(rng, taken_count, taken_ids) -> Array[Dictionary]`** — pure helper that mirrors `Shop.slate()`. Each of 3 slots rolls a rarity weighted by `taken_count`, then draws a non-duplicate sponsor of that rarity. Fallback walk goes Legendary → Rare → Common so a thin Common pool can't downgrade a Legendary slot. `eligible_pool(taken_ids)` pre-filters sponsors whose `requires_taken` prereq isn't in the accepted-list, so the "return engagement" story-arc sponsor only surfaces after its setup.
+  - Static `sponsors_owed()` and `get_offer()` untouched — Run 20's threshold/cadence math still drives when the pop-up fires; Run 29 only changes what's *in* the pop-up.
+- **`scenes/SponsorOffer.gd`** — switched from `pool.duplicate() + shuffle + slice(0,3)` to `Sponsors.slate(rng, taken_count, taken_ids)`. RNG is seeded per pop-up as `run_seed ^ (taken+1)·7919` so consecutive pop-ups within a run roll different slates AND save/resume reproduces the same slate. Card chrome adds:
+  - Rarity strip at top (e.g. `LEGENDARY`, `COMMON`); return-engagement sponsors get `▸ LEGENDARY · ENCORE` so the callback is obvious.
+  - Border color now driven by rarity (orange Legendary, blue Rare, grey Common) — sponsor brand color still drives the icon + name tint so each card still feels distinct.
+  - Legendary cards: 4px border (vs 2px), thicker shadow, infinite shadow-pulse tween, and a soft orange screen flash on screen entry — same idiom as LootScreen / Shop, so a Legendary slate reads instantly.
+  - Legendary picks play the `victory` SFX at -4dB + a `sponsor_legendary` quip. Return picks play the regular select SFX + a dedicated `sponsor_return` quip (so the callback gag lands twice — on appearance via the chevron, and on accept via the System).
+  - Defensive `picks.is_empty()` fallback path to the legacy shuffle so the screen never blanks if `slate()` ever returns nothing.
+  - On accept (`_on_continue`), appends `_chosen` into `GameState.sponsor_offers_taken_ids` (with an empty-id guard) so the next pop-up's `slate()` sees the updated prereq set.
+- **`autoloads/GameState.gd`** — new `sponsor_offers_taken_ids: Array[String]` mirrors `sponsor_offers_taken` (the existing counter) but stores per-id history so `Sponsors.slate()` can honor `requires_taken` prereqs. Reset in `start_run()`, snapshotted in `snapshot()`, rehydrated in `apply_snapshot()` with a `[]` default so pre-Run-29 saves still load cleanly (no SAVE_VERSION bump needed — the field is purely additive).
+- **`autoloads/SystemVoice.gd`** — two new quip pools:
+  - `sponsor_legendary` (6 lines) — fires when a slate enters with a Legendary card present, separate from the generic `sponsor_offer` line so the cadence stays varied.
+  - `sponsor_return` (6 lines) — fires when the player accepts a sponsor whose `requires_taken` prereq is in their accepted list (the callback gag).
+- **`tests/test_run29.gd`** (19 test functions, ~70 assertions): rarity schema (every sponsor has rarity, values are in the allowed set, at least one of each rarity), Run-29 ids exist (`tiny_carl_plush`, `big_mikes_return`, `godking_industries`, `neo_blood_co`), the BIG MIKE story-arc wiring (`requires_taken == "big_mikes_meat"`), weight-table shape (4 tiers, Legendary climbs + Common shrinks, all tiers have positive total weight), `taken_tier()` bucket boundaries including negative-input safety, slate basics (size, in-slate uniqueness, determinism for same seed, defensive null-rng case), statistical Legendary-share-rises-with-taken-count (200 trials, low vs high), story-arc gating (return sponsor NEVER appears without prereq across 50 trials; return sponsor DOES appear with prereq + high tier across 100 trials), `eligible_pool()` strip/restore behavior, and back-compat with Run 20 helpers (`sponsors_owed`, `get_offer`).
+
 **Run 28 (Save / Resume a Run):**
 - **`autoloads/GameState.gd`** — pure snapshot/apply helpers + JSON file I/O for resuming a run:
   - `snapshot() -> Dictionary` serializes every run-relevant field (floor, class, HP/XP/level, gold, abilities, inventory, base stats, audience score, lava-push counter, sponsor offers, patch notes seen, shop visits, battle speed, run seed). Arrays are deep-copied so a downstream mutation can't poison the live state.
@@ -447,14 +468,15 @@ FTL, traditional roguelikes). Status of the "what are we missing" audit:
 - Mana Shield HUD bar (per-entity, drains on hit, hides on expiry) — Run 25
 - Shop slot LOCK toggle (preserves a card through reroll) — Run 26
 - Save / resume a run (per-floor JSON checkpoint on `user://`, CONTINUE button on title) — Run 28
+- Sponsor rarity tiers + threshold-weighted slate + story-arc returning sponsors — Run 29
 
 ### 🔜 Highest-value, easiest remaining (do next, roughly in order)
-1. **Sponsor cooldown / variety** — Run 20 ships 10 sponsors at a flat 200-audience cadence.
-   Could weight rare/legendary sponsors at higher audience thresholds, or thread sponsor
-   stories across multiple offers (e.g. "Big Mike returns" with a follow-up gift).
-2. **Shop "extras" — remaining** — Lock landed in Run 26. Still on the table: an occasional
+1. **Shop "extras" — remaining** — Lock landed in Run 26. Still on the table: an occasional
    surprise-Legendary "the merchant takes a shine to you" event, or a one-per-run
    "buyback" of the last loot card the player skipped.
+2. **More sponsor story arcs** — Run 29 ships one (BIG MIKE → BIG MIKE'S RETURN). Could add
+   another 1-2 chains (e.g. Spectral Cola → Spectral Cola Zero, with a third "final form")
+   so the reality-show layer has multi-arc continuity, not just a single callback.
 
 ### 🟡 Larger / later (note, not yet scoped)
 4. **More floor variety** — Per-tier hazards: Tier 1 crumbling bridges, Tier 2 freeze pools,
@@ -491,7 +513,7 @@ assets/
 
 autoloads/
   GameRng.gd         — seeded RNG singleton
-  GameState.gd       — run-persistent hero state (+run_score, total_kills, bosses_slain, audience_score, lava_push_kills, sponsor_offers_taken, patch_notes_seen)
+  GameState.gd       — run-persistent hero state (+run_score, total_kills, bosses_slain, audience_score, lava_push_kills, sponsor_offers_taken, sponsor_offers_taken_ids, patch_notes_seen)
   SystemVoice.gd     — The System commentary pools + signal (+sponsor_offer, patch_notes_v2, patch_notes_v3 pools as of Run 20)
   AudioManager.gd    — SFX + music player: WAV pool, play(name, pitch_var, vol_db),
                        play_music(name, fade_s), music_for_floor(n), stop_music(fade_s),
@@ -514,6 +536,8 @@ src/data/
   EnemyDefs.gd       — enemy definitions + Combatant factory (+floor_num scaling param)
   Allies.gd          — floor-scripted ally NPCs + Combatant factory (Run 18)
   Sponsors.gd        — Run 20: DCC sponsor-offer pool + threshold math (sponsors_owed)
+                       Run 29: rarity tiers on every sponsor + `slate(rng, taken, taken_ids)`
+                       with weighted-by-taken-count rarity + `requires_taken` story-arc gating
   PatchNotes.gd      — Run 20: per-tier patch-note payloads (floors 7, 13)
   Shop.gd            — Run 21: merchant inventory + gold-economy helpers (slate/gold_for_*/should_show_shop)
                        Run 25: rarity tiers on every item + per-tier weighted `slate(rng, floor_num)` + `reroll_cost(n)`
@@ -549,6 +573,7 @@ tests/
   test_run25.gd      — Shop rarity tier schema + weighted slate + reroll cost ramp + floor-tier boundaries (Run 25)
   test_run26.gd      — Shop slate `locked` arg: placement, no duplication, overflow + defensive cases (Run 26)
   test_run28.gd      — Save/Resume: snapshot↔apply roundtrip, JSON safety, defensive cases, disk I/O smoke, version gate (Run 28)
+  test_run29.gd      — Sponsor rarity schema + weighted slate + story-arc prereq gating (Run 29)
 ```
 
 ## Running Tests

@@ -462,6 +462,30 @@ const LINES: Dictionary = {
 		"An advertiser would like to speak with your audience. Through you. Loudly.",
 	],
 
+	# ── Sponsor legendary (Run 29) ────────────────────────────────────────────
+	# Fired when a sponsor slate enters with a Legendary card present. Different
+	# from `sponsor_offer` so the cadence stays varied across the run.
+	"sponsor_legendary": [
+		"A LEGENDARY sponsor has manifested. This is statistically improbable. The dungeon is, briefly, jealous.",
+		"Legendary brand opportunity detected. The audience is, for once, paying attention.",
+		"A platinum-tier sponsor has entered the slate. The merchandising rights alone are vulgar.",
+		"Premium sponsor in queue. The contract is thick. The benefits are real. So is the price.",
+		"The audience signal is high enough to attract serious capital. Bid accordingly.",
+		"Legendary offer. The dungeon's compliance officer is filing complaints. They will be ignored.",
+	],
+
+	# ── Sponsor return engagement (Run 29) ────────────────────────────────────
+	# Plays when the player accepts a sponsor whose `requires_taken` prereq is
+	# already in their accepted list — i.e. a callback sponsor.
+	"sponsor_return": [
+		"A returning sponsor. Continuity is rare in this dungeon. Cherish it.",
+		"The follow-up endorsement has been signed. The relationship deepens. Reluctantly.",
+		"A repeat customer. Or rather: a repeat product. You are the product.",
+		"The sponsor has come back for seconds. So has the cleaver.",
+		"Continued partnership confirmed. The audience nods, knowingly.",
+		"The brand has decided you are worth a second placement. This is, technically, a compliment.",
+	],
+
 	# ── Patch notes: Tier 2 (floor 7) ─────────────────────────────────────────
 	"patch_notes_v2": [
 		"Hot-patch incoming. The dungeon is being rebalanced mid-run. The System apologizes for nothing.",

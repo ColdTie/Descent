@@ -39,6 +39,13 @@ signal audience_gained(amount: int, reason: String)
 var sponsor_offers_taken: int = 0
 var patch_notes_seen: Array[int] = []
 
+# Run 29: per-id record of sponsors the player has accepted this run. Drives
+# the story-arc gating in `Sponsors.slate()` (a "BIG MIKE'S RETURN" card only
+# appears once the player has taken `big_mikes_meat`). `sponsor_offers_taken`
+# stays as the count used by `sponsors_owed()` — the two are kept in sync,
+# but the id-list is the source of truth for prereqs.
+var sponsor_offers_taken_ids: Array[String] = []
+
 # Run 21: gold economy. Earned from kills/bosses/floor clears, spent at the
 # between-floor Shop. `shop_visits` tracks how many shops have appeared this
 # run; the HUD widget animates briefly on every gain.
@@ -89,6 +96,7 @@ func start_run(class_id: String, seed_val: int = -1) -> void:
 	audience_score_floor = 0
 	lava_push_kills = 0
 	sponsor_offers_taken = 0
+	sponsor_offers_taken_ids.clear()
 	patch_notes_seen.clear()
 	shop_visits = 0
 	hero_inventory.clear()
@@ -199,6 +207,9 @@ func snapshot() -> Dictionary:
 	var pn_copy: Array = []
 	for n: int in patch_notes_seen:
 		pn_copy.append(n)
+	var sp_ids_copy: Array = []
+	for s: String in sponsor_offers_taken_ids:
+		sp_ids_copy.append(s)
 	return {
 		"version": SAVE_VERSION,
 		"run_seed": run_seed,
@@ -218,6 +229,7 @@ func snapshot() -> Dictionary:
 		"audience_score": audience_score,
 		"lava_push_kills": lava_push_kills,
 		"sponsor_offers_taken": sponsor_offers_taken,
+		"sponsor_offers_taken_ids": sp_ids_copy,
 		"patch_notes_seen": pn_copy,
 		"shop_visits": shop_visits,
 	}
@@ -259,6 +271,11 @@ func apply_snapshot(data: Dictionary) -> bool:
 	patch_notes_seen.clear()
 	for n: Variant in data.get("patch_notes_seen", []):
 		patch_notes_seen.append(int(n))
+	# Run 29: id-list defaults to [] for pre-Run-29 saves so older save files
+	# still load cleanly (no SAVE_VERSION bump needed).
+	sponsor_offers_taken_ids.clear()
+	for s: Variant in data.get("sponsor_offers_taken_ids", []):
+		sponsor_offers_taken_ids.append(String(s))
 	# hero_base_stats: JSON parses numbers as floats; rebuild as ints since
 	# downstream combat math treats them as integer attack/defense/speed.
 	hero_base_stats = {}
