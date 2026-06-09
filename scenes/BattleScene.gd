@@ -1550,6 +1550,11 @@ func _next_turn() -> void:
 		_moved_this_turn = false
 		_basic_attacked_this_turn = false
 		_attacked_this_turn = false
+		# Reset the armed ability back to Basic Attack so the player can move
+		# right away on a new turn. Without this, an ability fired last turn
+		# (e.g. fireball) stays selected and the click-to-move highlights
+		# don't appear until the player right-clicks to deselect.
+		_selected_ability = "basic_attack"
 		# Tick ability cooldowns at the start of each hero turn
 		for id: String in _hero_ability_objs:
 			_hero_ability_objs[id].tick_cooldown()
