@@ -35,8 +35,22 @@ DESCENT is a turn-based tactical dungeon crawler in the spirit of **Dungeon Craw
 - **Architecture rule**: `BattleEngine._calculate_damage()` returns RAW damage (no armor). `Combatant.take_damage(amount, ignore_armor=false)` applies armor. Don't double-apply armor in both places.
 - `Combatant.take_damage(amount, ignore_armor)` — the `ignore_armor` parameter bypasses the `armor` field reduction (for backstab, env damage, etc.)
 
-## Current State (Run 29 — Sponsor Variety + Rarity + Story Arcs)
+## Current State (Run 30 — Multi-Step Sponsor Story Arcs)
 ### Implemented ✅
+**Run 30 (Multi-Step Sponsor Story Arcs):**
+- **`src/data/Sponsors.gd`** — Run 29 shipped one 2-step arc (BIG MIKE → BIG MIKE'S RETURN). Run 30 extends the reality-show layer with three more story arcs, including the first 3-step trilogy:
+  - **Spectral Cola Trilogy** — `spectral_cola` (existing Rare) → `spectral_cola_zero` (new Rare, requires `spectral_cola`) → `spectral_cola_singularity` (new Legendary, requires `spectral_cola_zero`, `chain_finale: true`). Three-step chain where each subsequent offer's `requires_taken` is the *previous* step (not the OG), so the trilogy unlocks one rung at a time as the player engages with the brand across multiple sponsor pop-ups.
+  - **Bopca Insurance saga** — `bopca_insurance` (existing Rare) → `bopca_executive_plan` (new Legendary, requires `bopca_insurance`). The actuaries upgrade you to the platinum package: +50 Max HP / +4 Armor / full heal.
+  - **Hyperion Megapack** — `hyperion_drink` (existing Common) → `hyperion_megapack` (new Rare, requires `hyperion_drink`). The first Common→Rare arc, deliberately low-stakes so a fresh-run player has at least one arc they can plausibly complete inside a single descent.
+  - New `is_chain_finale(offer) -> bool` static helper — convenience predicate around `offer.get("chain_finale", false)` so the screen + tests don't have to know the dict-key convention.
+- **`scenes/SponsorOffer.gd`** — finale-aware card chrome + accept flow:
+  - Cards with `chain_finale: true` get a distinct rarity strip: `* LEGENDARY * TRILOGY FINALE`. Takes priority over the Run-29 `▸ … ENCORE` callback prefix so the trilogy capstone reads at a glance against a regular return-sponsor offer.
+  - Finale accept path: plays `victory` SFX at -3 dB (slightly louder than the standard Legendary -4 dB), fires the legendary screen flash, and speaks from a dedicated `sponsor_finale` quip pool — *not* the generic Legendary `speak_direct` line — so the trilogy payoff lands narratively. Sits in front of the generic Legendary branch in `_on_card_selected` so finale wins on both flags.
+  - Pre-Run-29 fallbacks (return-engagement + base Legendary + standard) are untouched.
+- **`autoloads/SystemVoice.gd`** — new `sponsor_finale` quip pool (6 lines). Voice is dryly meta — "The trilogy concludes. The audience weeps." — referencing the multi-offer narrative arc, distinct from the existing `sponsor_return` (callback) and `sponsor_legendary` (slate-entry) lines. Slots between `sponsor_return` and the patch-notes pools so the file's sponsor section stays grouped.
+- **`tests/test_run30.gd`** (17 test functions, ~370 assertions): all 4 new ids exist in `POOL`; each new sponsor's `requires_taken` points at the right prereq (Zero→Cola, Singularity→Zero, Executive→Insurance, Megapack→Drink); `chain_finale: true` is set on Singularity ONLY (10 other sponsors verified NOT finales); `is_chain_finale({})` defensive case; multi-step gating via `eligible_pool()` — Singularity hidden with only Cola taken, visible after both Cola+Zero; same gating verified at the `slate()` level across 80 trials (Singularity never appears with only Cola taken) and 200 trials (Singularity appears at least once with both prereqs at high taken_count); all new sponsor effect keys are ones `_apply_effects()` actually handles; end-to-end simulated walk of the Spectral Cola trilogy (step 0 → step 3) verifying eligibility flips at each rung.
+- **Test suite total: 1657 passed, 0 failed** (up from 1288 in Run 29).
+
 **Run 29 (Sponsor Variety + Rarity + Story Arcs):**
 - **`src/data/Sponsors.gd`** — sponsor pool now follows the same rarity idiom as Loot (Run 24) and Shop (Run 25):
   - New `RARITY_COMMON/RARE/LEGENDARY` constants, `RARITY_COLORS` + `RARITY_LABELS` mirroring LootScreen so the card chrome reads at a glance.
@@ -469,14 +483,13 @@ FTL, traditional roguelikes). Status of the "what are we missing" audit:
 - Shop slot LOCK toggle (preserves a card through reroll) — Run 26
 - Save / resume a run (per-floor JSON checkpoint on `user://`, CONTINUE button on title) — Run 28
 - Sponsor rarity tiers + threshold-weighted slate + story-arc returning sponsors — Run 29
+- Multi-step sponsor chains: Spectral Cola trilogy (3 steps, with trilogy-finale badge),
+  Bopca Executive Plan (2 steps), Hyperion Megapack (2 steps, Common→Rare) — Run 30
 
 ### 🔜 Highest-value, easiest remaining (do next, roughly in order)
 1. **Shop "extras" — remaining** — Lock landed in Run 26. Still on the table: an occasional
    surprise-Legendary "the merchant takes a shine to you" event, or a one-per-run
    "buyback" of the last loot card the player skipped.
-2. **More sponsor story arcs** — Run 29 ships one (BIG MIKE → BIG MIKE'S RETURN). Could add
-   another 1-2 chains (e.g. Spectral Cola → Spectral Cola Zero, with a third "final form")
-   so the reality-show layer has multi-arc continuity, not just a single callback.
 
 ### 🟡 Larger / later (note, not yet scoped)
 4. **More floor variety** — Per-tier hazards: Tier 1 crumbling bridges, Tier 2 freeze pools,
@@ -538,6 +551,8 @@ src/data/
   Sponsors.gd        — Run 20: DCC sponsor-offer pool + threshold math (sponsors_owed)
                        Run 29: rarity tiers on every sponsor + `slate(rng, taken, taken_ids)`
                        with weighted-by-taken-count rarity + `requires_taken` story-arc gating
+                       Run 30: multi-step chains (Spectral Cola trilogy + Bopca Executive +
+                       Hyperion Megapack) + `chain_finale: true` flag + `is_chain_finale()`
   PatchNotes.gd      — Run 20: per-tier patch-note payloads (floors 7, 13)
   Shop.gd            — Run 21: merchant inventory + gold-economy helpers (slate/gold_for_*/should_show_shop)
                        Run 25: rarity tiers on every item + per-tier weighted `slate(rng, floor_num)` + `reroll_cost(n)`
@@ -574,6 +589,7 @@ tests/
   test_run26.gd      — Shop slate `locked` arg: placement, no duplication, overflow + defensive cases (Run 26)
   test_run28.gd      — Save/Resume: snapshot↔apply roundtrip, JSON safety, defensive cases, disk I/O smoke, version gate (Run 28)
   test_run29.gd      — Sponsor rarity schema + weighted slate + story-arc prereq gating (Run 29)
+  test_run30.gd      — Multi-step chain wiring + finale flag + slate-level gating across trials (Run 30)
 ```
 
 ## Running Tests

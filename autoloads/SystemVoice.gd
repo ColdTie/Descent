@@ -486,6 +486,19 @@ const LINES: Dictionary = {
 		"The brand has decided you are worth a second placement. This is, technically, a compliment.",
 	],
 
+	# ── Sponsor trilogy finale (Run 30) ───────────────────────────────────────
+	# Plays when the player accepts a sponsor flagged `chain_finale: true` —
+	# the capstone of a multi-step story arc. Bigger event than a return; the
+	# audience has watched the arc build across multiple offers.
+	"sponsor_finale": [
+		"The trilogy concludes. The audience weeps. The sponsor's quarterly report writes itself.",
+		"Chain complete. A merchandising executive has just optioned the rights. You will see royalties from approximately none of it.",
+		"The arc lands. The narrative pays off. The product moves units. The dungeon is, briefly, a story.",
+		"You have followed a sponsor across three offers. The audience considers this commitment. The audience considers itself, briefly, also committed.",
+		"Trilogy finale signed. The brand has now installed itself in your bloodstream, your weapon, and your tax forms.",
+		"The capstone endorsement is yours. The sponsor will name a son after you. The son will sue.",
+	],
+
 	# ── Patch notes: Tier 2 (floor 7) ─────────────────────────────────────────
 	"patch_notes_v2": [
 		"Hot-patch incoming. The dungeon is being rebalanced mid-run. The System apologizes for nothing.",

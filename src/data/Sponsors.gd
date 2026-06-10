@@ -1,6 +1,9 @@
 class_name Sponsors
 ## Run 20: DCC reality-show sponsor offers.
 ## Run 29: rarity tiers + threshold-weighted slate + multi-offer story arcs.
+## Run 30: multi-step chains — Spectral Cola trilogy + Bopca Executive plan
+## + Hyperion Megapack. A sponsor can mark `chain_finale: true` so the screen
+## treats it as the capstone of its arc (special badge + finale quip).
 ##
 ## In Dungeon Crawler Carl, weird alien corporations sponsor crawlers in
 ## exchange for advertising — they hand out gifts that are sometimes pure
@@ -13,6 +16,11 @@ class_name Sponsors
 ## sponsors are "return engagements" — they only appear if the player
 ## previously took a setup sponsor (`requires_taken`). This threads the
 ## DCC reality-show conceit across multiple offers instead of a flat pool.
+##
+## Run 30: chains can be more than two steps. Spectral Cola is a 3-step
+## trilogy (cola → zero → singularity). The middle step's `requires_taken`
+## is the OG sponsor; the finale's `requires_taken` is the middle step,
+## so the chain unlocks step by step as the player engages with the brand.
 ##
 ## Pure data + math. No autoload references, no Node ops — safe to test in
 ## --script mode.
@@ -205,6 +213,63 @@ const POOL: Array[Dictionary] = [
 		"desc": "+40 Max HP, +5 Attack, -2 Speed. The bag is warm. The Crown of Blood approves.",
 		"effects": {"max_hp": 40, "heal": 40, "attack": 5, "speed": -2},
 	},
+	# ── Run 30 additions — multi-step story arcs ──────────────────────────────
+	# Spectral Cola Trilogy: spectral_cola → spectral_cola_zero → singularity.
+	# Each step's `requires_taken` is the previous step, so the chain unlocks
+	# only as the player engages with the brand across multiple offers. The
+	# capstone carries `chain_finale: true` so the screen treats it as the
+	# trilogy payoff (special badge + finale quip).
+	{
+		"id": "spectral_cola_zero",
+		"sponsor": "Spectral Cola Zero",
+		"icon": "SPD",
+		"name": "Zero-Sugar Sequel Deal",
+		"color": Color(0.85, 0.85, 0.95),
+		"rarity": RARITY_RARE,
+		"requires_taken": "spectral_cola",
+		"desc": "+5 Speed, +5 Attack, +10 Max HP. The bottle is matte black. The branding swears it's healthier. The audience does not care.",
+		"effects": {"attack": 5, "speed": 5, "max_hp": 10},
+	},
+	{
+		"id": "spectral_cola_singularity",
+		"sponsor": "SPECTRAL COLA SINGULARITY",
+		"icon": "SPD",
+		"name": "The Cola Singularity",
+		"color": Color(1.00, 0.10, 0.55),
+		"rarity": RARITY_LEGENDARY,
+		"requires_taken": "spectral_cola_zero",
+		"chain_finale": true,
+		"desc": "+12 Attack, +6 Speed, +30 Max HP, heal 30, +50 Audience. The trilogy concludes. The product transcends carbonation. So do you.",
+		"effects": {"attack": 12, "speed": 6, "max_hp": 30, "heal": 30, "audience": 50},
+	},
+	# Bopca Insurance saga: insurance → executive plan. Two-step Legendary
+	# upgrade — the executive package is what insurance was always going to be
+	# once the actuaries finished their pitch.
+	{
+		"id": "bopca_executive_plan",
+		"sponsor": "Bopca Executive Plan",
+		"icon": "DEF",
+		"name": "Platinum Underwriter Package",
+		"color": Color(0.20, 0.92, 0.55),
+		"rarity": RARITY_LEGENDARY,
+		"requires_taken": "bopca_insurance",
+		"desc": "+50 Max HP, +4 Armor, full heal. The actuaries have reviewed your file. They approve. Reluctantly.",
+		"effects": {"max_hp": 50, "defense": 4, "heal": 999},
+	},
+	# Hyperion Drink — the easy-mode early-game arc. Common setup, Rare payoff.
+	# Lower stakes than the Cola trilogy; designed so a fresh-run player has at
+	# least one arc they can plausibly complete inside a single descent.
+	{
+		"id": "hyperion_megapack",
+		"sponsor": "Hyperion Drink-It-All Mega Pack",
+		"icon": "HP",
+		"name": "Bulk Hydration Endorsement",
+		"color": Color(0.20, 0.86, 1.00),
+		"rarity": RARITY_RARE,
+		"requires_taken": "hyperion_drink",
+		"desc": "+20 Max HP, heal 60, +2 Speed. The case is industrial-sized. The audience approves of bulk endorsements.",
+		"effects": {"max_hp": 20, "heal": 60, "speed": 2},
+	},
 ]
 
 
@@ -222,6 +287,13 @@ static func get_offer(id: String) -> Dictionary:
 		if String(o.get("id", "")) == id:
 			return o
 	return {}
+
+
+static func is_chain_finale(offer: Dictionary) -> bool:
+	## Run 30: convenience predicate. A chain finale is the capstone of a
+	## multi-step story arc; the screen shows a special badge and the System
+	## fires a dedicated quip on accept.
+	return bool(offer.get("chain_finale", false))
 
 
 static func eligible_pool(taken_ids: Array) -> Array[Dictionary]:

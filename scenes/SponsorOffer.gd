@@ -64,6 +64,7 @@ func _make_card(item: Dictionary) -> PanelContainer:
 	var rarity_col: Color = Sponsors.RARITY_COLORS.get(rarity, brand_col)
 	var border_w: int = 4 if rarity == Sponsors.RARITY_LEGENDARY else 2
 	var is_return: bool = String(item.get("requires_taken", "")) != ""
+	var is_finale: bool = Sponsors.is_chain_finale(item)
 
 	var panel := PanelContainer.new()
 	panel.custom_minimum_size = Vector2(280.0, 270.0)
@@ -82,10 +83,14 @@ func _make_card(item: Dictionary) -> PanelContainer:
 	panel.add_child(vbox)
 
 	# Rarity strip — same idiom as Loot/Shop. A "return engagement" sponsor
-	# gets a small chevron prefix so the player notices it's a callback.
+	# gets a small chevron prefix so the player notices it's a callback;
+	# the capstone of a multi-step chain (Run 30) gets a FINALE flag so the
+	# trilogy payoff reads at a glance.
 	var rarity_lbl := Label.new()
 	var rarity_text: String = Sponsors.RARITY_LABELS.get(rarity, "")
-	if is_return:
+	if is_finale:
+		rarity_text = "* %s * TRILOGY FINALE" % rarity_text
+	elif is_return:
 		rarity_text = "▸ %s · ENCORE" % rarity_text
 	rarity_lbl.text = rarity_text
 	rarity_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -171,9 +176,14 @@ func _on_card_selected(item: Dictionary, panel: PanelContainer, ps: StyleBoxFlat
 		return
 	_chosen = String(item.get("id", ""))
 	var rarity: String = String(item.get("rarity", Sponsors.RARITY_COMMON))
-	# Legendary picks get the victory sting + special quip; return-engagement
-	# picks get their own line so the callback gag lands.
-	if rarity == Sponsors.RARITY_LEGENDARY:
+	# Run 30: a chain finale takes priority over the generic legendary line —
+	# it's the trilogy payoff and deserves its own callout. Legendary picks
+	# still get the victory sting; return-engagement picks get the encore line.
+	if Sponsors.is_chain_finale(item):
+		AudioManager.play("victory", 0.0, -3.0)
+		_flash_legendary_aura()
+		SystemVoice.speak("sponsor_finale")
+	elif rarity == Sponsors.RARITY_LEGENDARY:
 		AudioManager.play("victory", 0.0, -4.0)
 		_flash_legendary_aura()
 		SystemVoice.speak_direct(
