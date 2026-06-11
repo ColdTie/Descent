@@ -168,6 +168,20 @@ func set_battle_speed(mult: float) -> void:
 	battle_speed = clamp(mult, 0.5, 3.0)
 
 
+func consume_xp_bonus(base_xp: int) -> int:
+	## Run 32: the LevelUp "Combat Instincts" card stores a one-shot percentage
+	## in hero_base_stats["xp_bonus"] ("Next floor grants +50% XP"). Before this
+	## run NOTHING read that key — the upgrade was a silent no-op. This helper
+	## applies the bonus to a floor's XP haul and erases the key (one-shot, per
+	## the card's own wording). Stacked picks (+50 twice = +100%) pay out in one
+	## boosted floor. Pure math + dict mutation; testable headlessly.
+	var bonus_pct: int = int(hero_base_stats.get("xp_bonus", 0))
+	if bonus_pct <= 0:
+		return base_xp
+	hero_base_stats.erase("xp_bonus")
+	return base_xp + base_xp * bonus_pct / 100
+
+
 func gain_xp(amount: int) -> bool:
 	hero_xp += amount
 	if hero_xp >= hero_level * XP_PER_LEVEL:

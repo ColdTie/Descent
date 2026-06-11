@@ -245,6 +245,10 @@ func _make_loot_card(item: Dictionary) -> PanelContainer:
 	desc_lbl.add_theme_color_override("font_color", Color(0.82, 0.80, 0.70))
 	desc_lbl.add_theme_font_size_override("font_size", 13)
 	desc_lbl.custom_minimum_size = Vector2(218.0, 0.0)
+	# Run 32: let the description absorb the leftover card height so every
+	# card's TAKE IT button pins to the bottom edge — previously the buttons
+	# floated at differing heights depending on description line count.
+	desc_lbl.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	vbox.add_child(desc_lbl)
 
 	var btn := Button.new()

@@ -127,7 +127,8 @@ func _build_ui() -> void:
 	stats_row.add_theme_constant_override("separation", 12)
 	vbox.add_child(stats_row)
 
-	_stat_card(stats_row, "ATK", "ENEMIES",  str(enemies_killed),
+	# Run 32: was the "ATK" glyph — read as an attack stat, not a body count.
+	_stat_card(stats_row, "X", "KILLS",  str(enemies_killed),
 		Color(0.90, 0.28, 0.16))
 	_stat_card(stats_row, "*", "XP EARNED", str(xp_earned),
 		Color(0.28, 0.82, 0.38))

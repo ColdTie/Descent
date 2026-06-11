@@ -143,8 +143,10 @@ func _on_battle_complete(hero_won: bool, xp_earned: int, enemies_killed: int) ->
 		GameState.hero_hp = 0
 		_go_to_class_select()
 		return
-	# Store data for VictoryScreen + accumulate run stats
-	_pending_xp = xp_earned
+	# Store data for VictoryScreen + accumulate run stats.
+	# Run 32: apply the one-shot Combat Instincts XP bonus here so the boosted
+	# number is what the VictoryScreen displays AND what gain_xp later consumes.
+	_pending_xp = GameState.consume_xp_bonus(xp_earned)
 	_pending_kills = enemies_killed
 	GameState.total_kills += enemies_killed
 	if EnemyDefs.is_boss_floor(GameState.floor_num):

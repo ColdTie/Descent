@@ -176,9 +176,21 @@ var _attack_pre_hp: int = 0  # snapshot of target HP before _do_hero_attack — 
 var _gold_widget: Label = null
 var _gold_flash_tween: Tween = null
 
+# Run 32: framed hero HP widget (replaces the bare .tscn HeroHPLabel) — name
+# + numbers + a thin drain bar, matching the AUDIENCE/GOLD panel idiom.
+var _hero_hp_widget: Label = null
+var _hero_hp_bar: ColorRect = null
+
 # Active screen-shake tweens, one per world layer — killed before a new shake
 # starts so back-to-back impacts don't fight each other on the same property.
 var _shake_tweens: Array[Tween] = []
+
+# Run 32: world-layer origin. The .tscn pins HexLayer/EntityLayer at (640,340),
+# but the generated map's hex footprint is rarely symmetric around the axial
+# origin — some floors rendered hugging the top-left with a dead bottom-right
+# quarter. _center_world_layers() recomputes this per floor; _screen_shake
+# returns layers here instead of the old hardcoded constant.
+var _world_base: Vector2 = Vector2(640.0, 340.0)
 
 # Run 24: pause overlay + combat log. Pause overlay is a CanvasLayer; ESC
 # toggles it. Combat log is a small scrolling panel of the last ~6 events,
@@ -211,6 +223,7 @@ func _ready() -> void:
 	AudioManager.play_music(AudioManager.music_for_floor(GameState.floor_num), 1.6)
 	SystemVoice.line_spoken.connect(_on_system_line)
 	_build_encounter()
+	_center_world_layers()
 	_load_effect_textures()
 	_draw_cave_background()
 	_draw_hex_grid()
@@ -244,6 +257,28 @@ func _ready() -> void:
 			_donut_say(_donut_pick("allies_arrive")))
 	await get_tree().create_timer(0.4).timeout
 	_next_turn()
+
+func _center_world_layers() -> void:
+	## Run 32: center the generated map inside the playfield. The playfield is
+	## the screen area between the left HUD column (~x 200), the right HUD
+	## column (x 1070), the floor header (~y 95) and the ability bar (y 628).
+	## Compute the pixel bounding box of every map hex and place the layer
+	## origin so the box's center lands on the playfield center. Clicks are
+	## unaffected — hex Area2Ds live inside _hex_layer and follow its transform.
+	if _map == null or _map.tile_types.is_empty():
+		return
+	var minp := Vector2(INF, INF)
+	var maxp := Vector2(-INF, -INF)
+	for hex: Vector2i in _map.tile_types:
+		var p: Vector2 = HexGrid.hex_to_pixel(hex, HEX_SIZE)
+		minp = minp.min(p)
+		maxp = maxp.max(p)
+	var bbox_center: Vector2 = (minp + maxp) * 0.5
+	const PLAYFIELD_CENTER := Vector2(635.0, 358.0)
+	_world_base = PLAYFIELD_CENTER - bbox_center
+	_hex_layer.position = _world_base
+	_entity_layer.position = _world_base
+
 
 ## ─── Floor Theme ──────────────────────────────────────────────────────────────
 
@@ -838,6 +873,11 @@ func _spawn_entity_node(c: Combatant) -> void:
 		elif c.sprite_key == "companion_donut":
 			sprite_scale = 0.22
 		sprite.scale = Vector2(sprite_scale, sprite_scale)
+		# Run 32: variant palette tint (Void Wraith, Bone Colossus). Applied to
+		# self_modulate so the root-node modulate animations (hit flash, death
+		# grey-out, vanish alpha) compose with it instead of overwriting it.
+		if c.tint != Color(1.0, 1.0, 1.0):
+			sprite.self_modulate = c.tint
 		sprite.position = Vector2(0.0, -24.0)
 		sprite.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 		root.add_child(sprite)
@@ -2580,10 +2620,18 @@ func _update_status_label(c: Combatant) -> void:
 	status_lbl.text = " ".join(icons)
 
 func _update_hero_hp_label() -> void:
-	_hero_hp_label.text = "HP: %d / %d" % [_hero.hp, _hero.max_hp]
 	var ratio: float = float(_hero.hp) / float(max(1, _hero.max_hp))
-	_hero_hp_label.add_theme_color_override("font_color",
-		Color(1.0 - ratio * 0.7, 0.2 + ratio * 0.7, 0.1))
+	var hp_color := Color(1.0 - ratio * 0.7, 0.2 + ratio * 0.7, 0.1)
+	# Legacy bare label (hidden since Run 32, kept in sync defensively).
+	_hero_hp_label.text = "HP: %d / %d" % [_hero.hp, _hero.max_hp]
+	_hero_hp_label.add_theme_color_override("font_color", hp_color)
+	# Run 32: framed widget + drain bar.
+	if _hero_hp_widget != null:
+		_hero_hp_widget.text = "CARL  %d / %d" % [_hero.hp, _hero.max_hp]
+		_hero_hp_widget.add_theme_color_override("font_color", hp_color)
+	if _hero_hp_bar != null:
+		_hero_hp_bar.size.x = 172.0 * clampf(ratio, 0.0, 1.0)
+		_hero_hp_bar.color = hp_color
 
 func _sync_hero_alpha() -> void:
 	## Restore hero's alpha to 1.0 when vanish has expired.
@@ -2622,7 +2670,9 @@ func _screen_shake(intensity: float = 5.0, duration: float = 0.22) -> void:
 		if old != null and old.is_valid():
 			old.kill()
 	_shake_tweens.clear()
-	var base: Vector2 = Vector2(640.0, 340.0)
+	# Run 32: layers are re-centered per floor — shake around that base, not
+	# the old hardcoded .tscn origin (which would visibly teleport the map).
+	var base: Vector2 = _world_base
 	var offsets: Array[Vector2] = [
 		Vector2(intensity, -intensity * 0.55),
 		Vector2(-intensity * 0.85, intensity * 0.70),
@@ -2704,6 +2754,51 @@ func _build_achievement_overlay() -> void:
 	_achievement_layer = CanvasLayer.new()
 	_achievement_layer.layer = 5
 	add_child(_achievement_layer)
+
+	# Run 32: the hero HP readout was a bare floating Label (.tscn HeroHPLabel)
+	# — the only unframed widget in the right-edge column, with no owner name.
+	# Replace it with a framed panel matching the AUDIENCE/GOLD idiom, plus a
+	# thin HP fill bar that drains with damage. The .tscn label is hidden, not
+	# removed, so the scene file stays untouched.
+	_hero_hp_label.visible = false
+	var hp_panel := PanelContainer.new()
+	hp_panel.position = Vector2(1080.0, 12.0)
+	hp_panel.custom_minimum_size = Vector2(188.0, 38.0)
+	var hsb := StyleBoxFlat.new()
+	hsb.bg_color = Color(0.08, 0.06, 0.12, 0.86)
+	hsb.border_color = Color(0.30, 0.85, 0.35)
+	hsb.set_border_width_all(1)
+	hsb.set_corner_radius_all(4)
+	hsb.set_content_margin_all(6.0)
+	hp_panel.add_theme_stylebox_override("panel", hsb)
+	hp_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_achievement_layer.add_child(hp_panel)
+
+	var hp_col := VBoxContainer.new()
+	hp_col.add_theme_constant_override("separation", 3)
+	hp_col.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	hp_panel.add_child(hp_col)
+
+	_hero_hp_widget = Label.new()
+	_hero_hp_widget.text = "CARL  -- / --"
+	_hero_hp_widget.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_hero_hp_widget.add_theme_font_size_override("font_size", 13)
+	_hero_hp_widget.add_theme_color_override("font_color", Color(0.35, 1.0, 0.35))
+	_hero_hp_widget.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	hp_col.add_child(_hero_hp_widget)
+
+	var bar_bg := ColorRect.new()
+	bar_bg.custom_minimum_size = Vector2(172.0, 5.0)
+	bar_bg.color = Color(0.10, 0.10, 0.12, 0.95)
+	bar_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	hp_col.add_child(bar_bg)
+
+	_hero_hp_bar = ColorRect.new()
+	_hero_hp_bar.size = Vector2(172.0, 5.0)
+	_hero_hp_bar.color = Color(0.30, 0.90, 0.35)
+	_hero_hp_bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	bar_bg.add_child(_hero_hp_bar)
+	_update_hero_hp_label()
 
 	# Run 22 (fix): widgets were colliding with the HeroHPLabel at (1070,16).
 	# Stack them BELOW the hero HP line instead — top-right column, y=58+.
@@ -3239,6 +3334,12 @@ func _build_combat_log() -> void:
 	_combat_log_vbox = VBoxContainer.new()
 	_combat_log_vbox.add_theme_constant_override("separation", 2)
 	outer.add_child(_combat_log_vbox)
+
+	# Run 32: seed an opening line so the log isn't an empty bordered box for
+	# the whole first round. Doubles as an at-a-glance threat count.
+	var boss_note: String = "  (boss)" if EnemyDefs.is_boss_floor(GameState.floor_num) else ""
+	_combat_log_add("Floor %d — %d hostiles%s" % [GameState.floor_num,
+		_enemies.size(), boss_note], Color(0.62, 0.60, 0.55))
 
 
 func _combat_log_add(text: String, color: Color = Color(0.82, 0.82, 0.78)) -> void:

@@ -138,6 +138,8 @@ func _make_card(item: Dictionary) -> PanelContainer:
 	desc_lbl.add_theme_color_override("font_color", Color(0.82, 0.80, 0.70))
 	desc_lbl.add_theme_font_size_override("font_size", 12)
 	desc_lbl.custom_minimum_size = Vector2(238.0, 0.0)
+	# Run 32: absorb leftover height so TAKE IT pins to the card bottom.
+	desc_lbl.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	vbox.add_child(desc_lbl)
 
 	var btn := Button.new()

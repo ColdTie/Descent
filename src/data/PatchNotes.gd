@@ -18,6 +18,7 @@ const NOTES: Dictionary = {
 		"subtitle": "The dungeon thanks you for your continued participation.",
 		"lines": [
 			"+ Enemies above Floor 6 have been retired. Their assets are now allocated downward.",
+			"+ NEW: Void Wraiths deployed. Fast. Ranged. Upset about something.",
 			"+ Skeletal Warriors on Floor 10+ unlock Bone Volley. Working as intended.",
 			"+ Lava ambient temperature normalized. (No, it is not cooler.)",
 			"+ Audience favor multiplier set to x1.0 for the Obsidian tier. Earn it.",
@@ -31,6 +32,7 @@ const NOTES: Dictionary = {
 		"subtitle": "The dungeon's management requests a brief moment of your time.",
 		"lines": [
 			"+ Demon Hellfire AoE now deployed on Floor 13+. Floor flammability: updated.",
+			"+ NEW: Bone Colossus units online. Slow. Inevitable. Door-shaped.",
 			"+ Void-tier monster stipend increased. They are paid in your HP.",
 			"+ Boss enrage threshold confirmed at 30%. Working as intended. Still.",
 			"+ Reality-show audience favor multiplier increased to x1.2 for the Void tier.",

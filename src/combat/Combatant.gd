@@ -19,6 +19,9 @@ var sprite_key: String = ""  # references which placeholder sprite to use
 var attack_bonus: int = 0    # flat bonus added to all outgoing damage
 var is_boss: bool = false
 var is_enraged: bool = false
+# Run 32: optional sprite tint — lets enemy *variants* (Void Wraith, Bone
+# Colossus) reuse an existing sprite with a distinct palette. WHITE = no tint.
+var tint: Color = Color(1.0, 1.0, 1.0)
 
 func _init(p_id: String, p_name: String, p_faction: Faction, p_hp: int, p_speed: int = 10) -> void:
 	id = p_id

@@ -35,8 +35,26 @@ DESCENT is a turn-based tactical dungeon crawler in the spirit of **Dungeon Craw
 - **Architecture rule**: `BattleEngine._calculate_damage()` returns RAW damage (no armor). `Combatant.take_damage(amount, ignore_armor=false)` applies armor. Don't double-apply armor in both places.
 - `Combatant.take_damage(amount, ignore_armor)` — the `ignore_armor` parameter bypasses the `armor` field reduction (for backstab, env damage, etc.)
 
-## Current State (Run 31 — Merchant's Favor)
+## Current State (Run 32 — UI & Arc Repair, screenshot-audited)
 ### Implemented ✅
+**Run 32 (UI & Arc Repair — first full visual audit via tools/tour_bot.gd):**
+- **`tools/tour_bot.gd`** — NEW dev tool: an auto-play bot that drives the real game under Xvfb (find-button-by-text + `pressed.emit()`, no pixel coordinates), kills enemies through the engine to advance floors, and saves viewport screenshots to `user://tour/`. To use: temporarily add `TourBot="*res://tools/tour_bot.gd"` to `[autoload]` in project.godot, run `DISPLAY=:99 godot --path . --resolution 1280x720`, inspect PNGs, remove the autoload. NOT registered by default — it is a dev harness, not game code. This audit produced every fix below.
+- **BUG FIX — Shop cards never got their initial state** (`scenes/Shop.gd`): `_refresh_card_state()` looks panels up via `_cards_container.get_child(slot_idx)`, but was called at the end of `_make_card()` — *before* the panel was added to the container — so it silently no-opped. Freshly built slates rendered with enabled BUY buttons on unaffordable items ("TOO POOR" never applied), blank LOCK buttons, and the Run-31 favor card showing "BUY" instead of "CLAIM (FAVOR)". Fix: `_rebuild_cards()` now calls `_refresh_all_cards()` after the panels are in the tree; the in-`_make_card` call was removed with an explanatory comment. Screenshot-verified.
+- **BUG FIX — "Combat Instincts" was a dead upgrade** (`autoloads/GameState.gd` + `scenes/Main.gd`): the LevelUp card wrote `hero_base_stats["xp_bonus"]` and NOTHING ever read it. New `GameState.consume_xp_bonus(base_xp) -> int` applies the percentage and erases the key (one-shot, matching the card's "Next floor grants +50% XP" wording; stacked picks pay out together). Called from `Main._on_battle_complete` so the boosted number is what the VictoryScreen shows AND what `gain_xp` later consumes.
+- **BUG FIX — melee golem variants were statues** (`src/combat/BattleEngine.gd`): the `"golem"` AI branch only ever cast `enemy_fireball` and never moved. A golem-sprite enemy without that ability (new Bone Colossus) would idle forever. The branch now falls through to advance-and-melee for golems *without* the ranged ability; Lava Golems always carry it, so their stationary-turret behavior is regression-guarded by test.
+- **Victory screen kills card** (`scenes/VictoryScreen.gd`): was icon "ATK" + label "ENEMIES" — read as an attack stat. Now "X" + "KILLS".
+- **Hero HP widget** (`scenes/BattleScene.gd`): the HP readout was a bare floating green Label (.tscn `HeroHPLabel`) — the only unframed element in the right-edge HUD column, with no owner name. Replaced by a framed `CARL  N / N` panel at (1080,12) matching the AUDIENCE/GOLD stylebox idiom, plus a 172×5 HP drain bar that recolors green→red with the existing ratio gradient. The .tscn label is hidden (not removed) and kept in sync defensively; `_update_hero_hp_label()` drives all three.
+- **World-layer auto-centering** (`scenes/BattleScene.gd`): the .tscn pins HexLayer/EntityLayer at (640,340), but generated maps are rarely symmetric around the axial origin — some floors rendered hugging the top-left with a dead bottom-right quarter (screenshot-confirmed on floor 1). New `_center_world_layers()` computes the pixel bbox of all map hexes and repositions both layers so the bbox center lands on the playfield center (635,358 — the area between the side HUD columns, header, and ability bar). New `_world_base` var replaces the hardcoded base in `_screen_shake()` (which would otherwise teleport the map back to the old origin on the first hit). Clicks unaffected — hex Area2Ds live inside `_hex_layer`.
+- **Combat log opening line** (`scenes/BattleScene.gd`): the log rendered as an empty bordered box until the first hit. Now seeded with `Floor N — X hostiles (boss)` in dim grey on build. Doubles as a threat count.
+- **Card-button alignment** (`scenes/LootScreen.gd`, `scenes/LevelUp.gd`, `scenes/Shop.gd`): description labels now `SIZE_EXPAND_FILL` vertically so TAKE IT / BUY+LOCK rows pin to the card bottom — previously buttons floated at differing heights per description length (screenshot-confirmed).
+- **NEW ENEMIES — the Tier 2/3 roster finally grows** (`src/data/EnemyDefs.gd`): before this run the enemy pool stopped growing at floor 4; floors 7–18 fought the same five enemies with bigger numbers while patch notes *narrated* new threats. Both new defs are palette-tinted variants of existing sprites (zero new art pipeline):
+  - **Void Wraith** (min_floor 7, Obsidian tier): 45 HP / 2 armor / **speed 17** (fastest mob in the game — design locked by test), `enemy_claw` + `bone_volley`, violet tint. Inherits the skeleton ranged-AI branch via `sprite_key: "skeleton"` — kites from range 3 on turn one.
+  - **Bone Colossus** (min_floor 13, Void tier): 110 HP (≈374 after floor-13 scaling ≈ 2 lava golems, well under boss territory) / 10 armor / speed 4, `enemy_bite`, pale bone tint on the golem sprite. Advances relentlessly via the AI fix above.
+  - `Combatant.tint: Color` (default WHITE) + `make_combatant` copies the def's optional `tint`; BattleScene applies it to `sprite.self_modulate` so root-modulate animations (hit flash, death grey-out, vanish alpha) compose instead of overwriting.
+  - `src/data/PatchNotes.gd`: floor-7 notes gained "+ NEW: Void Wraiths deployed. Fast. Ranged. Upset about something."; floor-13 notes gained "+ NEW: Bone Colossus units online. Slow. Inevitable. Door-shaped." — the fiction now matches the mechanics.
+- **`tests/test_run32.gd`** (13 test functions, ~49 assertions): consume_xp_bonus (passthrough / apply+erase / stacking / int truncation / zero+negative guards), new-enemy schema + floor gating (6/7/13 boundaries) + abilities-exist drift detector + wraith-is-fastest design lock + tint plumbing + Combatant default, and three engine AI tests (colossus advances, colossus bites when adjacent, lava golem turret regression guard).
+- **Test suite total: 1746 passed, 0 failed** (up from 1697 in Run 31).
+
 **Run 31 (Merchant's Favor — once-per-run surprise Legendary discount):**
 - **`src/data/Shop.gd`** — pure-data helpers for the "merchant takes a shine to you" event called out in the Run 30 roadmap audit. New constants `FAVOR_BASE_CHANCE = 0.18`, `FAVOR_CHANCE_PER_100_AUDIENCE = 0.015`, `FAVOR_CHANCE_CAP = 0.40`, `FAVOR_DISCOUNT_PCT = 0.50`. Four new static helpers:
   - `favor_chance(audience_score) -> float` — base + audience-scaled bonus, clamped at the cap. Negative inputs floor to base (defensive — audience never drops in practice but the invariant holds).
@@ -505,9 +523,19 @@ FTL, traditional roguelikes). Status of the "what are we missing" audit:
   Bopca Executive Plan (2 steps), Hyperion Megapack (2 steps, Common→Rare) — Run 30
 - Merchant's Favor: once-per-run surprise Legendary discount (50% off, chance scales
   with audience score, max 40%) — Run 31
+- Screenshot-audit tooling (tools/tour_bot.gd) + the fixes it surfaced: shop initial
+  card state, dead Combat Instincts upgrade, world-layer centering, framed hero HP
+  widget, combat-log seed line, card-button alignment — Run 32
+- First Tier 2/3 enemy roster growth: Void Wraith (floor 7+) + Bone Colossus
+  (floor 13+) via the new Combatant.tint variant system — Run 32
 
 ### 🔜 Highest-value, easiest remaining (do next, roughly in order)
-1. **Shop "extras" — remaining** — Lock (Run 26) and Merchant's Favor (Run 31) have
+1. **More enemy variants via the tint system** — Run 32 added Combatant.tint +
+   two enemies for ~40 lines. Cheap follow-ups: a Tier-3 "Ember Imp" (imp sprite,
+   orange tint, applies burning), a "Plague Goblin" (green tint, poison bite).
+2. **Boss signature moves** — Dungeon Lord rallies a dead enemy; Warden ground-slam
+   knockback; Abyss Keeper void-pull. Per-boss scripted ability in enemy AI.
+3. **Shop "extras" — remaining** — Lock (Run 26) and Merchant's Favor (Run 31) have
    landed. Still on the table: a one-per-run "buyback" of the last loot card the
    player skipped, or a third event like an occasional "merchant trades" card swap.
 
@@ -613,6 +641,12 @@ tests/
   test_run29.gd      — Sponsor rarity schema + weighted slate + story-arc prereq gating (Run 29)
   test_run30.gd      — Multi-step chain wiring + finale flag + slate-level gating across trials (Run 30)
   test_run31.gd      — Merchant's Favor: chance scaling + roll determinism + discount math + slate force-Legendary helper + GameState flag persistence (Run 31)
+  test_run32.gd      — consume_xp_bonus math, Void Wraith/Bone Colossus schema + gating + tint, melee-golem AI fix + lava-golem turret regression (Run 32)
+
+tools/
+  tour_bot.gd        — Run 32: screenshot-audit auto-play bot (see Run 32 notes for usage;
+                       activate by temporarily adding it as an autoload, never ship enabled)
+  gen_*.py           — procedural asset generators (sprites, effects, audio, music)
 ```
 
 ## Running Tests

@@ -304,7 +304,13 @@ func _rebuild_cards() -> void:
 		child.queue_free()
 	for i: int in range(_slate.size()):
 		_cards_container.add_child(_make_card(_slate[i], i))
-	_refresh_reroll_button()
+	# Run 32 fix: card state (affordability, lock-button text, favor CLAIM verb)
+	# must be applied AFTER the panels are children of _cards_container —
+	# _refresh_card_state() looks cards up via _cards_container.get_child(), so
+	# the call inside _make_card() was a silent no-op and freshly built slates
+	# rendered with enabled BUY buttons on unaffordable items and blank LOCK
+	# buttons until the first purchase forced a refresh.
+	_refresh_all_cards()
 
 
 func _make_card(item: Dictionary, slot_idx: int) -> PanelContainer:
@@ -393,6 +399,8 @@ func _make_card(item: Dictionary, slot_idx: int) -> PanelContainer:
 	desc_lbl.add_theme_color_override("font_color", Color(0.82, 0.80, 0.70))
 	desc_lbl.add_theme_font_size_override("font_size", 12)
 	desc_lbl.custom_minimum_size = Vector2(210.0, 0.0)
+	# Run 32: absorb leftover height so the BUY/LOCK row pins to the bottom.
+	desc_lbl.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	vb.add_child(desc_lbl)
 
 	# Cost label — Run 31: when this is the favored slot, show the original
@@ -443,7 +451,9 @@ func _make_card(item: Dictionary, slot_idx: int) -> PanelContainer:
 		tw.tween_property(ps, "shadow_size", 8, 1.1) \
 			.set_ease(Tween.EASE_IN_OUT).set_trans(Tween.TRANS_SINE)
 
-	_refresh_card_state(slot_idx)
+	# NOTE: card state (BUY/TOO POOR/LOCK text) is applied by _rebuild_cards()
+	# via _refresh_all_cards() once this panel is actually in the tree —
+	# calling _refresh_card_state() here would no-op (see Run 32 fix).
 	return panel
 
 

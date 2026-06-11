@@ -58,6 +58,40 @@ const ENEMIES: Array[Dictionary] = [
 		"sprite_key": "golem",
 		"min_floor": 4,
 	},
+	# Run 32: Tier 2/3 roster additions. Before these, the enemy pool stopped
+	# growing at floor 4 — floors 7-18 fought the same five enemies with bigger
+	# numbers while the patch notes *narrated* new threats. Both are tinted
+	# variants of existing sprites (no new art pipeline needed).
+	{
+		# Obsidian-tier flanker: fastest mob in the game, hits with ranged bone
+		# shards from turn one. Fragile — kill it first or it kites you.
+		"id": "void_wraith",
+		"display_name": "Void Wraith",
+		"hp": 45,
+		"armor": 2,
+		"speed": 17,
+		"abilities": ["enemy_claw", "bone_volley"],
+		"xp_reward": 55,
+		"sprite_key": "skeleton",
+		"tint": Color(0.62, 0.40, 1.00),
+		"min_floor": 7,
+	},
+	{
+		# Void-tier wall: enormous HP + armor, glacially slow. A positional
+		# problem — it WILL reach you eventually, and its hits crater.
+		# Base 110 lands at ~374 HP after the floor-13 +20%/floor scaling —
+		# roughly 2 lava golems, well clear of boss territory (~1470).
+		"id": "bone_colossus",
+		"display_name": "Bone Colossus",
+		"hp": 110,
+		"armor": 10,
+		"speed": 4,
+		"abilities": ["enemy_bite"],
+		"xp_reward": 85,
+		"sprite_key": "golem",
+		"tint": Color(0.82, 0.88, 0.78),
+		"min_floor": 13,
+	},
 ]
 
 const BOSSES: Array[Dictionary] = [
@@ -203,4 +237,6 @@ static func make_combatant(enemy_def: Dictionary, position: Vector2i, rng: Rando
 	c.abilities = typed_abilities
 	c.xp_reward = enemy_def.get("xp_reward", 20)
 	c.sprite_key = enemy_def.get("sprite_key", "imp")
+	# Run 32: optional palette tint for sprite-reusing variants.
+	c.tint = enemy_def.get("tint", Color(1.0, 1.0, 1.0))
 	return c

@@ -196,7 +196,17 @@ func enemy_ai_action(enemy: Combatant, map: DungeonMap = null) -> void:
 			var ranged_id: String = "enemy_fireball"
 			if enemy.abilities.has(ranged_id) and HexGrid.is_in_range(enemy.position, target.position, 3):
 				perform_attack(enemy, target, ranged_id)
-			# else do nothing (too far, wait)
+			elif not enemy.abilities.has(ranged_id):
+				# Run 32: melee golem-sprite variants (Bone Colossus) are NOT
+				# turrets — they lumber toward the hero and crush when adjacent.
+				# Lava Golems always carry enemy_fireball, so this path never
+				# fires for them and their stationary-turret behavior is intact.
+				if HexGrid.hex_distance(enemy.position, target.position) > 1 and map != null:
+					_move_toward(enemy, target.position, map)
+				if HexGrid.hex_distance(enemy.position, target.position) <= 1 \
+						and not enemy.abilities.is_empty():
+					perform_attack(enemy, target, enemy.abilities[0])
+			# else: ranged golem out of range — wait
 		"goblin":
 			# Goblins try to flank: move if not adjacent, then attack
 			var dist: int = HexGrid.hex_distance(enemy.position, target.position)
