@@ -10,6 +10,10 @@ signal battle_ended(hero_won: bool, xp_earned: int)
 signal status_ticked(combatant: Combatant, damage: int)
 signal hero_moved(combatant: Combatant, from_hex: Vector2i, to_hex: Vector2i)
 signal boss_enraged(boss: Combatant)
+# Run 33: a boss used its signature move. move_id is one of "rally" / "slam" /
+# "pull"; affected lists the combatants touched (revived enemy, slammed heroes,
+# pulled hero). BattleScene uses this for banners, quips and VFX.
+signal boss_signature(boss: Combatant, move_id: String, affected: Array[Combatant])
 
 var combatants: Array[Combatant] = []
 var turn_order: Array[Combatant] = []
@@ -26,6 +30,11 @@ var rng: RandomNumberGenerator
 const CRIT_MULT: float = 2.0
 var hero_crit_chance: float = 0.15
 var last_attack_was_crit: bool = false
+
+# Run 33: boss signature cadence — after using a signature, a boss waits this
+# many of its own turns before the next one. 3 keeps signatures a recurring
+# set-piece without dominating every boss turn.
+const SIGNATURE_COOLDOWN: int = 3
 
 func _init(p_rng: RandomNumberGenerator = null) -> void:
 	if p_rng == null:
@@ -107,6 +116,19 @@ func perform_attack(attacker: Combatant, target: Combatant, ability_id: String =
 		_on_combatant_died(target)
 	else:
 		_check_boss_enrage(target)
+		# Run 33: ENEMY-side status application (Plague Bite poison, Ember Claw
+		# burn). Faction-gated on purpose — hero status abilities (poison_blade,
+		# frost_nova, ...) are applied by BattleScene with their own duration
+		# logic, and applying them here too would double-stack the status.
+		if attacker.faction == Combatant.Faction.ENEMY:
+			if ability_data.get("applies_poisoned", false):
+				target.apply_status(StatusEffect.poisoned(
+					int(ability_data.get("poison_duration", 3)),
+					int(ability_data.get("poison_dpt", 5))))
+			if ability_data.get("applies_burning", false):
+				target.apply_status(StatusEffect.burning(
+					int(ability_data.get("burn_duration", 3)),
+					int(ability_data.get("burn_dpt", 4))))
 	return actual
 
 func _check_boss_enrage(c: Combatant) -> void:
@@ -190,6 +212,13 @@ func enemy_ai_action(enemy: Combatant, map: DungeonMap = null) -> void:
 			best_target_dist = d
 			target = h
 
+	# Run 33: bosses get a dedicated branch — signature move when off cooldown
+	# and conditions allow, otherwise the exact legacy behavior (random-ability
+	# attack) so base boss difficulty is unchanged.
+	if enemy.is_boss:
+		_boss_ai(enemy, target, visible_heroes, map)
+		return
+
 	match enemy.sprite_key:
 		"golem":
 			# Golems stay put, only use ranged ability if in range
@@ -216,12 +245,18 @@ func enemy_ai_action(enemy: Combatant, map: DungeonMap = null) -> void:
 				var ability_id: String = enemy.abilities[rng.randi_range(0, enemy.abilities.size() - 1)]
 				perform_attack(enemy, target, ability_id)
 		"imp":
-			# Imps rush: always move toward hero, attack if adjacent
+			# Imps rush: always move toward hero, attack if adjacent.
+			# Run 33: attack with the def's first ability instead of hardcoded
+			# enemy_claw — regular imps still claw (their list is [enemy_claw]),
+			# but the Ember Imp variant swings its burning ember_claw.
 			var dist: int = HexGrid.hex_distance(enemy.position, target.position)
 			if dist > 1 and map != null:
 				_move_toward(enemy, target.position, map)
 			if HexGrid.hex_distance(enemy.position, target.position) <= 1:
-				perform_attack(enemy, target, "enemy_claw")
+				var imp_ability: String = "enemy_claw"
+				if not enemy.abilities.is_empty():
+					imp_ability = enemy.abilities[0]
+				perform_attack(enemy, target, imp_ability)
 		"skeleton":
 			# Skeletons with bone_volley prefer ranged; otherwise close and claw
 			if enemy.abilities.has("bone_volley") and HexGrid.is_in_range(enemy.position, target.position, 3):
@@ -257,6 +292,137 @@ func enemy_ai_action(enemy: Combatant, map: DungeonMap = null) -> void:
 			if not enemy.abilities.is_empty():
 				ability_id = enemy.abilities[rng.randi_range(0, enemy.abilities.size() - 1)]
 			perform_attack(enemy, target, ability_id)
+
+func _boss_ai(boss: Combatant, target: Combatant, visible_heroes: Array[Combatant],
+		map: DungeonMap) -> void:
+	## Run 33: boss turn. Tick the signature cooldown; when ready, attempt the
+	## boss's signature move (consumes the turn on success). Otherwise fall back
+	## to the pre-Run-33 behavior: attack the nearest hero with a random ability.
+	if boss.signature_cd > 0:
+		boss.signature_cd -= 1
+	elif _try_boss_signature(boss, target, visible_heroes, map):
+		boss.signature_cd = SIGNATURE_COOLDOWN
+		return
+	# Legacy fallback (identical to the old default branch).
+	var ability_id: String = "basic_attack"
+	if not boss.abilities.is_empty():
+		ability_id = boss.abilities[rng.randi_range(0, boss.abilities.size() - 1)]
+	perform_attack(boss, target, ability_id)
+
+
+func _try_boss_signature(boss: Combatant, target: Combatant,
+		visible_heroes: Array[Combatant], map: DungeonMap) -> bool:
+	## Dispatch by boss identity. Returns true if a signature fired (turn spent).
+	match boss.sprite_key:
+		"boss_dungeon_lord":
+			return _signature_rally(boss, map)
+		"boss_warden":
+			return _signature_ground_slam(boss, visible_heroes, map)
+		"boss_abyss_keeper":
+			return _signature_void_pull(boss, target, map)
+	return false  # Lizard Titans etc. — no signature; duel gimmick is enough
+
+
+func _signature_rally(boss: Combatant, map: DungeonMap) -> bool:
+	## Dungeon Lord: once per battle, drag a fallen minion back to its feet at
+	## half HP. The corpse must have a free hex to stand on (its death spot, or
+	## a passable unoccupied neighbor).
+	if boss.rally_used:
+		return false
+	for c: Combatant in combatants:
+		if c.faction != Combatant.Faction.ENEMY or c.is_boss or c.is_alive():
+			continue
+		var spot: Vector2i = _free_revive_spot(c.position, map)
+		if spot == Vector2i(-9999, -9999):
+			continue  # nowhere to stand — try the next corpse
+		c.position = spot
+		c.hp = max(1, c.max_hp / 2)
+		c.status_effects.clear()  # death cures poison; the System calls it a perk
+		turn_order.append(c)
+		boss.rally_used = true
+		boss_signature.emit(boss, "rally", [c] as Array[Combatant])
+		return true
+	return false
+
+
+func _free_revive_spot(origin: Vector2i, map: DungeonMap) -> Vector2i:
+	## The death hex itself, or a passable unoccupied neighbor. Sentinel
+	## (-9999,-9999) when nothing is free.
+	var candidates: Array[Vector2i] = [origin]
+	candidates.append_array(HexGrid.neighbors(origin))
+	for h: Vector2i in candidates:
+		if map != null and not map.is_passable(h):
+			continue
+		var occupied: bool = false
+		for c: Combatant in combatants:
+			if c.is_alive() and c.position == h:
+				occupied = true
+				break
+		if not occupied:
+			return h
+	return Vector2i(-9999, -9999)
+
+
+func _signature_ground_slam(boss: Combatant, visible_heroes: Array[Combatant],
+		map: DungeonMap) -> bool:
+	## The Warden: smash every adjacent hero and hurl them 2 hexes back.
+	## Requires at least one hero in melee contact — staying spread/ranged is
+	## the counterplay.
+	var adjacent: Array[Combatant] = []
+	for h: Combatant in visible_heroes:
+		if HexGrid.hex_distance(boss.position, h.position) <= 1:
+			adjacent.append(h)
+	if adjacent.is_empty():
+		return false
+	var slam_data: Dictionary = Abilities.get_ability("ground_slam")
+	var base: int = int(slam_data.get("base_damage", 14)) + boss.attack_bonus
+	for h: Combatant in adjacent:
+		var actual: int = h.take_damage(base)
+		action_taken.emit(boss, h, actual, "ground_slam")
+		if not h.is_alive():
+			_on_combatant_died(h)
+		elif map != null:
+			push_combatant(boss, h, 2, map)
+	boss_signature.emit(boss, "slam", adjacent)
+	return true
+
+
+func _signature_void_pull(boss: Combatant, target: Combatant, map: DungeonMap) -> bool:
+	## The Abyss Keeper: fold a hero at range 2-4 into melee contact and rake
+	## them on arrival (armor-ignoring). Standing far away is no longer safe;
+	## standing adjacent already is the counter (the pull needs distance).
+	var dist: int = HexGrid.hex_distance(boss.position, target.position)
+	if dist < 2 or dist > 4:
+		return false
+	# Land the hero on the free passable boss-neighbor nearest their old spot.
+	var best: Vector2i = Vector2i(-9999, -9999)
+	var best_d: int = 1 << 30
+	for n: Vector2i in HexGrid.neighbors(boss.position):
+		if map != null and not map.is_passable(n):
+			continue
+		var occupied: bool = false
+		for c: Combatant in combatants:
+			if c.is_alive() and c != target and c.position == n:
+				occupied = true
+				break
+		if occupied:
+			continue
+		var d: int = HexGrid.hex_distance(n, target.position)
+		if d < best_d:
+			best_d = d
+			best = n
+	if best == Vector2i(-9999, -9999):
+		return false  # boss is fully ringed — no landing hex
+	target.position = best
+	var pull_data: Dictionary = Abilities.get_ability("void_pull")
+	var dmg: int = int(pull_data.get("base_damage", 10)) + boss.attack_bonus
+	var actual: int = target.take_damage(dmg, true)
+	action_taken.emit(boss, target, actual, "void_pull")
+	if not target.is_alive():
+		_on_combatant_died(target)
+	boss_signature.emit(boss, "pull", [target] as Array[Combatant])
+	return true
+
 
 func _move_toward(mover: Combatant, goal: Vector2i, map: DungeonMap) -> void:
 	## Move one step toward goal, picking passable, unoccupied neighbor closest to goal.

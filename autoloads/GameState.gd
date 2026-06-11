@@ -59,6 +59,13 @@ var shop_visits: int = 0
 # has already fired for this run.
 var merchant_favor_used: bool = false
 
+# Run 33: loot buyback. LootScreen records the best card the player skipped
+# (via Shop.pick_buyback_candidate) and the merchant offers it back ONCE per
+# run for gold. Whole item dict is stored — LOOT_POOL entries are JSON-safe
+# (no Colors), so it snapshots cleanly.
+var last_skipped_loot: Dictionary = {}
+var loot_buyback_used: bool = false
+
 # Run 27: inventory tracking — ids of shop items the hero currently owns.
 # Drives the stats + items HUD panel; recorded by Shop on purchase.
 var hero_inventory: Array[String] = []
@@ -108,6 +115,8 @@ func start_run(class_id: String, seed_val: int = -1) -> void:
 	hero_inventory.clear()
 	battle_speed = 1.0
 	merchant_favor_used = false
+	last_skipped_loot = {}
+	loot_buyback_used = false
 	var cls_data: Dictionary = Classes.get_class_data(class_id)
 	hero_max_hp = cls_data.get("hp", 100)
 	hero_hp = hero_max_hp
@@ -254,6 +263,8 @@ func snapshot() -> Dictionary:
 		"patch_notes_seen": pn_copy,
 		"shop_visits": shop_visits,
 		"merchant_favor_used": merchant_favor_used,
+		"last_skipped_loot": last_skipped_loot.duplicate(true),
+		"loot_buyback_used": loot_buyback_used,
 	}
 
 
@@ -287,6 +298,11 @@ func apply_snapshot(data: Dictionary) -> bool:
 	# Run 31: defaults to false for pre-Run-31 saves so older snapshots load
 	# cleanly without a SAVE_VERSION bump (purely additive field).
 	merchant_favor_used = bool(data.get("merchant_favor_used", false))
+	# Run 33: additive buyback fields — pre-Run-33 saves default to "no skip
+	# recorded / buyback available".
+	var skipped: Variant = data.get("last_skipped_loot", {})
+	last_skipped_loot = (skipped as Dictionary).duplicate(true) if skipped is Dictionary else {}
+	loot_buyback_used = bool(data.get("loot_buyback_used", false))
 	hero_abilities.clear()
 	for a: Variant in data.get("hero_abilities", []):
 		hero_abilities.append(String(a))

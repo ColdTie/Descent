@@ -35,8 +35,30 @@ DESCENT is a turn-based tactical dungeon crawler in the spirit of **Dungeon Craw
 - **Architecture rule**: `BattleEngine._calculate_damage()` returns RAW damage (no armor). `Combatant.take_damage(amount, ignore_armor=false)` applies armor. Don't double-apply armor in both places.
 - `Combatant.take_damage(amount, ignore_armor)` — the `ignore_armor` parameter bypasses the `armor` field reduction (for backstab, env damage, etc.)
 
-## Current State (Run 32 — UI & Arc Repair, screenshot-audited)
+## Current State (Run 33 — Boss Signatures + Enemy Variants + Loot Buyback)
 ### Implemented ✅
+**Run 33 (Boss signature moves + 2 new enemy variants + loot buyback — the three roadmap items from Run 32):**
+- **Boss signature moves** — every boss now has a once-per-cadence signature that fires through a new `BattleEngine._boss_ai` branch. `Combatant.signature_cd` ticks the cooldown (3 boss turns by default — `SIGNATURE_COOLDOWN`); `Combatant.rally_used` is the Dungeon Lord's once-per-battle gate. New `boss_signature(boss, move_id, affected)` signal drives all visuals — BattleScene's `_on_boss_signature` handler spawns VFX, banner, audio sting and a colored combat-log line. The boss AI dispatch is faction-gated behind `if enemy.is_boss` so non-boss enemies are untouched and the previous random-ability fallback still fires when a signature can't be used (no eligible corpse / no adjacent hero / out of pull range), keeping base boss difficulty intact.
+  - **Dungeon Lord — Rally**: drags one fallen non-boss enemy back to its feet at half HP, clearing its statuses. Once per battle. Skipped (and `rally_used` not consumed) when no eligible corpse has a free spot to stand. BattleScene re-spawns the entity node so the corpse's greyed-out art is replaced with a fresh sprite + bob tween, and fires the `rally` VFX (heal cross).
+  - **The Warden — Ground Slam**: AoE melee that hits *every* hero adjacent to the boss, then pushes each 2 hexes back via the existing `push_combatant` path. Skipped when nobody's adjacent — counter-play is "don't stand next to the Warden". Plays `hurt` SFX, shakes the screen.
+  - **The Abyss Keeper — Void Pull**: teleports a hero at range 2-4 onto the boss's nearest free neighbor and rakes them for `void_pull` damage (armor-ignoring). Already-adjacent and out-of-range heroes are immune — distance is the trigger, melee is the counter. Plays `ability` SFX with the shadow-step VFX.
+- **`src/data/Abilities.gd`** — five new ability defs: `ground_slam` and `void_pull` (for the engine to lookup base damage / ignore_armor), plus `plague_bite` (poison-applying enemy attack, 3-turn / 5 dpt poison) and `ember_claw` (burning-applying, 3-turn / 4 dpt). All are flagged as enemy-side variants so `BattleEngine.perform_attack` knows to apply the status — a new `if attacker.faction == ENEMY` block reads the `applies_poisoned`/`applies_burning` markers + duration/dpt fields and calls `apply_status`. The faction guard is critical: hero-side `poison_blade` already applies its own status in BattleScene, and applying it again here would double-stack. Tested.
+- **NEW enemy variants** (`src/data/EnemyDefs.gd`) — both reuse existing sprites via Run 32's `Combatant.tint`:
+  - **Plague Goblin** (min_floor 8, Obsidian): 40 HP / 1 armor / speed 14, goblin AI (flank + random ability), green tint. Carries `enemy_claw` + `plague_bite` so 50% of its hits stack poison. The plague-tier debuffer the goblin sprite was already half-built for.
+  - **Ember Imp** (min_floor 13, Void): 35 HP / 0 armor / speed 13, imp AI (always rush), orange tint, single `ember_claw` ability (every hit burns). Cheap individually so a pack stacks DoT fast.
+  - **AI tweak** — the imp branch previously hardcoded `perform_attack(..., "enemy_claw")`, which would have made the Ember Imp swing claws and skip its burn entirely. Branch now attacks with `enemy.abilities[0]`; regular imps still claw (their list is `[enemy_claw]`).
+- **Loot Buyback — the "regret aisle"** — once per run, the merchant offers back the best loot card the player skipped:
+  - **`scenes/LootScreen.gd`**: tracks `_slate_items` and, on a TAKE IT click, calls `Shop.pick_buyback_candidate(slate, chosen_id)` to find the highest-rarity card the player walked away from (legendary > rare > common; skip-type items excluded — re-applying a floor skip mid-shop would mutate `floor_num`). Stores the whole item dict in `GameState.last_skipped_loot` so it survives a floor transition. Overwritten each floor — buyback always shows the LAST skip, not the first.
+  - **`src/data/Shop.gd`**: `BUYBACK_COSTS = {common: 60, rare: 120, legendary: 240}` — deliberately above the "you should have just grabbed it" line, because by definition you decided not to grab it. New `pick_buyback_candidate` + `buyback_cost` helpers, both pure-data and tested.
+  - **`scenes/Shop.gd`**: a teal `BUYBACK · <name>` strip renders between the card row and the button row when `last_skipped_loot` is non-empty and `loot_buyback_used == false`. Full-width (not a 5th card — would have overflowed the 1120px panel) with the card name, the merchant's flavor text ("You walked past this once. The merchant kept it."), gold cost, "once per run" hint, and a `BUY IT BACK` button that switches to `RECLAIMED` once clicked. Survives shop rerolls — it isn't part of the slate draw. Uses LOOT_POOL schema (`type`/`value`/`stat`/`multi` keys) via a new `_apply_loot_buyback` helper rather than Shop items' `effects` dict.
+  - **`autoloads/GameState.gd`**: new `last_skipped_loot: Dictionary` and `loot_buyback_used: bool`, both reset in `start_run()`, included in `snapshot()` (deep-copied so future mutations don't poison the live state), restored in `apply_snapshot()` with `{}`/`false` defaults so pre-Run-33 saves load cleanly (no SAVE_VERSION bump — purely additive).
+- **`autoloads/SystemVoice.gd`** — four new quip pools (`boss_rally`, `boss_slam`, `boss_pull`, `shop_buyback`), 5-6 lines each, DCC-flavored ("The Abyss does not ask. The Abyss arrives.").
+- **`src/data/PatchNotes.gd`** — floor-7/13 patch notes updated with mentions of every Run-33 addition so the fiction stays in sync with the mechanics. Run 20's test asserts `lines.size() > 2`; the additions stay well above that bar.
+- **VFX wiring** (`scenes/BattleScene.gd`): five new entries in `_load_effect_textures()` — `plague_bite` → poison, `ember_claw` → lava heat, `ground_slam` → impact, `void_pull` → shadow step, `rally` → heal. All reuse existing PNGs, so no new art-generator runs.
+- **`tests/test_run33.gd`** (24 test functions, ~50 assertions): variant schema + floor gating (boundaries at 7/8/13) + tint plumbing + ability drift detector; enemy plague_bite/ember_claw apply their statuses to the hero through perform_attack; hero poison_blade does NOT double-apply (faction-guard regression); each boss signature fires when conditions are right + is correctly skipped when they aren't (no corpse / no adjacent target / out of pull range); rally is once-per-battle; signature cooldown ticks down between uses; loot buyback candidate picks highest-rarity skipped + excludes chosen + excludes skip-type + returns {} for trivial slates; buyback costs climb with rarity + unknown rarity falls back; GameState buyback fields default + JSON snapshot roundtrip + pre-Run-33 save default + start_run reset.
+- **Test suite total: 1806 passed, 0 failed** (up from 1746 in Run 32).
+- **Visual audit**: re-ran `tools/tour_bot.gd` after the work and confirmed the merchant interlude correctly renders the teal BUYBACK strip below the slate cards with the Run-32 affordability logic still applying to the 4 main cards.
+
 **Run 32 (UI & Arc Repair — first full visual audit via tools/tour_bot.gd):**
 - **`tools/tour_bot.gd`** — NEW dev tool: an auto-play bot that drives the real game under Xvfb (find-button-by-text + `pressed.emit()`, no pixel coordinates), kills enemies through the engine to advance floors, and saves viewport screenshots to `user://tour/`. To use: temporarily add `TourBot="*res://tools/tour_bot.gd"` to `[autoload]` in project.godot, run `DISPLAY=:99 godot --path . --resolution 1280x720`, inspect PNGs, remove the autoload. NOT registered by default — it is a dev harness, not game code. This audit produced every fix below.
 - **BUG FIX — Shop cards never got their initial state** (`scenes/Shop.gd`): `_refresh_card_state()` looks panels up via `_cards_container.get_child(slot_idx)`, but was called at the end of `_make_card()` — *before* the panel was added to the container — so it silently no-opped. Freshly built slates rendered with enabled BUY buttons on unaffordable items ("TOO POOR" never applied), blank LOCK buttons, and the Run-31 favor card showing "BUY" instead of "CLAIM (FAVOR)". Fix: `_rebuild_cards()` now calls `_refresh_all_cards()` after the panels are in the tree; the in-`_make_card` call was removed with an explanatory comment. Screenshot-verified.
@@ -528,16 +550,23 @@ FTL, traditional roguelikes). Status of the "what are we missing" audit:
   widget, combat-log seed line, card-button alignment — Run 32
 - First Tier 2/3 enemy roster growth: Void Wraith (floor 7+) + Bone Colossus
   (floor 13+) via the new Combatant.tint variant system — Run 32
+- Two more tinted enemy variants: Plague Goblin (floor 8+, poison bite) + Ember
+  Imp (floor 13+, burning claws) — Run 33
+- Boss signature moves: Dungeon Lord rallies a corpse, Warden ground-slams +
+  pushes adjacent heroes, Abyss Keeper teleport-pulls a ranged hero — Run 33
+- Loot buyback "regret aisle": once-per-run shop strip offering back the best
+  loot card the player skipped, priced by rarity — Run 33
 
 ### 🔜 Highest-value, easiest remaining (do next, roughly in order)
-1. **More enemy variants via the tint system** — Run 32 added Combatant.tint +
-   two enemies for ~40 lines. Cheap follow-ups: a Tier-3 "Ember Imp" (imp sprite,
-   orange tint, applies burning), a "Plague Goblin" (green tint, poison bite).
-2. **Boss signature moves** — Dungeon Lord rallies a dead enemy; Warden ground-slam
-   knockback; Abyss Keeper void-pull. Per-boss scripted ability in enemy AI.
-3. **Shop "extras" — remaining** — Lock (Run 26) and Merchant's Favor (Run 31) have
-   landed. Still on the table: a one-per-run "buyback" of the last loot card the
-   player skipped, or a third event like an occasional "merchant trades" card swap.
+1. **More tier-1 enemy variants** — the tint system has only been used at floors
+   7+/13+. Cheap floor 1-6 additions: a "Cave Bat" (imp sprite, slate tint,
+   speed 16 but lower HP), a "Stone Skeleton" (skeleton sprite, brown tint,
+   higher armor) to thicken the early run.
+2. **Boss Phase 3** — at sub-15% HP a boss's signature changes (Dungeon Lord
+   rallies *every* corpse at once; Warden slam radius grows to range 2;
+   Keeper pulls all heroes simultaneously). Reuses the Run 33 signature path.
+3. **Meta-progression / unlocks** — Persistent currency between runs, unlockable
+   starting perks. Requires save persistence (already in place via Run 28).
 
 ### 🟡 Larger / later (note, not yet scoped)
 4. **More floor variety** — Per-tier hazards: Tier 1 crumbling bridges, Tier 2 freeze pools,
@@ -642,6 +671,7 @@ tests/
   test_run30.gd      — Multi-step chain wiring + finale flag + slate-level gating across trials (Run 30)
   test_run31.gd      — Merchant's Favor: chance scaling + roll determinism + discount math + slate force-Legendary helper + GameState flag persistence (Run 31)
   test_run32.gd      — consume_xp_bonus math, Void Wraith/Bone Colossus schema + gating + tint, melee-golem AI fix + lava-golem turret regression (Run 32)
+  test_run33.gd      — Plague Goblin/Ember Imp schema + status application + faction-guard regression, all three boss signatures + cooldown, loot buyback candidate + cost + GameState plumbing (Run 33)
 
 tools/
   tour_bot.gd        — Run 32: screenshot-audit auto-play bot (see Run 32 notes for usage;

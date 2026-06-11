@@ -550,6 +550,39 @@ const LINES: Dictionary = {
 		"Refresh fee collected. The merchant did not move. Yet your gold did.",
 	],
 
+	# ── Shop loot buyback (Run 33) ────────────────────────────────────────────
+	"shop_buyback": [
+		"Reclaimed. The merchant kept it warm. Mostly literally.",
+		"The skipped becomes the purchased. The dungeon notes the reversal.",
+		"Buyback honored. The merchant's records confirm you regretted nothing. Yet.",
+		"Returned to inventory. The audience appreciates a redemption arc.",
+		"The dropped picked up. Indecision, monetized.",
+		"Reacquired. The System logs your second guess. Statistically: warranted.",
+	],
+
+	# ── Boss signature moves (Run 33) ─────────────────────────────────────────
+	"boss_rally": [
+		"The Dungeon Lord drags a minion back into service. Severance withheld.",
+		"Reanimation. The dead were not done with you.",
+		"A fallen enemy stands. Conservation of carnage.",
+		"The Dungeon Lord prefers a crowd. The crowd is now louder.",
+		"Resurrection achieved. The dungeon's HR department is, regrettably, efficient.",
+	],
+	"boss_slam": [
+		"The Warden's hammer meets ground. The ground escalates.",
+		"Ground slam. The shockwave does not care about your stance.",
+		"Tactical advice: do not stand next to the Warden. Tactical advice issued late.",
+		"Slam confirmed. Adjacent geometry rearranged.",
+		"The Warden's signature: the floor is the weapon.",
+	],
+	"boss_pull": [
+		"The Abyss folds. Range was a comfort. The comfort is gone.",
+		"Void pull. The distance you cultivated has been confiscated.",
+		"Space declines to be space.",
+		"You have been relocated. Compliments of the Keeper.",
+		"The Abyss does not ask. The Abyss arrives.",
+	],
+
 	# ── Shop merchant's favor (Run 31) ────────────────────────────────────────
 	"shop_merchant_favor": [
 		"The merchant has taken a shine to you. The audience approves. The accountants weep.",

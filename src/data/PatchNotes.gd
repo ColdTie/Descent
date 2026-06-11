@@ -19,7 +19,9 @@ const NOTES: Dictionary = {
 		"lines": [
 			"+ Enemies above Floor 6 have been retired. Their assets are now allocated downward.",
 			"+ NEW: Void Wraiths deployed. Fast. Ranged. Upset about something.",
+			"+ NEW: Plague Goblins added to the Floor 8+ roster. Poison damage included.",
 			"+ Skeletal Warriors on Floor 10+ unlock Bone Volley. Working as intended.",
+			"+ The Warden gains a signature ground slam. Adjacency strongly discouraged.",
 			"+ Lava ambient temperature normalized. (No, it is not cooler.)",
 			"+ Audience favor multiplier set to x1.0 for the Obsidian tier. Earn it.",
 			"- Removed: \"Compassion\" subroutine. It was unused.",
@@ -33,6 +35,9 @@ const NOTES: Dictionary = {
 		"lines": [
 			"+ Demon Hellfire AoE now deployed on Floor 13+. Floor flammability: updated.",
 			"+ NEW: Bone Colossus units online. Slow. Inevitable. Door-shaped.",
+			"+ NEW: Ember Imps released. Small. Numerous. Flammable in both directions.",
+			"+ The Abyss Keeper unlocks Void Pull. Distance was a phase.",
+			"+ The Dungeon Lord may now reanimate one fallen minion. Per encounter.",
 			"+ Void-tier monster stipend increased. They are paid in your HP.",
 			"+ Boss enrage threshold confirmed at 30%. Working as intended. Still.",
 			"+ Reality-show audience favor multiplier increased to x1.2 for the Void tier.",

@@ -43,12 +43,16 @@ const RARITY_LABELS: Dictionary = {
 
 const LOCK_GLOW_COLOR: Color = Color(1.00, 0.86, 0.18)
 const FAVOR_GLOW_COLOR: Color = Color(1.00, 0.42, 0.78)  # Run 31: rose/magenta — distinct from gold lock
+const BUYBACK_GLOW_COLOR: Color = Color(0.30, 0.95, 0.80)  # Run 33: teal — the "regret" aisle
 
 var _slate: Array[Dictionary] = []
 var _purchased: Dictionary = {}  # id -> true once bought (greys the card)
 var _reroll_count: int = 0       # Run 25: number of rerolls used this visit
 var _locked_slots: Dictionary = {}  # Run 26: slot_index -> true preserves the item through reroll
 var _favor_slot: int = -1        # Run 31: which slot has the merchant's discount (-1 = none)
+var _buyback_item: Dictionary = {}    # Run 33: skipped loot offered back ({} = no offer)
+var _buyback_bought: bool = false     # Run 33: purchased during THIS visit (greys the card)
+var _buyback_button: Button = null
 var _gold_label: Label = null
 var _system_label: Label = null
 var _cards_container: HBoxContainer = null
@@ -58,6 +62,11 @@ var _reroll_button: Button = null
 
 func _ready() -> void:
 	GameState.shop_visits += 1
+	# Run 33: once per run, the merchant offers back the best loot card the
+	# player skipped. Decided before the first card build; survives rerolls
+	# (it is appended after the slate cards, outside the reroll draw).
+	if not GameState.loot_buyback_used and not GameState.last_skipped_loot.is_empty():
+		_buyback_item = GameState.last_skipped_loot.duplicate(true)
 	_build_ui()
 	_roll_initial_slate()
 	_rebuild_cards()
@@ -141,6 +150,11 @@ func _build_ui() -> void:
 	_cards_container.add_theme_constant_override("separation", 16)
 	_cards_container.alignment = BoxContainer.ALIGNMENT_CENTER
 	vbox.add_child(_cards_container)
+
+	# Run 33: one-time loot buyback strip (only when a skipped card is on file
+	# and the buyback hasn't been used this run).
+	if not _buyback_item.is_empty():
+		vbox.add_child(_make_buyback_strip())
 
 	# Reroll + Leave button row (Run 25)
 	var btn_row := HBoxContainer.new()
@@ -457,6 +471,146 @@ func _make_card(item: Dictionary, slot_idx: int) -> PanelContainer:
 	return panel
 
 
+func _make_buyback_strip() -> PanelContainer:
+	## Run 33: the "regret aisle" — a full-width teal strip between the card
+	## row and the buttons, offering back the best loot card the player
+	## skipped. A strip (not a 5th card) so the 4-card row never overflows
+	## the 1120px panel. Survives rerolls — it isn't part of the slate draw.
+	var item: Dictionary = _buyback_item
+	var rarity: String = String(item.get("rarity", "common"))
+	var rarity_col: Color = RARITY_COLORS.get(rarity, BUYBACK_GLOW_COLOR)
+
+	var panel := PanelContainer.new()
+	panel.name = "BuybackStrip"
+	var ps := StyleBoxFlat.new()
+	ps.bg_color = Color(0.04, 0.10, 0.09, 0.96)
+	ps.border_color = BUYBACK_GLOW_COLOR
+	ps.set_border_width_all(2)
+	ps.set_corner_radius_all(5)
+	ps.set_content_margin_all(10.0)
+	ps.shadow_color = Color(BUYBACK_GLOW_COLOR.r * 0.40, BUYBACK_GLOW_COLOR.g * 0.40,
+		BUYBACK_GLOW_COLOR.b * 0.40, 0.55)
+	ps.shadow_size = 6
+	panel.add_theme_stylebox_override("panel", ps)
+
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 14)
+	panel.add_child(row)
+
+	var tag := Label.new()
+	tag.text = "BUYBACK"
+	tag.add_theme_font_size_override("font_size", 12)
+	tag.add_theme_color_override("font_color", BUYBACK_GLOW_COLOR)
+	row.add_child(tag)
+
+	var icon_lbl := Label.new()
+	icon_lbl.text = String(item.get("icon", "*"))
+	icon_lbl.add_theme_font_size_override("font_size", 20)
+	icon_lbl.add_theme_color_override("font_color", rarity_col)
+	row.add_child(icon_lbl)
+
+	var name_lbl := Label.new()
+	name_lbl.text = String(item.get("name", "Skipped Loot"))
+	name_lbl.add_theme_font_size_override("font_size", 15)
+	name_lbl.add_theme_color_override("font_color", BUYBACK_GLOW_COLOR.lightened(0.20))
+	row.add_child(name_lbl)
+
+	var desc_lbl := Label.new()
+	desc_lbl.text = "You walked past this once. The merchant kept it. %s" \
+		% String(item.get("desc", ""))
+	desc_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	desc_lbl.add_theme_color_override("font_color", Color(0.74, 0.84, 0.80))
+	desc_lbl.add_theme_font_size_override("font_size", 11)
+	desc_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.add_child(desc_lbl)
+
+	var cost_lbl := Label.new()
+	cost_lbl.text = "$ %d  ·  once per run" % Shop.buyback_cost(rarity)
+	cost_lbl.add_theme_font_size_override("font_size", 13)
+	cost_lbl.add_theme_color_override("font_color", Color(1.0, 0.86, 0.18))
+	row.add_child(cost_lbl)
+
+	_buyback_button = Button.new()
+	_buyback_button.text = "BUY IT BACK"
+	_buyback_button.custom_minimum_size = Vector2(150.0, 34.0)
+	_buyback_button.add_theme_font_size_override("font_size", 13)
+	_buyback_button.add_theme_color_override("font_color", BUYBACK_GLOW_COLOR)
+	_buyback_button.pressed.connect(_on_buyback_pressed)
+	row.add_child(_buyback_button)
+
+	return panel
+
+
+func _refresh_buyback_card() -> void:
+	## Affordability + purchased state for the buyback strip.
+	if _buyback_button == null or _buyback_item.is_empty():
+		return
+	var cost: int = Shop.buyback_cost(String(_buyback_item.get("rarity", "common")))
+	if _buyback_bought:
+		_buyback_button.disabled = true
+		_buyback_button.text = "RECLAIMED"
+		var strip: Node = find_child("BuybackStrip", true, false)
+		if strip is PanelContainer:
+			(strip as PanelContainer).modulate = Color(0.50, 0.50, 0.50)
+	elif GameState.hero_gold < cost:
+		_buyback_button.disabled = true
+		_buyback_button.text = "TOO POOR"
+	else:
+		_buyback_button.disabled = false
+		_buyback_button.text = "BUY IT BACK"
+
+
+func _on_buyback_pressed() -> void:
+	if _buyback_bought or _buyback_item.is_empty():
+		return
+	var cost: int = Shop.buyback_cost(String(_buyback_item.get("rarity", "common")))
+	if not GameState.spend_gold(cost, "loot_buyback"):
+		return
+	_buyback_bought = true
+	GameState.loot_buyback_used = true
+	GameState.last_skipped_loot = {}
+	_apply_loot_buyback(_buyback_item)
+	AudioManager.play("heal" if String(_buyback_item.get("type", "")) == "heal" else "select")
+	SystemVoice.speak("shop_buyback")
+	_refresh_all_cards()
+
+
+func _apply_loot_buyback(item: Dictionary) -> void:
+	## Run 33: apply a LOOT_POOL-schema item (type/stat/value/multi keys —
+	## different from shop items' `effects` dict). Skip-type items never reach
+	## here (Shop.pick_buyback_candidate filters them out).
+	match String(item.get("type", "")):
+		"heal":
+			GameState.heal(int(item.get("value", 30)))
+		"stat":
+			var stat: String = String(item.get("stat", "attack"))
+			var val: int = int(item.get("value", 5))
+			match stat:
+				"attack":
+					GameState.hero_base_stats["attack"] = \
+						GameState.hero_base_stats.get("attack", 0) + val
+				"defense":
+					GameState.hero_base_stats["defense"] = \
+						GameState.hero_base_stats.get("defense", 0) + val
+				"max_hp":
+					GameState.hero_max_hp += val
+					GameState.hero_hp = min(GameState.hero_hp + val, GameState.hero_max_hp)
+				"speed":
+					GameState.hero_base_stats["speed"] = \
+						GameState.hero_base_stats.get("speed", 10) + val
+		"multi":
+			GameState.hero_base_stats["attack"] = \
+				GameState.hero_base_stats.get("attack", 0) + int(item.get("attack", 0))
+			GameState.hero_base_stats["defense"] = \
+				GameState.hero_base_stats.get("defense", 0) + int(item.get("defense", 0))
+			GameState.hero_base_stats["speed"] = \
+				GameState.hero_base_stats.get("speed", 10) + int(item.get("speed", 0))
+			var hp_gain: int = int(item.get("max_hp", 0))
+			if hp_gain > 0:
+				GameState.hero_max_hp += hp_gain
+				GameState.hero_hp = min(GameState.hero_hp + hp_gain, GameState.hero_max_hp)
+
+
 func _card_panel(slot_idx: int) -> PanelContainer:
 	if _cards_container == null or slot_idx >= _cards_container.get_child_count():
 		return null
@@ -623,6 +777,7 @@ func _refresh_all_cards() -> void:
 	## have changed) and re-run the disable rules.
 	for i: int in range(_slate.size()):
 		_refresh_card_state(i)
+	_refresh_buyback_card()
 	_refresh_reroll_button()
 
 

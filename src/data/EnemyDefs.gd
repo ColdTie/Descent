@@ -77,6 +77,35 @@ const ENEMIES: Array[Dictionary] = [
 		"min_floor": 7,
 	},
 	{
+		# Run 33: Obsidian-tier debuffer — goblin AI (flank + random ability),
+		# 50/50 claw or Plague Bite (poison 5/turn for 3). Pressures the player
+		# to burn heals or kill it fast.
+		"id": "plague_goblin",
+		"display_name": "Plague Goblin",
+		"hp": 40,
+		"armor": 1,
+		"speed": 14,
+		"abilities": ["enemy_claw", "plague_bite"],
+		"xp_reward": 45,
+		"sprite_key": "goblin",
+		"tint": Color(0.55, 1.00, 0.45),
+		"min_floor": 8,
+	},
+	{
+		# Run 33: Void-tier rusher — imp AI (always advance), every hit applies
+		# burning (4/turn for 3). Cheap individually; a pack stacks DoT fast.
+		"id": "ember_imp",
+		"display_name": "Ember Imp",
+		"hp": 35,
+		"armor": 0,
+		"speed": 13,
+		"abilities": ["ember_claw"],
+		"xp_reward": 50,
+		"sprite_key": "imp",
+		"tint": Color(1.00, 0.72, 0.25),
+		"min_floor": 13,
+	},
+	{
 		# Void-tier wall: enormous HP + armor, glacially slow. A positional
 		# problem — it WILL reach you eventually, and its hits crater.
 		# Base 110 lands at ~374 HP after the floor-13 +20%/floor scaling —

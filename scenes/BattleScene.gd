@@ -398,6 +398,7 @@ func _build_encounter() -> void:
 	_engine.status_ticked.connect(_on_status_ticked)
 	_engine.hero_moved.connect(_on_hero_moved)
 	_engine.boss_enraged.connect(_on_boss_enraged)
+	_engine.boss_signature.connect(_on_boss_signature)
 	_engine.setup(_all_combatants)
 
 	# Run 19: subscribe to achievement + audience streams for the toast/HUD UI.
@@ -472,6 +473,12 @@ func _load_effect_textures() -> void:
 		"enemy_fireball": "res://assets/effects/fx_fireball.png",
 		"bone_volley":  "res://assets/effects/fx_impact.png",
 		"hellfire_aoe":  "res://assets/effects/fx_fireball.png",
+		# Run 33: enemy-variant + boss-signature abilities
+		"plague_bite":  "res://assets/effects/fx_poison.png",
+		"ember_claw":  "res://assets/effects/fx_lava_heat.png",
+		"ground_slam":  "res://assets/effects/fx_impact.png",
+		"void_pull":  "res://assets/effects/fx_shadow_step.png",
+		"rally":  "res://assets/effects/fx_heal.png",
 	}
 	for id: String in fx_map:
 		var path: String = fx_map[id]
@@ -2426,6 +2433,50 @@ func _on_boss_enraged(boss: Combatant) -> void:
 	_update_boss_hp_bar()
 	var quip: String = SystemVoice.pick("boss_enraged")
 	_show_system_banner("⚠ ENRAGED: %s — %s" % [boss.display_name, quip], 4.0)
+
+func _on_boss_signature(boss: Combatant, move_id: String, affected: Array[Combatant]) -> void:
+	## Run 33: boss used a signature move. The engine already applied the
+	## damage / push / pull / revive. This handler is purely cosmetic: VFX,
+	## banner, audio, log lines, and (for "rally") spawning the resurrected
+	## minion's entity node.
+	_screen_shake(7.0, 0.32)
+	match move_id:
+		"rally":
+			AudioManager.play("heal")
+			# The revived minion needs a fresh visual — its old node was greyed
+			# out and bob-tween was killed on death.
+			if not affected.is_empty():
+				var revived: Combatant = affected[0]
+				var old_node: Node2D = _entity_nodes.get(revived.id)
+				if old_node != null:
+					old_node.queue_free()
+					_entity_nodes.erase(revived.id)
+				_spawn_entity_node(revived)
+				_play_ability_effect(revived.position, "rally")
+				_update_hp_bar(revived)
+				_combat_log_add("%s reanimates %s" % [_short_name(boss),
+					_short_name(revived)], Color(0.42, 0.92, 0.56))
+			_show_system_banner("✦ %s RALLIES THE DEAD ✦" % boss.display_name, 3.2)
+			SystemVoice.speak("boss_rally")
+		"slam":
+			AudioManager.play("hurt", 0.05, -2.0)
+			for h: Combatant in affected:
+				_play_ability_effect(h.position, "ground_slam")
+				_hit_flash(h)
+			_combat_log_add("%s GROUND SLAM hits %d" % [_short_name(boss),
+				affected.size()], Color(1.0, 0.55, 0.18))
+			_show_system_banner("✦ GROUND SLAM ✦", 3.0)
+			SystemVoice.speak("boss_slam")
+		"pull":
+			AudioManager.play("ability", 0.0, -2.0)
+			if not affected.is_empty():
+				var pulled: Combatant = affected[0]
+				_play_ability_effect(pulled.position, "void_pull")
+				_hit_flash(pulled)
+				_combat_log_add("%s VOID-PULLS %s" % [_short_name(boss),
+					_short_name(pulled)], Color(0.72, 0.42, 1.0))
+			_show_system_banner("✦ VOID PULL ✦", 3.0)
+			SystemVoice.speak("boss_pull")
 
 func _on_battle_ended(hero_won: bool, xp_earned: int) -> void:
 	_player_turn = false

@@ -376,6 +376,45 @@ static func cheapest_legendary(exclude: Dictionary = {}) -> Dictionary:
 	return best
 
 
+## Run 33: loot-buyback pricing by rarity. Deliberately above the "value" of
+## an equivalent shop item — you passed on it once; the merchant remembers.
+const BUYBACK_COSTS: Dictionary = {
+	RARITY_COMMON: 60,
+	RARITY_RARE: 120,
+	RARITY_LEGENDARY: 240,
+}
+
+
+static func buyback_cost(rarity: String) -> int:
+	## Unknown rarity falls back to the Common price (defensive).
+	return int(BUYBACK_COSTS.get(rarity, BUYBACK_COSTS[RARITY_COMMON]))
+
+
+static func pick_buyback_candidate(slate: Array, chosen_id: String) -> Dictionary:
+	## Run 33: from a loot slate, pick the card the merchant will offer to
+	## "buy back" — the best item the player skipped. Highest rarity wins
+	## (legendary > rare > common); ties go to the earlier slate position.
+	## Skip-type items (Teleport Shard) are excluded — re-selling a floor skip
+	## from the shop would mutate floor_num mid-interlude. Returns {} when
+	## nothing qualifies.
+	var rank: Dictionary = {RARITY_COMMON: 0, RARITY_RARE: 1, RARITY_LEGENDARY: 2}
+	var best: Dictionary = {}
+	var best_rank: int = -1
+	for it_v: Variant in slate:
+		if not (it_v is Dictionary):
+			continue
+		var it: Dictionary = it_v
+		if String(it.get("id", "")) == chosen_id:
+			continue
+		if String(it.get("type", "")) == "skip":
+			continue
+		var r: int = int(rank.get(String(it.get("rarity", RARITY_COMMON)), 0))
+		if r > best_rank:
+			best_rank = r
+			best = it
+	return best
+
+
 static func should_show_shop(floor_num: int, hero_gold: int) -> bool:
 	## Suppress the shop on Floor 1 (no gold yet) and when the cadence rule
 	## says skip. Cadence is `floor_num % SHOP_EVERY_N_FLOORS == 0`.

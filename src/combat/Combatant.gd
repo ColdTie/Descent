@@ -23,6 +23,12 @@ var is_enraged: bool = false
 # Colossus) reuse an existing sprite with a distinct palette. WHITE = no tint.
 var tint: Color = Color(1.0, 1.0, 1.0)
 
+# Run 33: boss signature-move state. `signature_cd` counts the boss's own
+# turns until the next signature is available (0 = ready); `rally_used`
+# makes the Dungeon Lord's resurrection a once-per-battle event.
+var signature_cd: int = 0
+var rally_used: bool = false
+
 func _init(p_id: String, p_name: String, p_faction: Faction, p_hp: int, p_speed: int = 10) -> void:
 	id = p_id
 	display_name = p_name

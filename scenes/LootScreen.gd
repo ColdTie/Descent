@@ -102,6 +102,9 @@ const RARITY_WEIGHTS_BY_TIER: Array[Dictionary] = [
 @onready var _continue_button: Button  = $VBox/ContinueButton
 
 var _chosen: String = ""
+# Run 33: the items actually offered this floor — recorded so the pick handler
+# can stash the best *skipped* card for the merchant's buyback offer.
+var _slate_items: Array[Dictionary] = []
 
 func _ready() -> void:
 	SystemVoice.speak("loot")
@@ -148,6 +151,7 @@ func _generate_choices() -> void:
 		if item.is_empty():
 			continue
 		picked_ids[item["id"]] = true
+		_slate_items.append(item)
 		if item.get("rarity", RARITY_COMMON) == RARITY_LEGENDARY:
 			any_legendary = true
 		_loot_cards.add_child(_make_loot_card(item))
@@ -272,6 +276,12 @@ func _make_loot_card(item: Dictionary) -> PanelContainer:
 func _on_loot_selected(loot_id: String, item: Dictionary,
 		panel: PanelContainer, ps: StyleBoxFlat) -> void:
 	_chosen = loot_id
+	# Run 33: remember the best card the player just walked away from — the
+	# merchant may offer it back (once per run) at the next shop interlude.
+	# Overwrites each floor so the offer is always the LAST skipped card.
+	var skipped: Dictionary = Shop.pick_buyback_candidate(_slate_items, loot_id)
+	if not skipped.is_empty():
+		GameState.last_skipped_loot = skipped.duplicate(true)
 	var rarity: String = item.get("rarity", RARITY_COMMON)
 	# Legendary picks get a victory sting + special quip.
 	if rarity == RARITY_LEGENDARY:
