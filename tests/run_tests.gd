@@ -28,6 +28,7 @@ func _run_all() -> void:
 	_run_suite("Run28 (Save/Resume)", TestRun28.new())
 	_run_suite("Run29 (SponsorVariety)", TestRun29.new())
 	_run_suite("Run30 (SponsorChains)", TestRun30.new())
+	_run_suite("Run31 (MerchantsFavor)", TestRun31.new())
 
 func _run_suite(name: String, suite: Object) -> void:
 	print("\n--- %s ---" % name)

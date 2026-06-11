@@ -53,6 +53,12 @@ signal gold_gained(amount: int, reason: String)
 signal gold_spent(amount: int, item_id: String)
 var shop_visits: int = 0
 
+# Run 31: once-per-run "Merchant's Favor" — a surprise Legendary discount.
+# Flips true the first time a shop visit rolls favor (see Shop.roll_merchant_favor).
+# Reset by `start_run()` and snapshotted so resume preserves whether the favor
+# has already fired for this run.
+var merchant_favor_used: bool = false
+
 # Run 27: inventory tracking — ids of shop items the hero currently owns.
 # Drives the stats + items HUD panel; recorded by Shop on purchase.
 var hero_inventory: Array[String] = []
@@ -101,6 +107,7 @@ func start_run(class_id: String, seed_val: int = -1) -> void:
 	shop_visits = 0
 	hero_inventory.clear()
 	battle_speed = 1.0
+	merchant_favor_used = false
 	var cls_data: Dictionary = Classes.get_class_data(class_id)
 	hero_max_hp = cls_data.get("hp", 100)
 	hero_hp = hero_max_hp
@@ -232,6 +239,7 @@ func snapshot() -> Dictionary:
 		"sponsor_offers_taken_ids": sp_ids_copy,
 		"patch_notes_seen": pn_copy,
 		"shop_visits": shop_visits,
+		"merchant_favor_used": merchant_favor_used,
 	}
 
 
@@ -262,6 +270,9 @@ func apply_snapshot(data: Dictionary) -> bool:
 	lava_push_kills = int(data.get("lava_push_kills", 0))
 	sponsor_offers_taken = int(data.get("sponsor_offers_taken", 0))
 	shop_visits = int(data.get("shop_visits", 0))
+	# Run 31: defaults to false for pre-Run-31 saves so older snapshots load
+	# cleanly without a SAVE_VERSION bump (purely additive field).
+	merchant_favor_used = bool(data.get("merchant_favor_used", false))
 	hero_abilities.clear()
 	for a: Variant in data.get("hero_abilities", []):
 		hero_abilities.append(String(a))

@@ -18,6 +18,14 @@ extends Control
 ## position; the unlocked slots draw fresh items. Locking is free — its cost
 ## is opportunity (you can't replace what you've pinned). Locks auto-clear on
 ## purchase (no point pinning what you already own).
+##
+## Run 31: "Merchant's Favor" — once-per-run surprise event. On entry, if the
+## flag hasn't fired yet, roll `Shop.favor_chance(audience_score)`. On hit,
+## the slate is guaranteed to contain a Legendary and that Legendary's price
+## is cut by `FAVOR_DISCOUNT_PCT` (50%). Favor never carries across reroll —
+## leaving and re-rolling the slate would lose it — and the once-per-run flag
+## fires on the roll, not on the purchase, so spending less but not actually
+## buying still consumes the favor for the run.
 
 signal shop_left
 
@@ -34,11 +42,13 @@ const RARITY_LABELS: Dictionary = {
 }
 
 const LOCK_GLOW_COLOR: Color = Color(1.00, 0.86, 0.18)
+const FAVOR_GLOW_COLOR: Color = Color(1.00, 0.42, 0.78)  # Run 31: rose/magenta — distinct from gold lock
 
 var _slate: Array[Dictionary] = []
 var _purchased: Dictionary = {}  # id -> true once bought (greys the card)
 var _reroll_count: int = 0       # Run 25: number of rerolls used this visit
 var _locked_slots: Dictionary = {}  # Run 26: slot_index -> true preserves the item through reroll
+var _favor_slot: int = -1        # Run 31: which slot has the merchant's discount (-1 = none)
 var _gold_label: Label = null
 var _system_label: Label = null
 var _cards_container: HBoxContainer = null
@@ -165,7 +175,65 @@ func _roll_initial_slate() -> void:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = GameState.run_seed ^ (GameState.floor_num * 7919) ^ (GameState.shop_visits * 1543)
 	_slate = Shop.slate(rng, GameState.floor_num)
+
+	# Run 31: roll the once-per-run "Merchant's Favor" surprise. Independent rng
+	# stream (seed mixed with a distinct prime) so the favor outcome is
+	# deterministic per visit but doesn't perturb the slate draw above.
+	_favor_slot = -1
+	if not GameState.merchant_favor_used:
+		var favor_rng := RandomNumberGenerator.new()
+		favor_rng.seed = rng.seed ^ 8629
+		if Shop.roll_merchant_favor(favor_rng, GameState.audience_score):
+			_activate_merchant_favor()
+
 	_check_legendary_aura()
+
+
+func _activate_merchant_favor() -> void:
+	## Run 31: install the surprise discount. Ensures the slate has at least
+	## one Legendary (swapping the most expensive non-Legendary out if needed
+	## — that slot was the worst marginal-value pick anyway), records the slot
+	## index, marks the run-wide flag so the favor never fires twice in a run,
+	## and speaks the System line so the player notices.
+	var legendary_idx: int = -1
+	for i: int in range(_slate.size()):
+		if String((_slate[i] as Dictionary).get("rarity", "")) == Shop.RARITY_LEGENDARY:
+			legendary_idx = i
+			break
+	if legendary_idx == -1:
+		var ids_in_slate: Dictionary = {}
+		for it: Dictionary in _slate:
+			ids_in_slate[String(it.get("id", ""))] = true
+		var leg: Dictionary = Shop.cheapest_legendary(ids_in_slate)
+		if leg.is_empty():
+			# Defensive: every Legendary is somehow already in the slate (impossible
+			# at current inventory size, but the math should still degrade safely).
+			return
+		var swap_idx: int = 0
+		var highest_cost: int = -1
+		for i: int in range(_slate.size()):
+			var c: int = int((_slate[i] as Dictionary).get("cost", 0))
+			if c > highest_cost:
+				highest_cost = c
+				swap_idx = i
+		_slate[swap_idx] = leg
+		legendary_idx = swap_idx
+	_favor_slot = legendary_idx
+	GameState.merchant_favor_used = true
+	AudioManager.play("victory", 0.05, -2.0)
+	SystemVoice.speak("shop_merchant_favor")
+
+
+func _effective_cost(slot_idx: int) -> int:
+	## Run 31: returns the actual gold price for a slot, honoring the favor
+	## discount when this is the favored slot. All BUY paths route through
+	## here so the discount can't be bypassed (or applied twice).
+	if slot_idx >= _slate.size():
+		return 0
+	var raw: int = int((_slate[slot_idx] as Dictionary).get("cost", 0))
+	if slot_idx == _favor_slot:
+		return Shop.discounted_cost(raw)
+	return raw
 
 
 func _reroll_slate() -> void:
@@ -207,6 +275,16 @@ func _reroll_slate() -> void:
 	# greys don't carry over. Locked items can't have been purchased (lock
 	# auto-clears on buy), so this is safe.
 	_purchased.clear()
+	# Run 31: the favor pin doesn't survive a fresh draw — if the favored item
+	# wasn't locked, it's gone now. Re-anchor to the new Legendary slot when
+	# possible so the visible favor badge keeps pointing at a real card.
+	if _favor_slot != -1:
+		var found: int = -1
+		for i: int in range(_slate.size()):
+			if String((_slate[i] as Dictionary).get("rarity", "")) == Shop.RARITY_LEGENDARY:
+				found = i
+				break
+		_favor_slot = found
 	_check_legendary_aura()
 
 
@@ -272,6 +350,16 @@ func _make_card(item: Dictionary, slot_idx: int) -> PanelContainer:
 	lock_badge.visible = _locked_slots.get(slot_idx, false)
 	rarity_row.add_child(lock_badge)
 
+	# Run 31: merchant's-favor badge — sits in the same row as rarity + lock
+	# so the three flags read on one horizontal line.
+	var favor_badge := Label.new()
+	favor_badge.name = "FavorBadge"
+	favor_badge.text = "[MERCHANT'S FAVOR]"
+	favor_badge.add_theme_font_size_override("font_size", 11)
+	favor_badge.add_theme_color_override("font_color", FAVOR_GLOW_COLOR)
+	favor_badge.visible = (slot_idx == _favor_slot)
+	rarity_row.add_child(favor_badge)
+
 	# Icon + name row
 	var header := HBoxContainer.new()
 	header.alignment = BoxContainer.ALIGNMENT_CENTER
@@ -307,13 +395,21 @@ func _make_card(item: Dictionary, slot_idx: int) -> PanelContainer:
 	desc_lbl.custom_minimum_size = Vector2(210.0, 0.0)
 	vb.add_child(desc_lbl)
 
-	# Cost label
-	var cost: int = int(item.get("cost", 0))
+	# Cost label — Run 31: when this is the favored slot, show the original
+	# price struck-through next to the discounted price so the savings read
+	# at a glance.
+	var raw_cost: int = int(item.get("cost", 0))
 	var cost_lbl := Label.new()
-	cost_lbl.text = "$ %d gold" % cost
+	cost_lbl.name = "CostLabel"
+	if slot_idx == _favor_slot:
+		var disc: int = Shop.discounted_cost(raw_cost)
+		cost_lbl.text = "$ %d gold  ($ %d)" % [disc, raw_cost]
+		cost_lbl.add_theme_color_override("font_color", FAVOR_GLOW_COLOR)
+	else:
+		cost_lbl.text = "$ %d gold" % raw_cost
+		cost_lbl.add_theme_color_override("font_color", Color(1.0, 0.86, 0.18))
 	cost_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	cost_lbl.add_theme_font_size_override("font_size", 14)
-	cost_lbl.add_theme_color_override("font_color", Color(1.0, 0.86, 0.18))
 	vb.add_child(cost_lbl)
 
 	# BUY + LOCK row (Run 26: lock toggle)
@@ -379,11 +475,12 @@ func _refresh_card_state(slot_idx: int) -> void:
 		return
 
 	var id: String = String(item.get("id", ""))
-	var cost: int = int(item.get("cost", 0))
+	var cost: int = _effective_cost(slot_idx)
 	var rarity: String = String(item.get("rarity", "common"))
 	var border_col: Color = RARITY_COLORS.get(rarity, item.get("color",
 		Color(0.95, 0.78, 0.10)))
 	var locked: bool = _locked_slots.get(slot_idx, false)
+	var favored: bool = (slot_idx == _favor_slot)
 	var purchased: bool = _purchased.get(id, false)
 
 	if purchased:
@@ -397,8 +494,16 @@ func _refresh_card_state(slot_idx: int) -> void:
 		panel.modulate = Color(0.78, 0.78, 0.78)
 	else:
 		btn.disabled = false
-		btn.text = "BUY"
-		ps.border_color = LOCK_GLOW_COLOR if locked else border_col
+		# Run 31: favor changes the verb from BUY to a louder "CLAIM".
+		btn.text = "CLAIM (FAVOR)" if favored else "BUY"
+		# Run 31: favor border wins over lock wins over rarity color so the
+		# rarest state is most visible.
+		if favored:
+			ps.border_color = FAVOR_GLOW_COLOR
+		elif locked:
+			ps.border_color = LOCK_GLOW_COLOR
+		else:
+			ps.border_color = border_col
 		panel.modulate = Color(1.0, 1.0, 1.0)
 
 	if lock_btn != null:
@@ -424,7 +529,8 @@ func _on_buy_pressed(slot_idx: int) -> void:
 		return
 	var item: Dictionary = _slate[slot_idx]
 	var id: String = String(item.get("id", ""))
-	var cost: int = int(item.get("cost", 0))
+	var cost: int = _effective_cost(slot_idx)
+	var was_favored: bool = (slot_idx == _favor_slot)
 	if _purchased.get(id, false):
 		return
 	if not GameState.spend_gold(cost, id):
@@ -436,15 +542,25 @@ func _on_buy_pressed(slot_idx: int) -> void:
 	# Run 26: a purchased slot can't usefully stay locked — the next reroll
 	# would just preserve a PURCHASED card. Clear the lock automatically.
 	_locked_slots[slot_idx] = false
+	# Run 31: purchased favor card consumes its slot — clear the pin so the
+	# UI stops showing the badge and any subsequent reroll doesn't try to
+	# re-honor a discount on the newly empty slot.
+	if was_favored:
+		_favor_slot = -1
 	var rarity: String = String(item.get("rarity", "common"))
-	if rarity == "legendary":
+	if was_favored:
+		AudioManager.play("victory", 0.0, -2.0)
+		_flash_legendary_aura()
+		SystemVoice.speak_direct(
+			"Discount claimed. The merchant's affection is, statistically, suspect.")
+	elif rarity == "legendary":
 		AudioManager.play("victory", 0.0, -4.0)
 		_flash_legendary_aura()
 		SystemVoice.speak_direct("Legendary purchase. The merchant's smile is, regrettably, sincere.")
 	else:
 		AudioManager.play("select", 0.05)
 	_apply_effects(item)
-	if rarity != "legendary":
+	if rarity != "legendary" and not was_favored:
 		SystemVoice.speak("shop_purchase")
 	_refresh_all_cards()
 

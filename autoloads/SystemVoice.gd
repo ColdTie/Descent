@@ -550,6 +550,16 @@ const LINES: Dictionary = {
 		"Refresh fee collected. The merchant did not move. Yet your gold did.",
 	],
 
+	# ── Shop merchant's favor (Run 31) ────────────────────────────────────────
+	"shop_merchant_favor": [
+		"The merchant has taken a shine to you. The audience approves. The accountants weep.",
+		"Curious. The merchant smiles. The System has logged this anomaly.",
+		"A discount, unsolicited. The dungeon objects. The merchant pretends not to hear.",
+		"The merchant's price slips. Briefly. Once. Do not expect this again.",
+		"Favor extended. The merchant calls you 'friend'. He calls everyone 'friend' eventually.",
+		"Half off. The catch is uncertain. The catch is always uncertain.",
+	],
+
 	# ── Shop lock (Run 26) ────────────────────────────────────────────────────
 	"shop_lock": [
 		"Slot pinned. The merchant respects commitment. He respects gold more.",

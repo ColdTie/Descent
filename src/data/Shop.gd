@@ -48,6 +48,19 @@ const RARITY_WEIGHTS_BY_TIER: Array[Dictionary] = [
 const REROLL_BASE_COST: int = 25
 const REROLL_STEP_COST: int = 20
 
+## Run 31: "Merchant's Favor" — a once-per-run surprise event. When it fires,
+## the visit's slate is guaranteed to contain a Legendary item, and that
+## item is discounted by `FAVOR_DISCOUNT_PCT`. Chance is rolled per shop
+## visit and scales with audience score (reality-show flavor: fan-favorite
+## crawlers get the merchant's attention). Base chance is modest so it stays
+## a delightful surprise; the cap prevents max-audience runs from making it
+## near-certain. Flag lives on `GameState.merchant_favor_used` and is reset
+## per run via `start_run()`.
+const FAVOR_BASE_CHANCE: float = 0.18
+const FAVOR_CHANCE_PER_100_AUDIENCE: float = 0.015
+const FAVOR_CHANCE_CAP: float = 0.40
+const FAVOR_DISCOUNT_PCT: float = 0.50
+
 
 const INVENTORY: Array[Dictionary] = [
 	{
@@ -314,6 +327,53 @@ static func gold_for_boss(floor_num: int) -> int:
 static func gold_for_clear(floor_num: int) -> int:
 	## End-of-floor completion bonus.
 	return 20 + max(0, floor_num) * 3
+
+
+static func favor_chance(audience_score: int) -> float:
+	## Run 31: probability that the merchant takes a shine to the hero this
+	## visit. Base + audience-scaled bonus, clamped at the run-wide cap.
+	## Negative audience inputs are treated as zero (defensive — audience
+	## never actually drops, but better than letting a stray sentinel value
+	## produce a sub-base chance).
+	var bonus: float = (max(0, audience_score) / 100.0) * FAVOR_CHANCE_PER_100_AUDIENCE
+	return clamp(FAVOR_BASE_CHANCE + bonus, 0.0, FAVOR_CHANCE_CAP)
+
+
+static func roll_merchant_favor(rng: RandomNumberGenerator, audience_score: int) -> bool:
+	## Run 31: single probabilistic roll. Defensive null-rng case returns false
+	## so a missing rng never accidentally activates the favor (which would
+	## silently consume the once-per-run flag).
+	if rng == null:
+		return false
+	return rng.randf() < favor_chance(audience_score)
+
+
+static func discounted_cost(original: int) -> int:
+	## Run 31: apply the favor discount, with a 1-gold floor so a future
+	## low-cost Legendary can't round down to zero (defensive — every current
+	## Legendary is well above the threshold, but invariant matters).
+	if original <= 0:
+		return 0
+	return max(1, int(round(float(original) * (1.0 - FAVOR_DISCOUNT_PCT))))
+
+
+static func cheapest_legendary(exclude: Dictionary = {}) -> Dictionary:
+	## Run 31: pick the cheapest Legendary not already in `exclude` (keyed by
+	## item id). Used by the Shop scene to *force* a Legendary into the slate
+	## when favor rolls and the random slate didn't naturally surface one.
+	## Returns {} when the Legendary pool is fully excluded.
+	var best: Dictionary = {}
+	var best_cost: int = 1 << 30
+	for it: Dictionary in INVENTORY:
+		if String(it.get("rarity", "")) != RARITY_LEGENDARY:
+			continue
+		if exclude.has(String(it.get("id", ""))):
+			continue
+		var c: int = int(it.get("cost", 1 << 30))
+		if c < best_cost:
+			best_cost = c
+			best = it
+	return best
 
 
 static func should_show_shop(floor_num: int, hero_gold: int) -> bool:

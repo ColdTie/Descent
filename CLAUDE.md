@@ -35,8 +35,26 @@ DESCENT is a turn-based tactical dungeon crawler in the spirit of **Dungeon Craw
 - **Architecture rule**: `BattleEngine._calculate_damage()` returns RAW damage (no armor). `Combatant.take_damage(amount, ignore_armor=false)` applies armor. Don't double-apply armor in both places.
 - `Combatant.take_damage(amount, ignore_armor)` — the `ignore_armor` parameter bypasses the `armor` field reduction (for backstab, env damage, etc.)
 
-## Current State (Run 30 — Multi-Step Sponsor Story Arcs)
+## Current State (Run 31 — Merchant's Favor)
 ### Implemented ✅
+**Run 31 (Merchant's Favor — once-per-run surprise Legendary discount):**
+- **`src/data/Shop.gd`** — pure-data helpers for the "merchant takes a shine to you" event called out in the Run 30 roadmap audit. New constants `FAVOR_BASE_CHANCE = 0.18`, `FAVOR_CHANCE_PER_100_AUDIENCE = 0.015`, `FAVOR_CHANCE_CAP = 0.40`, `FAVOR_DISCOUNT_PCT = 0.50`. Four new static helpers:
+  - `favor_chance(audience_score) -> float` — base + audience-scaled bonus, clamped at the cap. Negative inputs floor to base (defensive — audience never drops in practice but the invariant holds).
+  - `roll_merchant_favor(rng, audience_score) -> bool` — single probabilistic roll. Defensive null-rng returns `false` so a missing rng can't silently consume the once-per-run flag.
+  - `discounted_cost(original) -> int` — rounds-then-floors at 1 gold so a hypothetical 1-gold Legendary can't free itself. Zero/negative input returns 0.
+  - `cheapest_legendary(exclude = {}) -> Dictionary` — used by the Shop scene to force a Legendary into the slate when favor rolls but no Legendary naturally surfaced. Respects an exclude-id-set so it never returns a duplicate of something already on the slate.
+- **`autoloads/GameState.gd`** — new `merchant_favor_used: bool` flag. Reset in `start_run()`, included in `snapshot()`, restored in `apply_snapshot()` with a `false` default so pre-Run-31 saves still load cleanly (no SAVE_VERSION bump — purely additive).
+- **`scenes/Shop.gd`** — entry-time favor roll:
+  - In `_roll_initial_slate()`, after the regular slate is drawn, an independent `favor_rng` (seed XOR'd with prime 8629) rolls against `favor_chance(audience_score)`. On hit, calls `_activate_merchant_favor()` which finds an existing Legendary in the slate or swaps in `cheapest_legendary()` over the most expensive non-Legendary slot (so the worst marginal-value pick is what gets replaced). Sets `_favor_slot: int`, fires the `victory` SFX at -2dB, and speaks the new `shop_merchant_favor` quip pool.
+  - Card chrome: a new rose/magenta `[MERCHANT'S FAVOR]` badge sits alongside the rarity and lock badges. The cost label shows the discounted price followed by the struck-through original in parens (`$ 150 gold  ($ 300)`), colored in the favor glow color. The buy button label flips from `BUY` to `CLAIM (FAVOR)` so the offer reads at a glance.
+  - Border-color priority: favored > locked > rarity, so the rarest state is the most visible cue.
+  - `_effective_cost(slot_idx)` is the single source of truth for the post-discount price — used by both the affordability ("TOO POOR") check and the `spend_gold()` call in `_on_buy_pressed`. Both paths use the same value so the discount can't be displayed but not honored, or vice versa.
+  - On a favored purchase, `_favor_slot` resets to -1 so the badge clears, and a dedicated `speak_direct` line ("Discount claimed. The merchant's affection is, statistically, suspect.") fires instead of the generic legendary or shop_purchase quip.
+  - Reroll handling: a `_reroll_slate()` re-anchors `_favor_slot` to whatever Legendary survived the redraw (or sets it to -1 if none did). Locking has no effect on favor — the player can't "preserve" the discount by locking, since the favor is per-visit and the flag has already fired.
+- **`autoloads/SystemVoice.gd`** — new `shop_merchant_favor` quip pool (6 lines, dry-meta DCC tone: "The merchant has taken a shine to you. The audience approves. The accountants weep.").
+- **`tests/test_run31.gd`** (18 test functions, ~40 assertions): `favor_chance()` base case + monotonicity across 6 audience points + cap behavior + negative-input safety; `roll_merchant_favor()` determinism with same seed + null-rng defensive case + statistical distribution check (600 trials at audience 500, observed within ±0.10 of `favor_chance(500) = 0.255`); `discounted_cost()` math for all 4 current Legendaries + 1-gold floor + zero/negative coercion; `cheapest_legendary()` returns lowest-cost (cross-checked against the full INVENTORY) + respects exclude + returns `{}` on fully-excluded pool; GameState flag default + snapshot inclusion + JSON roundtrip + pre-Run-31 save default + `start_run()` reset; constants-sanity invariants. Wired into `run_tests.gd`.
+- **Test suite total: 1697 passed, 0 failed** (up from 1657 in Run 30).
+
 **Run 30 (Multi-Step Sponsor Story Arcs):**
 - **`src/data/Sponsors.gd`** — Run 29 shipped one 2-step arc (BIG MIKE → BIG MIKE'S RETURN). Run 30 extends the reality-show layer with three more story arcs, including the first 3-step trilogy:
   - **Spectral Cola Trilogy** — `spectral_cola` (existing Rare) → `spectral_cola_zero` (new Rare, requires `spectral_cola`) → `spectral_cola_singularity` (new Legendary, requires `spectral_cola_zero`, `chain_finale: true`). Three-step chain where each subsequent offer's `requires_taken` is the *previous* step (not the OG), so the trilogy unlocks one rung at a time as the player engages with the brand across multiple sponsor pop-ups.
@@ -485,11 +503,13 @@ FTL, traditional roguelikes). Status of the "what are we missing" audit:
 - Sponsor rarity tiers + threshold-weighted slate + story-arc returning sponsors — Run 29
 - Multi-step sponsor chains: Spectral Cola trilogy (3 steps, with trilogy-finale badge),
   Bopca Executive Plan (2 steps), Hyperion Megapack (2 steps, Common→Rare) — Run 30
+- Merchant's Favor: once-per-run surprise Legendary discount (50% off, chance scales
+  with audience score, max 40%) — Run 31
 
 ### 🔜 Highest-value, easiest remaining (do next, roughly in order)
-1. **Shop "extras" — remaining** — Lock landed in Run 26. Still on the table: an occasional
-   surprise-Legendary "the merchant takes a shine to you" event, or a one-per-run
-   "buyback" of the last loot card the player skipped.
+1. **Shop "extras" — remaining** — Lock (Run 26) and Merchant's Favor (Run 31) have
+   landed. Still on the table: a one-per-run "buyback" of the last loot card the
+   player skipped, or a third event like an occasional "merchant trades" card swap.
 
 ### 🟡 Larger / later (note, not yet scoped)
 4. **More floor variety** — Per-tier hazards: Tier 1 crumbling bridges, Tier 2 freeze pools,
@@ -557,6 +577,8 @@ src/data/
   Shop.gd            — Run 21: merchant inventory + gold-economy helpers (slate/gold_for_*/should_show_shop)
                        Run 25: rarity tiers on every item + per-tier weighted `slate(rng, floor_num)` + `reroll_cost(n)`
                        Run 26: `slate()` accepts optional `locked` arg — locked items carry through reroll
+                       Run 31: Merchant's Favor — `favor_chance(audience)` + `roll_merchant_favor(rng, audience)`
+                       + `discounted_cost(cost)` + `cheapest_legendary(exclude)` helpers
 
 scenes/
   Main.tscn/.gd      — root, scene orchestration; boots to TitleScreen, routes through VictoryScreen
@@ -590,6 +612,7 @@ tests/
   test_run28.gd      — Save/Resume: snapshot↔apply roundtrip, JSON safety, defensive cases, disk I/O smoke, version gate (Run 28)
   test_run29.gd      — Sponsor rarity schema + weighted slate + story-arc prereq gating (Run 29)
   test_run30.gd      — Multi-step chain wiring + finale flag + slate-level gating across trials (Run 30)
+  test_run31.gd      — Merchant's Favor: chance scaling + roll determinism + discount math + slate force-Legendary helper + GameState flag persistence (Run 31)
 ```
 
 ## Running Tests
