@@ -14,6 +14,10 @@ signal boss_enraged(boss: Combatant)
 # "pull"; affected lists the combatants touched (revived enemy, slammed heroes,
 # pulled hero). BattleScene uses this for banners, quips and VFX.
 signal boss_signature(boss: Combatant, move_id: String, affected: Array[Combatant])
+# Run 34: Phase 3 — boss drops below PHASE_3_HP_THRESHOLD HP. Doesn't bump
+# stats (that's enrage's job); it flips the boss.frenzied flag so each
+# signature dispatches to an escalated variant on its next firing.
+signal boss_frenzied(boss: Combatant)
 
 var combatants: Array[Combatant] = []
 var turn_order: Array[Combatant] = []
@@ -35,6 +39,12 @@ var last_attack_was_crit: bool = false
 # many of its own turns before the next one. 3 keeps signatures a recurring
 # set-piece without dominating every boss turn.
 const SIGNATURE_COOLDOWN: int = 3
+# Run 34: when a boss is Frenzied (Phase 3, sub-15% HP) the cooldown shortens,
+# so signatures fire more often through the final stretch of the fight.
+const SIGNATURE_COOLDOWN_FRENZIED: int = 2
+# Run 34: HP ratio that flips a boss into Frenzied state. Tuned below the
+# enrage threshold (0.30) so Phase 2 → Phase 3 are a clear two-step escalation.
+const PHASE_3_HP_THRESHOLD: float = 0.15
 
 func _init(p_rng: RandomNumberGenerator = null) -> void:
 	if p_rng == null:
@@ -116,6 +126,7 @@ func perform_attack(attacker: Combatant, target: Combatant, ability_id: String =
 		_on_combatant_died(target)
 	else:
 		_check_boss_enrage(target)
+		_check_boss_phase3(target)
 		# Run 33: ENEMY-side status application (Plague Bite poison, Ember Claw
 		# burn). Faction-gated on purpose — hero status abilities (poison_blade,
 		# frost_nova, ...) are applied by BattleScene with their own duration
@@ -140,6 +151,19 @@ func _check_boss_enrage(c: Combatant) -> void:
 		c.speed += 4
 		c.attack_bonus += 4
 		boss_enraged.emit(c)
+
+
+func _check_boss_phase3(c: Combatant) -> void:
+	## Run 34: flip the Frenzied flag once a boss drops below the threshold.
+	## Phase 3 escalation lives inside each signature (mass rally / AoE slam /
+	## mass pull) — this function only marks state and emits the signal so
+	## BattleScene can play the violet glow + banner + audio sting.
+	if not c.is_boss or c.frenzied:
+		return
+	var hp_ratio: float = float(c.hp) / float(max(1, c.max_hp))
+	if hp_ratio < PHASE_3_HP_THRESHOLD:
+		c.frenzied = true
+		boss_frenzied.emit(c)
 
 func perform_aoe_attack(attacker: Combatant, targets: Array[Combatant], ability_id: String) -> Array[int]:
 	## Attack all targets with ability_id, returning list of damage values dealt.
@@ -301,7 +325,9 @@ func _boss_ai(boss: Combatant, target: Combatant, visible_heroes: Array[Combatan
 	if boss.signature_cd > 0:
 		boss.signature_cd -= 1
 	elif _try_boss_signature(boss, target, visible_heroes, map):
-		boss.signature_cd = SIGNATURE_COOLDOWN
+		# Run 34: Frenzied bosses fire signatures more often.
+		boss.signature_cd = SIGNATURE_COOLDOWN_FRENZIED if boss.frenzied \
+			else SIGNATURE_COOLDOWN
 		return
 	# Legacy fallback (identical to the old default branch).
 	var ability_id: String = "basic_attack"
@@ -327,8 +353,30 @@ func _signature_rally(boss: Combatant, map: DungeonMap) -> bool:
 	## Dungeon Lord: once per battle, drag a fallen minion back to its feet at
 	## half HP. The corpse must have a free hex to stand on (its death spot, or
 	## a passable unoccupied neighbor).
+	##
+	## Run 34: when Frenzied, raise EVERY eligible corpse in one detonation
+	## instead of just the first one. Still consumes rally_used — the upgrade
+	## is breadth, not repeatability.
 	if boss.rally_used:
 		return false
+	if boss.frenzied:
+		var revived: Array[Combatant] = []
+		for c: Combatant in combatants:
+			if c.faction != Combatant.Faction.ENEMY or c.is_boss or c.is_alive():
+				continue
+			var spot: Vector2i = _free_revive_spot(c.position, map)
+			if spot == Vector2i(-9999, -9999):
+				continue
+			c.position = spot
+			c.hp = max(1, c.max_hp / 2)
+			c.status_effects.clear()
+			turn_order.append(c)
+			revived.append(c)
+		if revived.is_empty():
+			return false
+		boss.rally_used = true
+		boss_signature.emit(boss, "rally", revived)
+		return true
 	for c: Combatant in combatants:
 		if c.faction != Combatant.Faction.ENEMY or c.is_boss or c.is_alive():
 			continue
@@ -368,22 +416,28 @@ func _signature_ground_slam(boss: Combatant, visible_heroes: Array[Combatant],
 	## The Warden: smash every adjacent hero and hurl them 2 hexes back.
 	## Requires at least one hero in melee contact — staying spread/ranged is
 	## the counterplay.
-	var adjacent: Array[Combatant] = []
+	##
+	## Run 34: Frenzied slam (Tectonic Slam) widens to range 2 and pushes 3
+	## hexes instead of 2. "Stay out of melee" stops being safe — the only
+	## true safe zone becomes range-3+.
+	var slam_range: int = 2 if boss.frenzied else 1
+	var push_dist: int = 3 if boss.frenzied else 2
+	var hit: Array[Combatant] = []
 	for h: Combatant in visible_heroes:
-		if HexGrid.hex_distance(boss.position, h.position) <= 1:
-			adjacent.append(h)
-	if adjacent.is_empty():
+		if HexGrid.hex_distance(boss.position, h.position) <= slam_range:
+			hit.append(h)
+	if hit.is_empty():
 		return false
 	var slam_data: Dictionary = Abilities.get_ability("ground_slam")
 	var base: int = int(slam_data.get("base_damage", 14)) + boss.attack_bonus
-	for h: Combatant in adjacent:
+	for h: Combatant in hit:
 		var actual: int = h.take_damage(base)
 		action_taken.emit(boss, h, actual, "ground_slam")
 		if not h.is_alive():
 			_on_combatant_died(h)
 		elif map != null:
-			push_combatant(boss, h, 2, map)
-	boss_signature.emit(boss, "slam", adjacent)
+			push_combatant(boss, h, push_dist, map)
+	boss_signature.emit(boss, "slam", hit)
 	return true
 
 
@@ -391,6 +445,12 @@ func _signature_void_pull(boss: Combatant, target: Combatant, map: DungeonMap) -
 	## The Abyss Keeper: fold a hero at range 2-4 into melee contact and rake
 	## them on arrival (armor-ignoring). Standing far away is no longer safe;
 	## standing adjacent already is the counter (the pull needs distance).
+	##
+	## Run 34: Frenzied pull (Void Implosion) grabs EVERY hero in range 2-4
+	## at once. Heroes are folded into the boss's free neighbors in ascending
+	## distance order — closest hero first, so chain pulls don't collide.
+	if boss.frenzied:
+		return _signature_void_pull_mass(boss, map)
 	var dist: int = HexGrid.hex_distance(boss.position, target.position)
 	if dist < 2 or dist > 4:
 		return false
@@ -422,6 +482,69 @@ func _signature_void_pull(boss: Combatant, target: Combatant, map: DungeonMap) -
 		_on_combatant_died(target)
 	boss_signature.emit(boss, "pull", [target] as Array[Combatant])
 	return true
+
+
+func _signature_void_pull_mass(boss: Combatant, map: DungeonMap) -> bool:
+	## Run 34 Frenzied variant: pull every living hero at range 2-4 into a
+	## free boss-neighbor and rake them all. Closest hero is placed first so a
+	## crowded ring doesn't starve the later pulls. Returns false (and fires
+	## no signature) if nobody is in pull range — Frenzied bosses must still
+	## fall back to a regular attack rather than waste the turn flailing.
+	var living_heroes: Array[Combatant] = []
+	for c: Combatant in combatants:
+		if c.faction == Combatant.Faction.HERO and c.is_alive():
+			living_heroes.append(c)
+	# Process closest-first so the nearest hero claims the best landing hex.
+	living_heroes.sort_custom(func(a: Combatant, b: Combatant) -> bool:
+		return HexGrid.hex_distance(boss.position, a.position) \
+			< HexGrid.hex_distance(boss.position, b.position))
+	var pulled: Array[Combatant] = []
+	var claimed: Dictionary = {}  # hex -> true; reserves landing spots in this turn
+	var pull_data: Dictionary = Abilities.get_ability("void_pull")
+	var base: int = int(pull_data.get("base_damage", 10)) + boss.attack_bonus
+	for hero: Combatant in living_heroes:
+		var d: int = HexGrid.hex_distance(boss.position, hero.position)
+		if d < 2 or d > 4:
+			continue
+		var landing: Vector2i = _nearest_free_neighbor(boss.position, hero, map, claimed)
+		if landing == Vector2i(-9999, -9999):
+			continue  # this hero stays put; ring is full
+		claimed[landing] = true
+		hero.position = landing
+		var actual: int = hero.take_damage(base, true)
+		action_taken.emit(boss, hero, actual, "void_pull")
+		if not hero.is_alive():
+			_on_combatant_died(hero)
+		pulled.append(hero)
+	if pulled.is_empty():
+		return false
+	boss_signature.emit(boss, "pull", pulled)
+	return true
+
+
+func _nearest_free_neighbor(origin: Vector2i, hero: Combatant, map: DungeonMap,
+		claimed: Dictionary) -> Vector2i:
+	## Pick the passable, unoccupied, unclaimed neighbor of `origin` closest to
+	## the hero's current position. Sentinel (-9999,-9999) if the ring is full.
+	var best: Vector2i = Vector2i(-9999, -9999)
+	var best_d: int = 1 << 30
+	for n: Vector2i in HexGrid.neighbors(origin):
+		if claimed.has(n):
+			continue
+		if map != null and not map.is_passable(n):
+			continue
+		var occupied: bool = false
+		for c: Combatant in combatants:
+			if c.is_alive() and c != hero and c.position == n:
+				occupied = true
+				break
+		if occupied:
+			continue
+		var d: int = HexGrid.hex_distance(n, hero.position)
+		if d < best_d:
+			best_d = d
+			best = n
+	return best
 
 
 func _move_toward(mover: Combatant, goal: Vector2i, map: DungeonMap) -> void:

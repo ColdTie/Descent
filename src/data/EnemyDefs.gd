@@ -58,6 +58,40 @@ const ENEMIES: Array[Dictionary] = [
 		"sprite_key": "golem",
 		"min_floor": 4,
 	},
+	# Run 34: Tier 1 roster additions. Pre-Run-34, floors 2-3 were just imp +
+	# goblin (+skeleton at 2, +demon at 3) — the early run lacked enemy variety.
+	# Cave Bat is a glass-cannon flanker (very fast, very fragile); Stone Skeleton
+	# is a low-tier armor wall that punishes glass-cannon hero builds. Both are
+	# tinted sprite variants — no new art pipeline.
+	{
+		# Tier 1 flanker: fastest non-Wraith mob, but pops in one good hit.
+		# Encourages the player to spend a turn killing it before chasing fodder.
+		"id": "cave_bat",
+		"display_name": "Cave Bat",
+		"hp": 18,
+		"armor": 0,
+		"speed": 16,
+		"abilities": ["enemy_claw"],
+		"xp_reward": 18,
+		"sprite_key": "imp",
+		"tint": Color(0.55, 0.62, 0.85),
+		"min_floor": 2,
+	},
+	{
+		# Tier 1 armor wall: slow, low damage, but armor 5 shrugs off basic hits.
+		# Forces backstab / fireball / power_strike usage early — the dungeon's
+		# first answer to "I just spam Basic Attack".
+		"id": "stone_skeleton",
+		"display_name": "Stone Skeleton",
+		"hp": 55,
+		"armor": 5,
+		"speed": 6,
+		"abilities": ["enemy_claw"],
+		"xp_reward": 35,
+		"sprite_key": "skeleton",
+		"tint": Color(0.72, 0.58, 0.42),
+		"min_floor": 3,
+	},
 	# Run 32: Tier 2/3 roster additions. Before these, the enemy pool stopped
 	# growing at floor 4 — floors 7-18 fought the same five enemies with bigger
 	# numbers while the patch notes *narrated* new threats. Both are tinted

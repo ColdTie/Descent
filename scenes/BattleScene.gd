@@ -399,6 +399,7 @@ func _build_encounter() -> void:
 	_engine.hero_moved.connect(_on_hero_moved)
 	_engine.boss_enraged.connect(_on_boss_enraged)
 	_engine.boss_signature.connect(_on_boss_signature)
+	_engine.boss_frenzied.connect(_on_boss_frenzied)
 	_engine.setup(_all_combatants)
 
 	# Run 19: subscribe to achievement + audience streams for the toast/HUD UI.
@@ -2433,6 +2434,34 @@ func _on_boss_enraged(boss: Combatant) -> void:
 	_update_boss_hp_bar()
 	var quip: String = SystemVoice.pick("boss_enraged")
 	_show_system_banner("⚠ ENRAGED: %s — %s" % [boss.display_name, quip], 4.0)
+
+func _on_boss_frenzied(boss: Combatant) -> void:
+	## Run 34 Phase 3: at sub-15% HP the boss's glow shifts from enraged-crimson
+	## to frenzied-violet, a banner fires, and the signature cooldown shortens
+	## (handled engine-side). All escalation lives in the signature variants —
+	## this handler is purely cosmetic.
+	var node: Node2D = _entity_nodes.get(boss.id)
+	if node != null:
+		var glow: Polygon2D = node.get_node_or_null("GlowRing") as Polygon2D
+		if glow != null and _boss_glow_tween != null:
+			_boss_glow_tween.kill()
+		if glow != null:
+			glow.color = Color(0.72, 0.14, 0.92, 0.80)
+			_boss_glow_tween = create_tween()
+			_boss_glow_tween.set_loops()
+			_boss_glow_tween.tween_property(glow, "color",
+				Color(0.85, 0.32, 1.0, 0.95), 0.45) \
+				.set_ease(Tween.EASE_IN_OUT).set_trans(Tween.TRANS_SINE)
+			_boss_glow_tween.tween_property(glow, "color",
+				Color(0.55, 0.06, 0.85, 0.40), 0.55) \
+				.set_ease(Tween.EASE_IN_OUT).set_trans(Tween.TRANS_SINE)
+	AudioManager.play("enrage", 0.0, 2.0)
+	_hit_flash(boss)
+	_screen_shake(11.0, 0.55)
+	_update_boss_hp_bar()
+	_combat_log_add("%s ENTERS FRENZY" % _short_name(boss), Color(0.85, 0.32, 1.0))
+	_show_system_banner("✦ %s — FRENZIED ✦" % boss.display_name, 4.0)
+	SystemVoice.speak("boss_frenzied")
 
 func _on_boss_signature(boss: Combatant, move_id: String, affected: Array[Combatant]) -> void:
 	## Run 33: boss used a signature move. The engine already applied the

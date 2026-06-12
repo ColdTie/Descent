@@ -136,8 +136,12 @@ func test_enemy_defs_floor1() -> void:
 	assert_true(enemies.size() >= 2, "Floor 1 has at least 2 enemy types")
 
 func test_enemy_defs_floor5() -> void:
+	## Floor 5 unlocks the full tier-1 pool: the 5 originals (imp, goblin,
+	## skeleton, demon_grunt, lava_golem) plus the Run-34 tier-1 variants
+	## (cave_bat at floor 2, stone_skeleton at floor 3) = 7 entries. Use >=
+	## so future tier-1 additions don't break this.
 	var enemies: Array[Dictionary] = EnemyDefs.get_enemies_for_floor(5)
-	assert_eq(enemies.size(), 5, "Floor 5 unlocks all 5 enemy types")
+	assert_true(enemies.size() >= 7, "Floor 5 unlocks the full tier-1 pool")
 
 func test_enemy_combatant_factory() -> void:
 	var rng := _make_rng(55)

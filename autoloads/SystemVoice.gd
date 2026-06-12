@@ -583,6 +583,16 @@ const LINES: Dictionary = {
 		"The Abyss does not ask. The Abyss arrives.",
 	],
 
+	# ── Boss Phase 3 / Frenzied (Run 34) ──────────────────────────────────────
+	"boss_frenzied": [
+		"The boss has descended into Phase 3. The metrics are no longer in your favor.",
+		"Frenzy state engaged. The dungeon's HR department has stopped taking calls.",
+		"Signature escalation in effect. Counter-play windows are now narrower.",
+		"The boss is bleeding and angry. Statistically, the worse of the two.",
+		"Phase 3: less negotiation, more amplitude. Continue at your discretion.",
+		"Frenzied. The System has revised its survival projection. Downward.",
+	],
+
 	# ── Shop merchant's favor (Run 31) ────────────────────────────────────────
 	"shop_merchant_favor": [
 		"The merchant has taken a shine to you. The audience approves. The accountants weep.",

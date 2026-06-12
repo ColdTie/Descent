@@ -35,8 +35,24 @@ DESCENT is a turn-based tactical dungeon crawler in the spirit of **Dungeon Craw
 - **Architecture rule**: `BattleEngine._calculate_damage()` returns RAW damage (no armor). `Combatant.take_damage(amount, ignore_armor=false)` applies armor. Don't double-apply armor in both places.
 - `Combatant.take_damage(amount, ignore_armor)` — the `ignore_armor` parameter bypasses the `armor` field reduction (for backstab, env damage, etc.)
 
-## Current State (Run 33 — Boss Signatures + Enemy Variants + Loot Buyback)
+## Current State (Run 34 — Tier-1 Variants + Boss Phase 3 "Frenzy")
 ### Implemented ✅
+**Run 34 (Two tier-1 enemy variants + Boss Phase 3 — both top items from the Run 33 roadmap):**
+- **Tier-1 enemy roster growth** (`src/data/EnemyDefs.gd`) — until now the early run (floors 1-6) drew from the same five enemies. Both new variants reuse existing sprites via the Run 32 `Combatant.tint` system (zero new art pipeline):
+  - **Cave Bat** (`cave_bat`, min_floor 2): 18 HP / 0 armor / **speed 16** — second-fastest mob in the game after the Void Wraith. Imp sprite, slate/blue tint Color(0.55, 0.62, 0.85), single `enemy_claw`. Glass-cannon flanker — gets adjacency fast, but pops in one good hit. Encourages spending a turn on it before chasing fodder.
+  - **Stone Skeleton** (`stone_skeleton`, min_floor 3): 55 HP / **armor 5** / speed 6 — highest armor in the tier-1 pool by a wide margin (next-highest is the regular skeleton at 3). Skeleton sprite, brown tint Color(0.72, 0.58, 0.42), single `enemy_claw`. Punishes "spam Basic Attack" hero builds — forces backstab / fireball / power_strike usage in the early run.
+  - Floor gating verified by test: bat doesn't appear at floor 1, joins floor 2; stone skeleton doesn't appear at floor 2, joins floor 3. Both flow through the existing `make_combatant` factory's `tint: Color` plumbing.
+  - **Regression fix**: `tests/test_combat.gd::test_enemy_defs_floor5` previously asserted exactly 5 enemy types at floor 5. Updated to `>= 7` (the new full tier-1 pool — 5 originals + 2 Run-34 variants) so future tier-1 additions don't re-break it.
+- **Boss Phase 3 — Frenzy** — when a boss drops below 15% HP (`PHASE_3_HP_THRESHOLD = 0.15`, deliberately tuned below the 0.30 enrage threshold so the player feels a clear two-step escalation), its signature moves escalate. The phase 3 trigger lives in a new `BattleEngine._check_boss_phase3` called from `perform_attack` right next to the existing `_check_boss_enrage` — same path, same "boss survived the hit" guard. New `frenzied: bool` field on Combatant (default false), new `boss_frenzied(boss)` signal. `_check_boss_phase3` only fires once (the `if boss.frenzied: return` guard mirrors enrage). When `frenzied` flips, the boss's signature cooldown shortens (`SIGNATURE_COOLDOWN_FRENZIED = 2` vs `SIGNATURE_COOLDOWN = 3`) so the escalated signature fires more often in the final stretch.
+  - **Dungeon Lord — Mass Rally** (`_signature_rally` Frenzied branch): raises EVERY eligible corpse in one detonation instead of just the first one. Still consumes `rally_used` for the whole battle — the upgrade is breadth, not repeatability. The `boss_signature` payload now lists every revived combatant (not a single-element array), and BattleScene's existing rally handler iterates `affected` so each gets a fresh entity node + VFX without code changes.
+  - **The Warden — Tectonic Slam** (`_signature_ground_slam` Frenzied branch): radius widens from 1 to 2, push distance grows from 2 to 3. The previous "stay out of melee" counter-play stops being enough — only range-3+ is truly safe. The `if hit.is_empty(): return false` guard still falls through to a regular attack when nobody's in the wider radius, so the boss never wastes the signature.
+  - **The Abyss Keeper — Void Implosion** (`_signature_void_pull_mass`, the Frenzied branch picked off `boss.frenzied` early in `_signature_void_pull`): pulls EVERY hero in range 2-4 into the boss's ring simultaneously. Heroes are sorted closest-first so the nearest hero claims the best landing hex (a new `_nearest_free_neighbor` helper takes a `claimed: Dictionary` of already-reserved hexes this turn, so chain pulls don't collide). Already-adjacent heroes are untouched (range guard 2-4). If nobody's in the pull range, no signature fires — same fallback discipline as the base form.
+- **`scenes/BattleScene.gd`** — new `_on_boss_frenzied` handler connected to `_engine.boss_frenzied`. Cosmetic-only: swaps the boss glow from crimson-orange (enrage's color) to a brighter violet (0.72, 0.14, 0.92, 0.80) with a faster pulse tween, plays the existing `enrage` SFX pitched +2 semitones, fires a heavier `_screen_shake(11.0, 0.55)`, adds a violet "ENTERS FRENZY" combat-log line, shows the `✦ NAME — FRENZIED ✦` banner, and speaks the new `boss_frenzied` quip pool. Reuses the existing GlowRing node so no .tscn changes were needed.
+- **`autoloads/SystemVoice.gd`** — new `boss_frenzied` quip pool (6 lines, DCC-flavored: "The boss has descended into Phase 3. The metrics are no longer in your favor.").
+- **`src/data/PatchNotes.gd`** — floor-7 v1.7 notes mention the retired tier-1 variants ("Cave Bats, Stone Skeletons. Their tier was unprofitable.") plus the Warden's Frenzied slam-radius widening. Floor-13 v1.13 notes gain three lines on dungeon-wide Phase 3 + the Dungeon Lord and Keeper Frenzied variants. The fiction stays in lockstep with the mechanics.
+- **`tests/test_run34.gd`** (22 test functions, ~30 assertions): variant schema + floor gating boundaries (1/2/3) + tint plumbing + ability drift detector; design locks (Cave Bat speed >= 16, Stone Skeleton armor >= 5); Phase 3 trigger (trips below threshold, doesn't trip above, signal fires exactly once even after HP yo-yos); Frenzied rally (revives every corpse, payload lists all revived, still one-shot per battle); Frenzied slam (range-2 reach, push distance grows, skipped when nobody in radius); Frenzied void pull (mass-pulls in range, skips already-adjacent, no signature when nobody in range); cooldown is 2 when frenzied / 3 when not; Combatant.frenzied defaults to false.
+- **Test suite total: 1857 passed, 0 failed** (up from 1806 in Run 33).
+
 **Run 33 (Boss signature moves + 2 new enemy variants + loot buyback — the three roadmap items from Run 32):**
 - **Boss signature moves** — every boss now has a once-per-cadence signature that fires through a new `BattleEngine._boss_ai` branch. `Combatant.signature_cd` ticks the cooldown (3 boss turns by default — `SIGNATURE_COOLDOWN`); `Combatant.rally_used` is the Dungeon Lord's once-per-battle gate. New `boss_signature(boss, move_id, affected)` signal drives all visuals — BattleScene's `_on_boss_signature` handler spawns VFX, banner, audio sting and a colored combat-log line. The boss AI dispatch is faction-gated behind `if enemy.is_boss` so non-boss enemies are untouched and the previous random-ability fallback still fires when a signature can't be used (no eligible corpse / no adjacent hero / out of pull range), keeping base boss difficulty intact.
   - **Dungeon Lord — Rally**: drags one fallen non-boss enemy back to its feet at half HP, clearing its statuses. Once per battle. Skipped (and `rally_used` not consumed) when no eligible corpse has a free spot to stand. BattleScene re-spawns the entity node so the corpse's greyed-out art is replaced with a fresh sprite + bob tween, and fires the `rally` VFX (heal cross).
@@ -556,17 +572,25 @@ FTL, traditional roguelikes). Status of the "what are we missing" audit:
   pushes adjacent heroes, Abyss Keeper teleport-pulls a ranged hero — Run 33
 - Loot buyback "regret aisle": once-per-run shop strip offering back the best
   loot card the player skipped, priced by rarity — Run 33
+- Tier-1 enemy roster growth: Cave Bat (floor 2+, glass-cannon flanker at
+  speed 16) + Stone Skeleton (floor 3+, armor-5 wall that punishes Basic
+  Attack spam). Both tinted sprite variants — Run 34
+- Boss Phase 3 ("Frenzy"): at sub-15% HP each boss signature escalates —
+  Dungeon Lord raises every corpse at once, Warden slam grows to range 2 /
+  push 3, Abyss Keeper folds every hero in pull range simultaneously.
+  Cooldown shortens to 2. New violet glow + banner — Run 34
 
 ### 🔜 Highest-value, easiest remaining (do next, roughly in order)
-1. **More tier-1 enemy variants** — the tint system has only been used at floors
-   7+/13+. Cheap floor 1-6 additions: a "Cave Bat" (imp sprite, slate tint,
-   speed 16 but lower HP), a "Stone Skeleton" (skeleton sprite, brown tint,
-   higher armor) to thicken the early run.
-2. **Boss Phase 3** — at sub-15% HP a boss's signature changes (Dungeon Lord
-   rallies *every* corpse at once; Warden slam radius grows to range 2;
-   Keeper pulls all heroes simultaneously). Reuses the Run 33 signature path.
-3. **Meta-progression / unlocks** — Persistent currency between runs, unlockable
-   starting perks. Requires save persistence (already in place via Run 28).
+1. **Meta-progression / unlocks** — Persistent currency between runs (e.g.
+   "shards" or "favor"), unlockable starting perks or alt-color class skins.
+   Requires save persistence (already in place via Run 28). Loop closer is
+   the next big lift.
+2. **Status-effect tooltips & stacks** — surface poison/burning duration and
+   damage-per-turn on a hover tooltip, show stack counts on the entity HUD.
+   The status data is already there (Plague Bite, Ember Claw, frost_nova,
+   poison_blade); the player just can't see what they're carrying.
+3. **Accessibility/options** — Colorblind-friendly hex highlights, text
+   size slider, screen-shake toggle. Run 24's pause menu is the natural home.
 
 ### 🟡 Larger / later (note, not yet scoped)
 4. **More floor variety** — Per-tier hazards: Tier 1 crumbling bridges, Tier 2 freeze pools,
@@ -672,6 +696,7 @@ tests/
   test_run31.gd      — Merchant's Favor: chance scaling + roll determinism + discount math + slate force-Legendary helper + GameState flag persistence (Run 31)
   test_run32.gd      — consume_xp_bonus math, Void Wraith/Bone Colossus schema + gating + tint, melee-golem AI fix + lava-golem turret regression (Run 32)
   test_run33.gd      — Plague Goblin/Ember Imp schema + status application + faction-guard regression, all three boss signatures + cooldown, loot buyback candidate + cost + GameState plumbing (Run 33)
+  test_run34.gd      — Cave Bat/Stone Skeleton schema + gating + tints + design locks, Phase 3 trigger + once-only emit, frenzied rally/slam/pull escalation + cooldown shortening (Run 34)
 
 tools/
   tour_bot.gd        — Run 32: screenshot-audit auto-play bot (see Run 32 notes for usage;
