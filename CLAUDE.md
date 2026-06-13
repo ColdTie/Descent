@@ -35,8 +35,25 @@ DESCENT is a turn-based tactical dungeon crawler in the spirit of **Dungeon Craw
 - **Architecture rule**: `BattleEngine._calculate_damage()` returns RAW damage (no armor). `Combatant.take_damage(amount, ignore_armor=false)` applies armor. Don't double-apply armor in both places.
 - `Combatant.take_damage(amount, ignore_armor)` — the `ignore_armor` parameter bypasses the `armor` field reduction (for backstab, env damage, etc.)
 
-## Current State (Run 34 — Tier-1 Variants + Boss Phase 3 "Frenzy")
+## Current State (Run 35 — Status-Effect HUD Depth + Accessibility Toggles)
 ### Implemented ✅
+**Run 35 (Roadmap items #2 and #3 — status-effect tooltips & stacks + accessibility):**
+- **`src/combat/StatusEffect.gd`** — single source of truth for HUD rendering. Four new pure helpers, zero scene dependency:
+  - `SHORT_CODES` + `DISPLAY_NAMES` constants — bare maps for `burning/frozen/poisoned/fortified/vanished/mana_shield`. The Run 22 magic-strings inside `_update_status_label` were the only place these lived; they're now grounded in the data module so a future effect adds in one place.
+  - `short_code(eff) -> String` — the three-letter code shown above each combatant. Defensive: unknown ids truncate to upper-cased first three, fully empty dicts return `???` so the HUD never renders a `[ ]` bracket.
+  - `display_name(eff) -> String` — long-form name for the detail panel. Falls back to the dict's `name` field for unknown ids.
+  - `summarize(eff) -> String` — multi-segment line ("Burning · 3t · 5/turn"). Always carries duration. Appends DPT only when > 0, armor mod only when != 0 (with leading `+` for positive), and substitutes "X absorb" for Mana Shield instead of a misleading "0/turn".
+  - `stack(effects) -> Array[Dictionary]` — collapses duplicates by id into one row with a `stacks` field. Duration → MAX of the group (player cares when it stops applying). DPT → SUM (matches how `tick_statuses` already pays out — poison_blade re-applied twice ticks for the combined dpt). Order of first appearance preserved so the HUD doesn't flicker as effects rotate. Malformed entries (non-dicts, blank ids) are silently dropped.
+- **`scenes/BattleScene.gd`** — three player-facing surfaces:
+  - **Above-the-sprite status label** (`_update_status_label`): now `[BRN 3] [PSN 4 x2]` instead of `[BRN] [PSN]`. Pre-Run-35 the label didn't surface duration OR stack counts — the player could see something was on them but not when it would stop or how many stacks were burning down. Built via `StatusEffect.stack` + `short_code` + duration, so the format definition is in one place.
+  - **Hero status detail section** (`_refresh_status_panel`): a new collapsible section appended to the existing Run-27 loadout panel. Divider + "STATUS" header + a multi-line label rendering `StatusEffect.summarize(eff)` for each stacked effect with a "(x2)" suffix when stacked. Hidden when the hero has no active effects so the panel stays compact between buffs/debuffs. Re-renders whenever `_update_status_label(_hero)` fires — no polling, no extra signals.
+  - **Pause-menu accessibility row** (`_build_pause_menu`): two new toggle buttons — `SHAKE: ON/OFF` and `DMG #s: ON/OFF`. Sits between the SFX/MUSIC row and RESUME. Reads the GameState fields directly for the initial label so a resumed run shows the saved state.
+- **`_screen_shake(intensity, duration)`** is now gated by `GameState.screen_shake_enabled`. When disabled it still kills any in-flight shake tween and snaps both world layers back to `_world_base` — important so a mid-shake disable settles cleanly instead of stranding the map on an offset frame.
+- **`_show_damage_number(c, dmg, color, is_crit)`** is gated by `GameState.damage_numbers_enabled`. HP bar still drains, combat-log line still fires, hit-flash still plays — only the floating `-N` Label is suppressed. Disabling reduces visual clutter without hiding actual damage feedback.
+- **`autoloads/GameState.gd`** — two new bool fields (`screen_shake_enabled`, `damage_numbers_enabled`), both default true. Reset in `start_run()` so a fresh class pick always starts with shipping behavior. Snapshotted in `snapshot()`; restored in `apply_snapshot()` with default-true fallbacks so pre-Run-35 saves load cleanly (purely additive — no SAVE_VERSION bump). Four helpers: `set_screen_shake/set_damage_numbers` (writeable from anywhere) and `toggle_*` (used by the pause-menu buttons — return the new value so the button label can be updated in one line).
+- **`tests/test_run35.gd`** (29 test functions, ~80 assertions): short_code for every known id + unknown-id truncation + empty-dict placeholder; display_name for every known id + dict-name fallback; summarize covers burning (dpt), poisoned (dpt), frozen (negative armor), fortified (positive armor with `+`), mana_shield (absorb pool, no `/turn` noise), vanished (no spurious tails); stack handles empty / single passthrough / duplicate collapse / mixed-id ordering / malformed entries / mana_shield absorb summing; GameState defaults / set / toggle (returns match state) / snapshot inclusion / apply roundtrip / pre-Run-35 save defaults / start_run reset; integration assertion composes the full `[BRN 3] [PSN 4 x2]` label so future drift in either side is caught.
+- **Test suite total: 1937 passed, 0 failed** (up from 1857 in Run 34).
+
 **Run 34 (Two tier-1 enemy variants + Boss Phase 3 — both top items from the Run 33 roadmap):**
 - **Tier-1 enemy roster growth** (`src/data/EnemyDefs.gd`) — until now the early run (floors 1-6) drew from the same five enemies. Both new variants reuse existing sprites via the Run 32 `Combatant.tint` system (zero new art pipeline):
   - **Cave Bat** (`cave_bat`, min_floor 2): 18 HP / 0 armor / **speed 16** — second-fastest mob in the game after the Void Wraith. Imp sprite, slate/blue tint Color(0.55, 0.62, 0.85), single `enemy_claw`. Glass-cannon flanker — gets adjacency fast, but pops in one good hit. Encourages spending a turn on it before chasing fodder.
@@ -585,12 +602,14 @@ FTL, traditional roguelikes). Status of the "what are we missing" audit:
    "shards" or "favor"), unlockable starting perks or alt-color class skins.
    Requires save persistence (already in place via Run 28). Loop closer is
    the next big lift.
-2. **Status-effect tooltips & stacks** — surface poison/burning duration and
-   damage-per-turn on a hover tooltip, show stack counts on the entity HUD.
-   The status data is already there (Plague Bite, Ember Claw, frost_nova,
-   poison_blade); the player just can't see what they're carrying.
-3. **Accessibility/options** — Colorblind-friendly hex highlights, text
-   size slider, screen-shake toggle. Run 24's pause menu is the natural home.
+2. **More accessibility** — colorblind-friendly hex highlights (MOVE_CLR
+   green vs ATTACK_CLR red is the obvious risk), text size slider. Run 35
+   shipped the screen-shake + damage-numbers toggles in the pause menu;
+   that row has space for two more.
+3. **Status-effect hover tooltips** — Run 35 surfaces every active status
+   in a permanent left-edge detail panel and inline durations above the
+   sprite. A hover tooltip on enemy sprites would push the same info into
+   the enemy HUD without changing the layout.
 
 ### 🟡 Larger / later (note, not yet scoped)
 4. **More floor variety** — Per-tier hazards: Tier 1 crumbling bridges, Tier 2 freeze pools,
@@ -697,6 +716,7 @@ tests/
   test_run32.gd      — consume_xp_bonus math, Void Wraith/Bone Colossus schema + gating + tint, melee-golem AI fix + lava-golem turret regression (Run 32)
   test_run33.gd      — Plague Goblin/Ember Imp schema + status application + faction-guard regression, all three boss signatures + cooldown, loot buyback candidate + cost + GameState plumbing (Run 33)
   test_run34.gd      — Cave Bat/Stone Skeleton schema + gating + tints + design locks, Phase 3 trigger + once-only emit, frenzied rally/slam/pull escalation + cooldown shortening (Run 34)
+  test_run35.gd      — StatusEffect short_code/display_name/summarize/stack helpers (every known id + defensive cases + duplicate collapse), GameState screen-shake + damage-numbers toggles (defaults / set / toggle / snapshot roundtrip / pre-Run-35 save default / start_run reset), integration label-format assertion (Run 35)
 
 tools/
   tour_bot.gd        — Run 32: screenshot-audit auto-play bot (see Run 32 notes for usage;

@@ -201,6 +201,12 @@ var _speed_buttons: Array[Button] = []  # Run 27: battle-speed selector buttons
 var _stats_panel: PanelContainer = null  # Run 27: hero stats + owned-items HUD panel
 var _stats_label: Label = null
 var _inventory_label: Label = null
+# Run 35: hero status-effect detail rows. The stack-collapsed status list is
+# rendered into a dedicated section of the loadout panel — name + duration +
+# DPT (or absorb pool for Mana Shield). Hidden when no effects are active.
+var _status_divider: ColorRect = null
+var _status_header: Label = null
+var _status_detail_label: Label = null
 var _combat_log_panel: PanelContainer = null
 var _combat_log_vbox: VBoxContainer = null
 const COMBAT_LOG_MAX: int = 6
@@ -2686,18 +2692,24 @@ func _update_status_label(c: Combatant) -> void:
 	var status_lbl: Label = node.get_node_or_null("StatusLabel")
 	if status_lbl == null:
 		return
-	# Run 22 (fix): use ASCII letter codes — the emoji glyphs above rendered as
-	# missing-glyph boxes in Godot's default font.
+	# Run 35: stacks collapse same-id effects and the code now carries the
+	# duration (and a "xN" suffix when stacked), so `[BRN 3] [PSN 4 x2]` tells
+	# the player at a glance how many turns of pain are still coming. Short
+	# codes + tooltip text live in StatusEffect — single source of truth.
 	var icons: Array[String] = []
-	for eff: Dictionary in c.status_effects:
-		match eff.get("id", ""):
-			"burning":  icons.append("[BRN]")
-			"frozen":  icons.append("[FRZ]")
-			"poisoned":  icons.append("[PSN]")
-			"fortified":  icons.append("[DEF]")
-			"vanished":  icons.append("[HID]")
-			"mana_shield": icons.append("[SHD]")
+	for eff: Dictionary in StatusEffect.stack(c.status_effects):
+		var code: String = StatusEffect.short_code(eff)
+		var dur: int = int(eff.get("duration", 0))
+		var n: int = int(eff.get("stacks", 1))
+		if n > 1:
+			icons.append("[%s %d x%d]" % [code, dur, n])
+		else:
+			icons.append("[%s %d]" % [code, dur])
 	status_lbl.text = " ".join(icons)
+	# Hero-side: keep the detail panel in sync without polling. Cheap — the
+	# panel rebuilds a handful of labels and the refresh is gated to changes.
+	if c == _hero:
+		_refresh_status_panel()
 
 func _update_hero_hp_label() -> void:
 	var ratio: float = float(_hero.hp) / float(max(1, _hero.max_hp))
@@ -2746,6 +2758,17 @@ func _screen_shake(intensity: float = 5.0, duration: float = 0.22) -> void:
 	## punch. UILayer is a CanvasLayer so the HUD stays put; Background is the
 	## sibling ColorRect at the BattleScene root and is also unaffected.
 	## Any in-flight shake is killed first so back-to-back impacts don't fight.
+	# Run 35: pause-menu toggle gate. We still kill any in-flight shake so a
+	# mid-shake disable settles the layers back to base instead of stranding
+	# them on an offset frame.
+	if not GameState.screen_shake_enabled:
+		for old: Tween in _shake_tweens:
+			if old != null and old.is_valid():
+				old.kill()
+		_shake_tweens.clear()
+		_hex_layer.position = _world_base
+		_entity_layer.position = _world_base
+		return
 	for old: Tween in _shake_tweens:
 		if old != null and old.is_valid():
 			old.kill()
@@ -2771,6 +2794,10 @@ func _screen_shake(intensity: float = 5.0, duration: float = 0.22) -> void:
 
 func _show_damage_number(c: Combatant, damage: int, color: Color = Color(1.0, 0.25, 0.1),
 		is_crit: bool = false) -> void:
+	# Run 35: pause-menu toggle gate. HP bar still drains and combat-log line
+	# still fires from the caller — only the floating "-N" label is suppressed.
+	if not GameState.damage_numbers_enabled:
+		return
 	var node: Node2D = _entity_nodes.get(c.id)
 	if node == null:
 		return
@@ -3179,6 +3206,26 @@ func _build_pause_menu() -> void:
 	music_btn.pressed.connect(_on_pause_toggle_music.bind(music_btn))
 	toggle_row.add_child(music_btn)
 
+	# Run 35: accessibility toggles. Screen shake stays off the rendering path
+	# entirely when disabled (helpful for motion-sensitivity); damage numbers
+	# stop floating without suppressing HP-bar drain or the combat-log line.
+	var access_row := HBoxContainer.new()
+	access_row.alignment = BoxContainer.ALIGNMENT_CENTER
+	access_row.add_theme_constant_override("separation", 12)
+	vb.add_child(access_row)
+
+	var shake_btn := Button.new()
+	shake_btn.text = ("SHAKE: ON" if GameState.screen_shake_enabled else "SHAKE: OFF")
+	shake_btn.custom_minimum_size = Vector2(150.0, 36.0)
+	shake_btn.pressed.connect(_on_pause_toggle_shake.bind(shake_btn))
+	access_row.add_child(shake_btn)
+
+	var dmg_btn := Button.new()
+	dmg_btn.text = ("DMG #s: ON" if GameState.damage_numbers_enabled else "DMG #s: OFF")
+	dmg_btn.custom_minimum_size = Vector2(160.0, 36.0)
+	dmg_btn.pressed.connect(_on_pause_toggle_damage_numbers.bind(dmg_btn))
+	access_row.add_child(dmg_btn)
+
 	# Action buttons
 	var resume_btn := Button.new()
 	resume_btn.text = "RESUME"
@@ -3244,6 +3291,20 @@ func _on_pause_toggle_sfx(btn: Button) -> void:
 func _on_pause_toggle_music(btn: Button) -> void:
 	var on: bool = AudioManager.toggle_music_enabled()
 	btn.text = "MUSIC: ON" if on else "MUSIC: OFF"
+	AudioManager.play("select")
+
+
+func _on_pause_toggle_shake(btn: Button) -> void:
+	## Run 35: motion-sensitivity toggle.
+	var on: bool = GameState.toggle_screen_shake()
+	btn.text = "SHAKE: ON" if on else "SHAKE: OFF"
+	AudioManager.play("select")
+
+
+func _on_pause_toggle_damage_numbers(btn: Button) -> void:
+	## Run 35: floating damage-number toggle.
+	var on: bool = GameState.toggle_damage_numbers()
+	btn.text = "DMG #s: ON" if on else "DMG #s: OFF"
 	AudioManager.play("select")
 
 
@@ -3342,7 +3403,32 @@ func _build_stats_panel() -> void:
 	_inventory_label.custom_minimum_size = Vector2(160.0, 0.0)
 	outer.add_child(_inventory_label)
 
+	# Run 35: status-effect detail section — divider + header + per-effect
+	# rows. Hidden when the hero has no active effects so the panel stays
+	# compact during the long stretches between buffs/debuffs.
+	_status_divider = ColorRect.new()
+	_status_divider.custom_minimum_size = Vector2(160.0, 1.0)
+	_status_divider.color = Color(0.55, 0.42, 0.18, 0.45)
+	_status_divider.visible = false
+	outer.add_child(_status_divider)
+
+	_status_header = Label.new()
+	_status_header.text = "STATUS"
+	_status_header.add_theme_font_size_override("font_size", 10)
+	_status_header.add_theme_color_override("font_color", Color(0.78, 0.68, 0.30))
+	_status_header.visible = false
+	outer.add_child(_status_header)
+
+	_status_detail_label = Label.new()
+	_status_detail_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_status_detail_label.add_theme_font_size_override("font_size", 10)
+	_status_detail_label.add_theme_color_override("font_color", Color(0.92, 0.86, 0.66))
+	_status_detail_label.custom_minimum_size = Vector2(160.0, 0.0)
+	_status_detail_label.visible = false
+	outer.add_child(_status_detail_label)
+
 	_refresh_stats_panel()
+	_refresh_status_panel()
 
 
 func _refresh_stats_panel() -> void:
@@ -3380,6 +3466,36 @@ func _refresh_stats_panel() -> void:
 func _on_inventory_changed() -> void:
 	## GameState.inventory_changed handler — kept tiny on purpose.
 	_refresh_stats_panel()
+
+
+func _refresh_status_panel() -> void:
+	## Run 35: render the hero's stack-collapsed status list under the
+	## loadout. Hidden when nothing is active so the panel doesn't sit
+	## with a stale "STATUS" header during normal play.
+	if _status_detail_label == null:
+		return
+	if _hero == null or _hero.status_effects.is_empty():
+		_status_divider.visible = false
+		_status_header.visible = false
+		_status_detail_label.visible = false
+		_status_detail_label.text = ""
+		return
+	var lines: Array[String] = []
+	for eff: Dictionary in StatusEffect.stack(_hero.status_effects):
+		var line: String = StatusEffect.summarize(eff)
+		var n: int = int(eff.get("stacks", 1))
+		if n > 1:
+			line += " (x%d)" % n
+		lines.append(line)
+	if lines.is_empty():
+		_status_divider.visible = false
+		_status_header.visible = false
+		_status_detail_label.visible = false
+		return
+	_status_divider.visible = true
+	_status_header.visible = true
+	_status_detail_label.visible = true
+	_status_detail_label.text = "\n".join(lines)
 
 
 func _build_combat_log() -> void:

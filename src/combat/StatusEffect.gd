@@ -24,3 +24,106 @@ static func mana_shield(absorb: int = 40, duration: int = 10) -> Dictionary:
 	return {"id": "mana_shield", "name": "Mana Shield", "duration": duration,
 		"damage_per_turn": 0, "armor_mod": 0, "absorb_remaining": absorb,
 		"absorb_max": absorb}
+
+# ── Run 35: HUD-friendly summary + stacking ──────────────────────────────────
+#
+# Single source of truth for how each effect renders. BattleScene's compact
+# above-the-sprite label uses `short_code()`; the new hero status detail panel
+# uses `display_name()` + `summarize()`. Stacking collapses duplicates so a
+# poison applied twice reads `Poisoned x2` instead of two separate rows that
+# can never tell the player how many turns are actually left.
+
+const SHORT_CODES: Dictionary = {
+	"burning": "BRN",
+	"frozen": "FRZ",
+	"poisoned": "PSN",
+	"fortified": "DEF",
+	"vanished": "HID",
+	"mana_shield": "SHD",
+}
+
+const DISPLAY_NAMES: Dictionary = {
+	"burning": "Burning",
+	"frozen": "Frozen",
+	"poisoned": "Poisoned",
+	"fortified": "Fortified",
+	"vanished": "Vanished",
+	"mana_shield": "Mana Shield",
+}
+
+static func short_code(eff: Dictionary) -> String:
+	## Three-letter HUD code. Falls back to the id (upper-cased, truncated)
+	## so a future effect renders something instead of a blank bracket.
+	var id: String = String(eff.get("id", ""))
+	if SHORT_CODES.has(id):
+		return String(SHORT_CODES[id])
+	return id.substr(0, 3).to_upper() if id != "" else "???"
+
+static func display_name(eff: Dictionary) -> String:
+	## Long-form name for the detail panel. Falls back to the dict's
+	## "name" field, then to a title-cased id.
+	var id: String = String(eff.get("id", ""))
+	if DISPLAY_NAMES.has(id):
+		return String(DISPLAY_NAMES[id])
+	var nm: String = String(eff.get("name", ""))
+	if nm != "":
+		return nm
+	return id.capitalize() if id != "" else "Unknown"
+
+static func summarize(eff: Dictionary) -> String:
+	## Detail-panel line. Always carries duration in turns; appends DPT
+	## or armor mod when non-zero so the player can see what the effect
+	## is actually doing this turn. Mana Shield gets the absorb pool
+	## instead of a DPT (which is always 0 by definition).
+	var dur: int = int(eff.get("duration", 0))
+	var parts: Array[String] = [display_name(eff), "%dt" % dur]
+	var id: String = String(eff.get("id", ""))
+	if id == "mana_shield":
+		parts.append("%d absorb" % int(eff.get("absorb_remaining", 0)))
+	else:
+		var dpt: int = int(eff.get("damage_per_turn", 0))
+		if dpt > 0:
+			parts.append("%d/turn" % dpt)
+		var armor_mod: int = int(eff.get("armor_mod", 0))
+		if armor_mod > 0:
+			parts.append("+%d armor" % armor_mod)
+		elif armor_mod < 0:
+			parts.append("%d armor" % armor_mod)
+	return " · ".join(parts)
+
+static func stack(effects: Array) -> Array[Dictionary]:
+	## Collapse duplicates by id into one row each. `stacks` is the count;
+	## `duration` is the LONGEST of the group (the player cares when the
+	## debuff stops applying, and the last application sets the floor);
+	## `damage_per_turn` SUMS (poison_blade re-applied twice ticks for the
+	## combined DPT — that's how `tick_statuses` already pays out). Order
+	## of first appearance is preserved so the HUD doesn't flicker.
+	var out: Array[Dictionary] = []
+	var index_by_id: Dictionary = {}
+	for raw: Variant in effects:
+		if not (raw is Dictionary):
+			continue
+		var eff: Dictionary = raw as Dictionary
+		var id: String = String(eff.get("id", ""))
+		if id == "":
+			continue
+		if index_by_id.has(id):
+			var idx: int = int(index_by_id[id])
+			var existing: Dictionary = out[idx]
+			existing["stacks"] = int(existing.get("stacks", 1)) + 1
+			existing["duration"] = max(int(existing.get("duration", 0)),
+				int(eff.get("duration", 0)))
+			existing["damage_per_turn"] = int(existing.get("damage_per_turn", 0)) \
+				+ int(eff.get("damage_per_turn", 0))
+			existing["armor_mod"] = int(existing.get("armor_mod", 0)) \
+				+ int(eff.get("armor_mod", 0))
+			if eff.has("absorb_remaining"):
+				existing["absorb_remaining"] = int(existing.get("absorb_remaining", 0)) \
+					+ int(eff.get("absorb_remaining", 0))
+			out[idx] = existing
+		else:
+			var copy: Dictionary = eff.duplicate(true)
+			copy["stacks"] = 1
+			out.append(copy)
+			index_by_id[id] = out.size() - 1
+	return out

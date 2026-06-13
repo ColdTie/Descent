@@ -77,6 +77,13 @@ signal inventory_changed
 # floors within a run; reset on `start_run()`.
 var battle_speed: float = 1.0
 
+# Run 35: accessibility toggles surfaced in the pause menu. Both default on
+# because they're shipping behavior — disabling them is a quality-of-life
+# choice for motion-sensitivity (screen shake) and visual clutter (floating
+# damage numbers). Persist across floors within a run; reset on `start_run()`.
+var screen_shake_enabled: bool = true
+var damage_numbers_enabled: bool = true
+
 const XP_PER_LEVEL: int = 100
 const TOTAL_FLOORS: int = 18
 
@@ -117,6 +124,8 @@ func start_run(class_id: String, seed_val: int = -1) -> void:
 	merchant_favor_used = false
 	last_skipped_loot = {}
 	loot_buyback_used = false
+	screen_shake_enabled = true
+	damage_numbers_enabled = true
 	var cls_data: Dictionary = Classes.get_class_data(class_id)
 	hero_max_hp = cls_data.get("hp", 100)
 	hero_hp = hero_max_hp
@@ -175,6 +184,30 @@ func set_battle_speed(mult: float) -> void:
 	## Run 27: clamp + apply the per-run animation-speed multiplier.
 	## Pause menu calls this; BattleScene reads it through `_dur()`.
 	battle_speed = clamp(mult, 0.5, 3.0)
+
+
+func set_screen_shake(on: bool) -> void:
+	## Run 35: pause-menu toggle. BattleScene._screen_shake() returns early
+	## when disabled — every existing call site goes through the helper,
+	## so this single flag fully gates motion.
+	screen_shake_enabled = on
+
+
+func set_damage_numbers(on: bool) -> void:
+	## Run 35: pause-menu toggle. _show_damage_number() returns early when
+	## disabled. The HP bar still drains and the combat log still records
+	## the hit, so disabling this only suppresses the floating "-N" labels.
+	damage_numbers_enabled = on
+
+
+func toggle_screen_shake() -> bool:
+	screen_shake_enabled = not screen_shake_enabled
+	return screen_shake_enabled
+
+
+func toggle_damage_numbers() -> bool:
+	damage_numbers_enabled = not damage_numbers_enabled
+	return damage_numbers_enabled
 
 
 func consume_xp_bonus(base_xp: int) -> int:
@@ -265,6 +298,8 @@ func snapshot() -> Dictionary:
 		"merchant_favor_used": merchant_favor_used,
 		"last_skipped_loot": last_skipped_loot.duplicate(true),
 		"loot_buyback_used": loot_buyback_used,
+		"screen_shake_enabled": screen_shake_enabled,
+		"damage_numbers_enabled": damage_numbers_enabled,
 	}
 
 
@@ -303,6 +338,10 @@ func apply_snapshot(data: Dictionary) -> bool:
 	var skipped: Variant = data.get("last_skipped_loot", {})
 	last_skipped_loot = (skipped as Dictionary).duplicate(true) if skipped is Dictionary else {}
 	loot_buyback_used = bool(data.get("loot_buyback_used", false))
+	# Run 35: accessibility toggles. Default to true so pre-Run-35 saves load
+	# with shipping behavior (purely additive — no SAVE_VERSION bump needed).
+	screen_shake_enabled = bool(data.get("screen_shake_enabled", true))
+	damage_numbers_enabled = bool(data.get("damage_numbers_enabled", true))
 	hero_abilities.clear()
 	for a: Variant in data.get("hero_abilities", []):
 		hero_abilities.append(String(a))
