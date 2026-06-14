@@ -107,6 +107,20 @@ func _build_ui() -> void:
 	# Run 21: gold left over at end of run — small contribution to SCORE.
 	_stat_card(stats, "$", "GOLD",  str(GameState.hero_gold),  Color(1.00, 0.80, 0.16))
 
+	# Run 36: meta-progression payout for this run. Main.gd already called
+	# `MetaProgress.record_run_end` before loading this scene, so the wallet
+	# is up to date — we just display the new totals + a "this run earned"
+	# breakdown so the player feels the loop closing.
+	var shard_payout: int = MetaProgress.shards_for_run(
+		GameState.floor_num, GameState.bosses_slain, true, GameState.hero_class)
+	var shard_row := Label.new()
+	shard_row.text = "$  +%d shards this run  ·  total %d  ·  spend on perks from the title menu" % [
+		shard_payout, MetaProgress.shards]
+	shard_row.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	shard_row.add_theme_font_size_override("font_size", 14)
+	shard_row.add_theme_color_override("font_color", Color(0.86, 0.66, 1.0))
+	vbox.add_child(shard_row)
+
 	# Run 19: achievement roster — show what the player earned this run.
 	var ach_count: int = Achievements.unlocked_ids.size()
 	var ach_total: int = Achievements.DEFS.size()

@@ -35,8 +35,34 @@ DESCENT is a turn-based tactical dungeon crawler in the spirit of **Dungeon Craw
 - **Architecture rule**: `BattleEngine._calculate_damage()` returns RAW damage (no armor). `Combatant.take_damage(amount, ignore_armor=false)` applies armor. Don't double-apply armor in both places.
 - `Combatant.take_damage(amount, ignore_armor)` — the `ignore_armor` parameter bypasses the `armor` field reduction (for backstab, env damage, etc.)
 
-## Current State (Run 35 — Status-Effect HUD Depth + Accessibility Toggles)
+## Current State (Run 36 — Meta-Progression: Shards & Starting Perks)
 ### Implemented ✅
+**Run 36 (Roadmap item #1 — meta-progression / unlocks, the biggest remaining gap):**
+- **`autoloads/MetaProgress.gd`** — NEW persistent autoload, registered in `project.godot` after `Achievements`. Distinct from `GameState`'s per-run save (`descent_save.json`) — the meta save (`descent_meta.json`) survives death / win / new run, finally closing the loop the Run 28 save was prep work for. Tracks `shards: int` (the meta currency), `owned_perks: Array[String]` (purchases), `equipped_perks: Array[String]` (active loadout, capped at `Perks.MAX_EQUIPPED = 2`), plus lifetime stats (`total_runs`, `total_wins`, `best_floor`, `best_score`, `classes_cleared: Dictionary` for first-class-win bonus accounting).
+  - File I/O matches Run-28's pattern (FileAccess + JSON + best-effort, IndexedDB-safe on web). `save_to_disk()` is gated behind `is_inside_tree()` so test instances (`.new()` outside the tree) can't pollute the player's real save — a clean test-isolation pattern with no test-only flags.
+  - `shards_for_run(floor, bosses, won, class_id)` is a pure helper exposed separately from `record_run_end` so the WinScreen can display the breakdown before the wallet updates. Constants: `SHARDS_PER_FLOOR=1`, `SHARDS_PER_BOSS=4`, `SHARDS_PER_WIN=25`, `SHARDS_PER_FIRST_CLASS_WIN=10` — tuned so a typical death at floor 5-7 pays ~10 shards (one cheap perk every 2-3 runs) and a full clear pays 65 first time / 55 thereafter.
+  - `purchase_perk` / `equip_perk` / `unequip_perk` enforce: unknown id refused, duplicate purchase refused, broke refused, unowned can't equip, full loadout (`MAX_EQUIPPED`) blocks equip, duplicate equip refused. Every successful mutation fires a signal AND saves.
+  - `apply_snapshot` defensively trims `equipped_perks` to `MAX_EQUIPPED` AND drops any entry not in both `owned_perks` and `Perks.DEFS` — guards against future perk removal / save drift so a stale save can't crash run-start.
+- **`src/data/Perks.gd`** — NEW pure data module. 8 perks across HP / gold / stats / audience / shop economy:
+  - `seasoned` (25): start at hero level 2.
+  - `wealthy` (20): start with 30 gold.
+  - `iron_blood` (30): +15 max HP, healed to new max.
+  - `lucky_strike` (30): +1 attack.
+  - `merchant_ally` (45): 15% shop + reroll discount.
+  - `audience_darling` (30): +50 audience score at run start (sponsor offers come sooner).
+  - `hardened_traveler` (40): +1 defense.
+  - `swift_boots` (35): +1 speed.
+  - `apply_to_run(state, equipped)` is the single mutator — stacks on top of class baseline. Duck-typed `state: Object` so tests can pass a minimal `_FakeState` without instantiating GameState (which requires `/root/GameRng`). `match` block keeps adding a perk to ≤3 lines (DEFS entry + match arm).
+  - `apply_shop_discount(raw_cost, equipped)` + `shop_discount_pct(equipped)` — pure economy helper. 1-gold floor so a future cheap item can't round to free. Called from `scenes/Shop.gd._effective_cost` AND the reroll path so the discount lands everywhere prices are computed.
+- **`scenes/MetaScreen.gd/.tscn`** — NEW screen reached from TitleScreen → META. Three-state perk cards: LOCKED (cost + BUY, greyed when broke), OWNED (purple border + EQUIP, greyed when loadout full), EQUIPPED (green border + UNEQUIP). Header row shows shard balance, equipped/cap, lifetime runs/wins/best-floor. BACK button returns to title via a new `meta_closed` signal so the player can re-read the updated CONTINUE state. Rebuilds on every shard/equip change (cost-affordability gating depends on the wallet, so a partial card refresh wouldn't catch all the state).
+- **`scenes/TitleScreen.gd`** — new META button below the main row showing live shard count + perk-equipped suffix ("META · 80 shards · 1 perk equipped"). Emits `open_meta`. The button sits in its own row so a brand-new 0-shards player isn't distracted by it but a returning player finds it instantly.
+- **`scenes/Main.gd`** — wired the route: `open_meta` → MetaScreen, `meta_closed` → TitleScreen. New `_record_meta_end(won)` helper, called from both `_on_hero_died` and the win-condition branch of `_on_loot_chosen`. Guarded by `_meta_recorded: bool` (reset on `_on_run_started`) so a quick death-during-victory edge case can't double-pay.
+- **`autoloads/GameState.gd`** — `start_run` now reads `MetaProgress.equipped_perks` via duck-typed `/root/MetaProgress` lookup and calls `Perks.apply_to_run(self, equipped)` right after class data load, before `run_started.emit()`. Effects stack on the class baseline — Brawler + iron_blood + lucky_strike starts at 165 HP / 16 atk. No new fields, no SAVE_VERSION bump (perks are external to the run save).
+- **`scenes/Shop.gd`** — `_effective_cost` now applies the `merchant_ally` percentage on top of the favor discount (favor first since it's larger). Reroll path calls `Perks.apply_shop_discount` too. Card cost label generalized: shows discounted/raw side-by-side whenever ANY discount applies (favor uses its existing glow color; perk-only uses the new soft-purple to mirror the META screen's accent so the source reads at a glance).
+- **`scenes/WinScreen.gd`** — new row above the play-again button: "+N shards this run · total M · spend on perks from the title menu". Pulls the breakdown via `MetaProgress.shards_for_run` (re-reads the live wallet via `MetaProgress.shards`) so the player feels the loop closing on a win.
+- **`tests/test_run36.gd`** (38 test functions, ~85 assertions): DEFS schema invariants + cost helper bounds; `apply_to_run` for every perk (incl. defensive `seasoned` never-downgrades, `merchant_ally` is a no-op on state, unknown-id ignored, empty/null safety); shop discount math (15% for merchant_ally, 0% for others, raw passthrough, 1-gold floor); MetaProgress currency (award/spend +/- guards, overdraft refused, wallet integrity); perk lifecycle (purchase happy-path, unknown refused, duplicate refused, broke refused, equip-needs-ownership, equip/unequip roundtrip, MAX_EQUIPPED cap, no-duplicate-equip); shard payout matrix (death-no-boss, death-with-boss, full-clear-first-time, full-clear-repeat, loss-never-gets-win-bonus); `record_run_end` plumbing (stats bump, class marked on win only, best_floor/best_score only-rises); snapshot/apply roundtrip + version stamp + defensive trim-to-cap + drop-equipped-not-owned + drop-equipped-not-in-DEFS. **Test suite total: 2071 passed, 0 failed** (up from 1937 in Run 35; +134 new).
+- **Visual audit**: ran a temporary `tools/meta_tour.gd` autoload (removed after the audit) — confirmed the META screen renders the three perk states correctly (locked grey / owned purple / equipped green), BUY drains the wallet in real-time, and the unaffordable Merchant's Friend (45 shards) shows greyed BUY at 80 shards. The screen lives at `scenes/MetaScreen.tscn` reached from TitleScreen → META; the test bot file was deleted after the audit.
+
 **Run 35 (Roadmap items #2 and #3 — status-effect tooltips & stacks + accessibility):**
 - **`src/combat/StatusEffect.gd`** — single source of truth for HUD rendering. Four new pure helpers, zero scene dependency:
   - `SHORT_CODES` + `DISPLAY_NAMES` constants — bare maps for `burning/frozen/poisoned/fortified/vanished/mana_shield`. The Run 22 magic-strings inside `_update_status_label` were the only place these lived; they're now grounded in the data module so a future effect adds in one place.
@@ -598,18 +624,23 @@ FTL, traditional roguelikes). Status of the "what are we missing" audit:
   Cooldown shortens to 2. New violet glow + banner — Run 34
 
 ### 🔜 Highest-value, easiest remaining (do next, roughly in order)
-1. **Meta-progression / unlocks** — Persistent currency between runs (e.g.
-   "shards" or "favor"), unlockable starting perks or alt-color class skins.
-   Requires save persistence (already in place via Run 28). Loop closer is
-   the next big lift.
-2. **More accessibility** — colorblind-friendly hex highlights (MOVE_CLR
+1. **More accessibility** — colorblind-friendly hex highlights (MOVE_CLR
    green vs ATTACK_CLR red is the obvious risk), text size slider. Run 35
    shipped the screen-shake + damage-numbers toggles in the pause menu;
    that row has space for two more.
-3. **Status-effect hover tooltips** — Run 35 surfaces every active status
+2. **Status-effect hover tooltips** — Run 35 surfaces every active status
    in a permanent left-edge detail panel and inline durations above the
    sprite. A hover tooltip on enemy sprites would push the same info into
    the enemy HUD without changing the layout.
+3. **More perks + perk milestones** — Run 36 ships 8 starter perks with a
+   2-perk loadout cap. Next bumps: perks that ONLY unlock after a milestone
+   (e.g. "Final Stand" once the player has cleared floor 9; "Bossbane" once
+   3 bosses have ever been slain). Drives meta-loop replays. Also: an alt
+   3rd-tier perk slot unlocked after the first full clear so perk depth
+   keeps growing.
+4. **Alt-color class skins** — purely cosmetic unlocks tied to per-class
+   win counts (`MetaProgress.classes_cleared` is the entrypoint). Reuses
+   the Run-32 `Combatant.tint` plumbing; no new sprite art needed.
 
 ### 🟡 Larger / later (note, not yet scoped)
 4. **More floor variety** — Per-tier hazards: Tier 1 crumbling bridges, Tier 2 freeze pools,
@@ -652,6 +683,7 @@ autoloads/
                        play_music(name, fade_s), music_for_floor(n), stop_music(fade_s),
                        SFX/music toggles + volume sliders (Run 24)
   Achievements.gd    — Run 19: DCC-style achievement defs + per-run unlock state + signal
+  MetaProgress.gd    — Run 36: PERSISTENT shards + owned/equipped perks + lifetime stats (descent_meta.json)
 
 src/combat/
   Combatant.gd       — pure fighter data class (+take_damage ignore_armor param)
@@ -679,6 +711,7 @@ src/data/
                        Run 26: `slate()` accepts optional `locked` arg — locked items carry through reroll
                        Run 31: Merchant's Favor — `favor_chance(audience)` + `roll_merchant_favor(rng, audience)`
                        + `discounted_cost(cost)` + `cheapest_legendary(exclude)` helpers
+  Perks.gd           — Run 36: starting-perk DEFS + `apply_to_run(state, equipped)` + `apply_shop_discount`
 
 scenes/
   Main.tscn/.gd      — root, scene orchestration; boots to TitleScreen, routes through VictoryScreen
@@ -692,6 +725,7 @@ scenes/
   SponsorOffer.tscn/.gd  — Run 20: 3-card sponsor pick when audience score crosses a threshold
   PatchNotes.tscn/.gd    — Run 20: mocking "patch notes" overlay at floors 7 and 13
   Shop.tscn/.gd          — Run 21: between-floor merchant; multi-purchase, gold-gated cards
+  MetaScreen.tscn/.gd    — Run 36: meta-progression hub reached from TitleScreen → META
 
 tests/
   run_tests.gd       — headless test runner (SceneTree)
@@ -717,6 +751,7 @@ tests/
   test_run33.gd      — Plague Goblin/Ember Imp schema + status application + faction-guard regression, all three boss signatures + cooldown, loot buyback candidate + cost + GameState plumbing (Run 33)
   test_run34.gd      — Cave Bat/Stone Skeleton schema + gating + tints + design locks, Phase 3 trigger + once-only emit, frenzied rally/slam/pull escalation + cooldown shortening (Run 34)
   test_run35.gd      — StatusEffect short_code/display_name/summarize/stack helpers (every known id + defensive cases + duplicate collapse), GameState screen-shake + damage-numbers toggles (defaults / set / toggle / snapshot roundtrip / pre-Run-35 save default / start_run reset), integration label-format assertion (Run 35)
+  test_run36.gd      — Perks DEFS schema + apply_to_run per-perk + null/empty/unknown defenses, MetaProgress currency (award/spend/overdraft), perk lifecycle (purchase/equip/unequip/cap/duplicate), shard payout matrix (death/win/repeat/first-class-win), record_run_end stat plumbing, snapshot/apply roundtrip + defensive trim-to-cap + drop-not-owned + drop-not-in-DEFS (Run 36)
 
 tools/
   tour_bot.gd        — Run 32: screenshot-audit auto-play bot (see Run 32 notes for usage;

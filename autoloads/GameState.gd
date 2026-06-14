@@ -134,6 +134,16 @@ func start_run(class_id: String, seed_val: int = -1) -> void:
 	for a: String in raw_abilities:
 		hero_abilities.append(a)
 	hero_base_stats = cls_data.get("stats", {}).duplicate()
+	# Run 36: meta-progression starting perks. Read the equipped list from
+	# the MetaProgress autoload (duck-typed so this script still compiles in
+	# --script tests where autoloads aren't registered) and stack their
+	# effects on top of the class baseline. Perks.apply_to_run is pure +
+	# mutates `self` in place.
+	var mp: Node = get_node_or_null("/root/MetaProgress")
+	if mp != null:
+		var equipped: Array = mp.get("equipped_perks")
+		if equipped != null:
+			Perks.apply_to_run(self, equipped)
 	run_started.emit()
 
 func descend() -> void:

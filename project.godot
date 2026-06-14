@@ -22,6 +22,7 @@ GameState="*res://autoloads/GameState.gd"
 SystemVoice="*res://autoloads/SystemVoice.gd"
 AudioManager="*res://autoloads/AudioManager.gd"
 Achievements="*res://autoloads/Achievements.gd"
+MetaProgress="*res://autoloads/MetaProgress.gd"
 
 [display]
 

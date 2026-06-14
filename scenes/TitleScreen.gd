@@ -6,6 +6,8 @@ signal start_game
 # Run 28: emitted when the player clicks CONTINUE on an existing save.
 # Main.gd handles routing back into the saved floor.
 signal continue_run
+# Run 36: emitted when the player opens the meta-progression screen.
+signal open_meta
 
 func _ready() -> void:
 	AudioManager.play_music("music_title", 2.0)
@@ -149,6 +151,27 @@ func _build_ui() -> void:
 	music_btn.pressed.connect(_on_toggle_music.bind(music_btn))
 	btn_row.add_child(music_btn)
 
+	# Run 36: META button — shards balance + perk loadout. Sits in its own
+	# row below the main actions so a brand-new player with 0 shards isn't
+	# distracted by it but a returning player can find it instantly.
+	var meta_row := HBoxContainer.new()
+	meta_row.alignment = BoxContainer.ALIGNMENT_CENTER
+	meta_row.add_theme_constant_override("separation", 12)
+	vbox.add_child(meta_row)
+
+	var meta_btn := Button.new()
+	var equipped_count: int = MetaProgress.equipped_perks.size()
+	var equipped_suffix: String = ""
+	if equipped_count > 0:
+		equipped_suffix = "  ·  %d perk%s equipped" % [
+			equipped_count, "" if equipped_count == 1 else "s"]
+	meta_btn.text = "META  ·  %d shards%s" % [MetaProgress.shards, equipped_suffix]
+	meta_btn.custom_minimum_size = Vector2(360.0, 44.0)
+	meta_btn.add_theme_font_size_override("font_size", 15)
+	meta_btn.add_theme_color_override("font_color", Color(0.78, 0.62, 1.0))
+	meta_btn.pressed.connect(_on_open_meta)
+	meta_row.add_child(meta_btn)
+
 func _on_begin() -> void:
 	AudioManager.play("select")
 	start_game.emit()
@@ -158,6 +181,10 @@ func _on_continue() -> void:
 	# routing to BattleScene.
 	AudioManager.play("select")
 	continue_run.emit()
+
+func _on_open_meta() -> void:
+	AudioManager.play("select")
+	open_meta.emit()
 
 func _on_toggle_sfx(btn: Button) -> void:
 	var on: bool = AudioManager.toggle_enabled()

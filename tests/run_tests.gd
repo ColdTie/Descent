@@ -33,6 +33,7 @@ func _run_all() -> void:
 	_run_suite("Run33 (BossSig+Variants+Buyback)", TestRun33.new())
 	_run_suite("Run34 (Tier1Variants+BossPhase3)", TestRun34.new())
 	_run_suite("Run35 (StatusHUDDepth+Accessibility)", TestRun35.new())
+	_run_suite("Run36 (MetaProgression+Perks)", TestRun36.new())
 
 func _run_suite(name: String, suite: Object) -> void:
 	print("\n--- %s ---" % name)

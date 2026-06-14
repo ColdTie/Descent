@@ -242,12 +242,17 @@ func _effective_cost(slot_idx: int) -> int:
 	## Run 31: returns the actual gold price for a slot, honoring the favor
 	## discount when this is the favored slot. All BUY paths route through
 	## here so the discount can't be bypassed (or applied twice).
+	## Run 36: also applies the meta-progression `merchant_ally` perk
+	## discount (stacks multiplicatively with favor — favor first since it's
+	## the bigger reduction, then the flat percentage). Pure helper; perks
+	## come from MetaProgress.equipped_perks (read-only).
 	if slot_idx >= _slate.size():
 		return 0
 	var raw: int = int((_slate[slot_idx] as Dictionary).get("cost", 0))
+	var price: int = raw
 	if slot_idx == _favor_slot:
-		return Shop.discounted_cost(raw)
-	return raw
+		price = Shop.discounted_cost(price)
+	return Perks.apply_shop_discount(price, MetaProgress.equipped_perks)
 
 
 func _reroll_slate() -> void:
@@ -419,14 +424,21 @@ func _make_card(item: Dictionary, slot_idx: int) -> PanelContainer:
 
 	# Cost label — Run 31: when this is the favored slot, show the original
 	# price struck-through next to the discounted price so the savings read
-	# at a glance.
+	# at a glance. Run 36: `_effective_cost` already folds in the
+	# `merchant_ally` discount; show that as the headline price and
+	# parenthesize the raw price whenever any discount applies.
 	var raw_cost: int = int(item.get("cost", 0))
+	var eff_cost: int = _effective_cost(slot_idx)
 	var cost_lbl := Label.new()
 	cost_lbl.name = "CostLabel"
-	if slot_idx == _favor_slot:
-		var disc: int = Shop.discounted_cost(raw_cost)
-		cost_lbl.text = "$ %d gold  ($ %d)" % [disc, raw_cost]
-		cost_lbl.add_theme_color_override("font_color", FAVOR_GLOW_COLOR)
+	if eff_cost != raw_cost:
+		cost_lbl.text = "$ %d gold  ($ %d)" % [eff_cost, raw_cost]
+		# Favor uses its glow color; perk-only discount uses a softer purple
+		# to mirror the META screen's accent so the source reads at a glance.
+		if slot_idx == _favor_slot:
+			cost_lbl.add_theme_color_override("font_color", FAVOR_GLOW_COLOR)
+		else:
+			cost_lbl.add_theme_color_override("font_color", Color(0.86, 0.66, 1.0))
 	else:
 		cost_lbl.text = "$ %d gold" % raw_cost
 		cost_lbl.add_theme_color_override("font_color", Color(1.0, 0.86, 0.18))
@@ -747,7 +759,9 @@ func _on_lock_pressed(slot_idx: int) -> void:
 
 func _on_reroll_pressed() -> void:
 	## Run 25: spend escalating gold to redraw the slate.
-	var cost: int = Shop.reroll_cost(_reroll_count)
+	## Run 36: reroll cost is also discounted by `merchant_ally`.
+	var cost: int = Perks.apply_shop_discount(
+		Shop.reroll_cost(_reroll_count), MetaProgress.equipped_perks)
 	if GameState.hero_gold < cost:
 		return
 	if not GameState.spend_gold(cost, "shop_reroll"):
@@ -762,7 +776,8 @@ func _on_reroll_pressed() -> void:
 func _refresh_reroll_button() -> void:
 	if _reroll_button == null:
 		return
-	var cost: int = Shop.reroll_cost(_reroll_count)
+	var cost: int = Perks.apply_shop_discount(
+		Shop.reroll_cost(_reroll_count), MetaProgress.equipped_perks)
 	_reroll_button.text = "  REROLL  ($ %d)  " % cost
 	if GameState.hero_gold < cost:
 		_reroll_button.disabled = true

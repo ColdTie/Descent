@@ -11,6 +11,7 @@ const WIN_SCENE := "res://scenes/WinScreen.tscn"
 const SPONSOR_SCENE := "res://scenes/SponsorOffer.tscn"
 const PATCH_NOTES_SCENE := "res://scenes/PatchNotes.tscn"
 const SHOP_SCENE := "res://scenes/Shop.tscn"
+const META_SCENE := "res://scenes/MetaScreen.tscn"
 
 var _current_scene: Node = null
 # Pending data from the last battle, used to pass to VictoryScreen
@@ -22,6 +23,9 @@ var _pending_leveled: bool = false
 # Run 20: floor we're about to enter when patch notes pop. PatchNotes scene
 # reads this via `prepare()` so it knows which tier's notes to show.
 var _pending_next_floor: int = 0
+# Run 36: ensures `_record_meta_end` only fires once per run (death OR win,
+# whichever happens first). Reset in `_on_run_started`.
+var _meta_recorded: bool = false
 
 func _ready() -> void:
 	GameState.run_started.connect(_on_run_started)
@@ -35,6 +39,9 @@ func _go_to_title() -> void:
 func _go_to_class_select() -> void:
 	_load_scene(CLASS_SELECT_SCENE)
 
+func _go_to_meta() -> void:
+	_load_scene(META_SCENE)
+
 func _on_new_run_requested() -> void:
 	# Run 28: starting a brand-new run from the title screen — drop any
 	# stale save so it can't reappear if the player escapes back to title
@@ -43,6 +50,8 @@ func _on_new_run_requested() -> void:
 	_go_to_class_select()
 
 func _on_run_started() -> void:
+	# Run 36: clear the meta-record guard so the next run-end pays out.
+	_meta_recorded = false
 	GameState.descend()
 
 func _on_floor_changed(_floor_num: int) -> void:
@@ -57,8 +66,28 @@ func _on_hero_died() -> void:
 	# Run 28: hero died — clear the save so the title screen doesn't offer
 	# CONTINUE on a dead run. Then back to class select.
 	GameState.clear_save_on_disk()
+	# Run 36: pay out meta-progression shards for the depth reached + bosses
+	# slain. Recorded before the title-screen route so the shard counter on
+	# title reflects the new balance.
+	_record_meta_end(false)
 	await get_tree().create_timer(2.5).timeout
 	_go_to_class_select()
+
+
+func _record_meta_end(won: bool) -> void:
+	## Run 36: idempotent run-end meta hook. Called from both the death path
+	## and the WinScreen route — guarded by `_meta_recorded` so a quick win
+	## (death follows immediately for any reason) doesn't double-pay.
+	if _meta_recorded:
+		return
+	_meta_recorded = true
+	MetaProgress.record_run_end(
+		GameState.floor_num,
+		GameState.bosses_slain,
+		won,
+		GameState.run_score(),
+		GameState.hero_class,
+	)
 
 
 func _persist_run() -> void:
@@ -136,6 +165,13 @@ func _load_scene(path: String) -> void:
 		_current_scene.patch_notes_dismissed.connect(_on_patch_notes_dismissed)
 	if _current_scene.has_signal("shop_left"):
 		_current_scene.shop_left.connect(_on_shop_left)
+	# Run 36: TitleScreen → META button opens the meta-progression screen.
+	# When the player backs out of MetaScreen we return to TitleScreen so
+	# they can re-read the (possibly updated) shard counter / CONTINUE state.
+	if _current_scene.has_signal("open_meta"):
+		_current_scene.open_meta.connect(_go_to_meta)
+	if _current_scene.has_signal("meta_closed"):
+		_current_scene.meta_closed.connect(_go_to_title)
 
 func _on_battle_complete(hero_won: bool, xp_earned: int, enemies_killed: int) -> void:
 	if not hero_won:
@@ -184,6 +220,9 @@ func _on_loot_chosen(_loot_id: String) -> void:
 	if GameState.floor_num >= GameState.TOTAL_FLOORS:
 		# Run 28: run complete — clear the save so CONTINUE doesn't dangle.
 		GameState.clear_save_on_disk()
+		# Run 36: pay out the full-clear shard bonus (+ first-class-win) so the
+		# WinScreen can read the new balance on its first frame.
+		_record_meta_end(true)
 		_load_scene(WIN_SCENE)
 		return
 	# Small HP regen between floors
