@@ -145,6 +145,12 @@ func unlock(id: String) -> bool:
 	var gs: Node = get_node_or_null("/root/GameState")
 	if gs != null:
 		gs.call("award_audience", int(def.get("audience", 10)), "achievement")
+	# Run 37: first-ever unlock of this id pays the meta-progression bonus.
+	# Duck-typed so this script still loads in --script test mode where
+	# /root/MetaProgress isn't registered.
+	var mp: Node = get_node_or_null("/root/MetaProgress")
+	if mp != null:
+		mp.call("award_for_achievement", id)
 	achievement_unlocked.emit(id, def)
 	return true
 

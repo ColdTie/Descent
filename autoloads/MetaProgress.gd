@@ -30,6 +30,11 @@ const SHARDS_PER_FLOOR: int = 1
 const SHARDS_PER_BOSS: int = 4
 const SHARDS_PER_WIN: int = 25
 const SHARDS_PER_FIRST_CLASS_WIN: int = 10  # one-time bonus per class
+# Run 37: one-time bonus for the very first time an achievement is unlocked
+# across the player's entire meta lifetime. Repeat unlocks (achievement gets
+# re-earned on a later run) pay nothing — the audience-score per-run reward
+# still fires every time via Achievements.unlock.
+const SHARDS_PER_ACHIEVEMENT_FIRST_UNLOCK: int = 5
 
 var shards: int = 0
 var owned_perks: Array[String] = []
@@ -41,6 +46,10 @@ var best_score: int = 0
 # `classes_cleared` tracks which class ids have ever won a run (for the
 # first-class-win shard bonus). Keyed by class id, value true.
 var classes_cleared: Dictionary = {}
+# Run 37: tracks every achievement id ever unlocked across all runs. Keyed by
+# achievement id, value true. Used both for the lifetime-bonus payout gate
+# (each id pays once) AND for the MetaScreen achievements gallery.
+var lifetime_achievements: Dictionary = {}
 
 
 func _ready() -> void:
@@ -116,6 +125,37 @@ func equip_perk(perk_id: String) -> bool:
 	return true
 
 
+## Run 37: Achievement → shards loop.
+
+func is_achievement_unlocked_lifetime(id: String) -> bool:
+	return lifetime_achievements.get(id, false)
+
+
+func total_achievements_unlocked_lifetime() -> int:
+	return lifetime_achievements.size()
+
+
+func award_for_achievement(id: String) -> int:
+	## Pay the lifetime-first bonus for an achievement unlock. Returns the
+	## shard amount awarded (0 if blank id, already lifetime-unlocked, or
+	## already paid out). Persists immediately so a crash before run-end
+	## doesn't lose the lifetime mark.
+	##
+	## Achievements.unlock calls this every time a NEW per-run unlock fires;
+	## the lifetime mark is the gate that keeps the payout one-time.
+	if id == null or id == "":
+		return 0
+	if lifetime_achievements.has(id):
+		return 0
+	lifetime_achievements[id] = true
+	var payout: int = SHARDS_PER_ACHIEVEMENT_FIRST_UNLOCK
+	if payout > 0:
+		shards += payout
+		shards_changed.emit(shards, payout)
+	save_to_disk()
+	return payout
+
+
 func unequip_perk(perk_id: String) -> bool:
 	var idx: int = equipped_perks.find(perk_id)
 	if idx < 0:
@@ -181,6 +221,10 @@ func snapshot() -> Dictionary:
 	var cc_copy: Dictionary = {}
 	for k: Variant in classes_cleared.keys():
 		cc_copy[String(k)] = bool(classes_cleared[k])
+	# Run 37: lifetime achievement record, persisted alongside the wallet.
+	var la_copy: Dictionary = {}
+	for k: Variant in lifetime_achievements.keys():
+		la_copy[String(k)] = bool(lifetime_achievements[k])
 	return {
 		"version": SAVE_VERSION,
 		"shards": shards,
@@ -191,6 +235,7 @@ func snapshot() -> Dictionary:
 		"best_floor": best_floor,
 		"best_score": best_score,
 		"classes_cleared": cc_copy,
+		"lifetime_achievements": la_copy,
 	}
 
 
@@ -227,6 +272,12 @@ func apply_snapshot(data: Dictionary) -> bool:
 	var raw_cc: Dictionary = data.get("classes_cleared", {})
 	for k: Variant in raw_cc.keys():
 		classes_cleared[String(k)] = bool(raw_cc[k])
+	# Run 37: tolerate older saves (pre-Run-37) that don't carry this field —
+	# default to empty so the next achievement unlock still pays out.
+	lifetime_achievements = {}
+	var raw_la: Dictionary = data.get("lifetime_achievements", {})
+	for k: Variant in raw_la.keys():
+		lifetime_achievements[String(k)] = bool(raw_la[k])
 	return true
 
 
@@ -276,6 +327,7 @@ func reset_all() -> void:
 	best_floor = 0
 	best_score = 0
 	classes_cleared.clear()
+	lifetime_achievements.clear()
 	save_to_disk()
 	shards_changed.emit(0, 0)
 	perks_equipped_changed.emit(equipped_perks.duplicate())

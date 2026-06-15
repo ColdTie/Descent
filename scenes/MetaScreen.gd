@@ -18,11 +18,20 @@ signal meta_closed
 
 const CARD_WIDTH: float = 250.0
 const CARD_HEIGHT: float = 200.0
+# Run 37: two-tab view — PERKS (the original Run-36 grid) and ACHIEVEMENTS
+# (the new lifetime gallery). The tabs share the same outer panel + header
+# row, only the body grid swaps. Mirrors the toggle idiom used in BattleScene's
+# pause menu so the affordance reads consistently.
+const TAB_PERKS: String = "perks"
+const TAB_ACHIEVEMENTS: String = "achievements"
 
 var _shard_label: Label
 var _equipped_label: Label
 var _stats_label: Label
 var _cards_container: GridContainer
+var _tab_perks_btn: Button
+var _tab_achievements_btn: Button
+var _active_tab: String = TAB_PERKS
 
 
 func _ready() -> void:
@@ -103,12 +112,40 @@ func _build_ui() -> void:
 	_stats_label.add_theme_color_override("font_color", Color(0.62, 0.62, 0.70))
 	header_row.add_child(_stats_label)
 
-	# Perk grid (4 columns × 2 rows for 8 perks)
+	# Run 37: tab toggle row — PERKS / ACHIEVEMENTS. The active tab pops with
+	# a brighter accent so the player always knows which body grid is showing.
+	var tab_row := HBoxContainer.new()
+	tab_row.alignment = BoxContainer.ALIGNMENT_CENTER
+	tab_row.add_theme_constant_override("separation", 8)
+	vbox.add_child(tab_row)
+
+	_tab_perks_btn = Button.new()
+	_tab_perks_btn.custom_minimum_size = Vector2(180.0, 32.0)
+	_tab_perks_btn.add_theme_font_size_override("font_size", 14)
+	_tab_perks_btn.pressed.connect(_on_tab_pressed.bind(TAB_PERKS))
+	tab_row.add_child(_tab_perks_btn)
+
+	_tab_achievements_btn = Button.new()
+	_tab_achievements_btn.custom_minimum_size = Vector2(220.0, 32.0)
+	_tab_achievements_btn.add_theme_font_size_override("font_size", 14)
+	_tab_achievements_btn.pressed.connect(_on_tab_pressed.bind(TAB_ACHIEVEMENTS))
+	tab_row.add_child(_tab_achievements_btn)
+
+	# Body grid — repopulated per tab. Perks use 4 cols (cards are wide);
+	# achievements use 4 cols of smaller cards (more entries to display).
+	# Wrapped in a ScrollContainer so the achievements tab can overflow the
+	# fixed-height outer panel cleanly without truncating cards.
+	var scroll := ScrollContainer.new()
+	scroll.custom_minimum_size = Vector2(1060.0, 380.0)
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	vbox.add_child(scroll)
+
 	_cards_container = GridContainer.new()
 	_cards_container.columns = 4
 	_cards_container.add_theme_constant_override("h_separation", 14)
 	_cards_container.add_theme_constant_override("v_separation", 14)
-	vbox.add_child(_cards_container)
+	_cards_container.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll.add_child(_cards_container)
 
 	# Back button
 	var btn_row := HBoxContainer.new()
@@ -133,17 +170,136 @@ func _refresh() -> void:
 	var win_pct: int = 0
 	if MetaProgress.total_runs > 0:
 		win_pct = MetaProgress.total_wins * 100 / MetaProgress.total_runs
-	_stats_label.text = "Runs: %d  ·  Wins: %d (%d%%)  ·  Best floor: %d" % [
+	# Run 37: header gains a lifetime-achievements counter so a player who's
+	# never opened the gallery tab still gets a hint there's progress to view.
+	var ach_count: int = MetaProgress.total_achievements_unlocked_lifetime()
+	var ach_total: int = Achievements.DEFS.size()
+	_stats_label.text = "Runs: %d  ·  Wins: %d (%d%%)  ·  Best floor: %d  ·  Achievements: %d/%d" % [
 		MetaProgress.total_runs, MetaProgress.total_wins, win_pct,
-		MetaProgress.best_floor]
+		MetaProgress.best_floor, ach_count, ach_total]
+	_refresh_tab_buttons()
 	_rebuild_cards()
+
+
+func _refresh_tab_buttons() -> void:
+	## Run 37: highlight the active tab. PERKS is the default-on landing tab
+	## so existing players don't see a behavior change on entry.
+	var ach_count: int = MetaProgress.total_achievements_unlocked_lifetime()
+	var ach_total: int = Achievements.DEFS.size()
+	_tab_perks_btn.text = "PERKS  (%d / %d)" % [
+		MetaProgress.owned_perks.size(), Perks.DEFS.size()]
+	_tab_achievements_btn.text = "ACHIEVEMENTS  (%d / %d)" % [ach_count, ach_total]
+	if _active_tab == TAB_PERKS:
+		_tab_perks_btn.add_theme_color_override("font_color", Color(0.96, 0.76, 0.10))
+		_tab_achievements_btn.add_theme_color_override("font_color", Color(0.55, 0.55, 0.65))
+	else:
+		_tab_perks_btn.add_theme_color_override("font_color", Color(0.55, 0.55, 0.65))
+		_tab_achievements_btn.add_theme_color_override("font_color", Color(0.96, 0.76, 0.10))
 
 
 func _rebuild_cards() -> void:
 	for child: Node in _cards_container.get_children():
 		child.queue_free()
-	for pid: String in Perks.all_ids():
-		_cards_container.add_child(_make_perk_card(pid))
+	if _active_tab == TAB_ACHIEVEMENTS:
+		_cards_container.columns = 4
+		for aid: String in Achievements.DEFS.keys():
+			_cards_container.add_child(_make_achievement_card(aid))
+	else:
+		_cards_container.columns = 4
+		for pid: String in Perks.all_ids():
+			_cards_container.add_child(_make_perk_card(pid))
+
+
+func _on_tab_pressed(tab: String) -> void:
+	if tab == _active_tab:
+		return
+	_active_tab = tab
+	AudioManager.play("select")
+	_refresh()
+
+
+func _make_achievement_card(achievement_id: String) -> PanelContainer:
+	## Locked = grey card with name hidden behind "??? — Hidden" if the
+	## achievement def itself sets `hidden: true` AND it's still locked.
+	## Unlocked = full info + green border + UNLOCKED tag.
+	var def: Dictionary = Achievements.DEFS.get(achievement_id, {})
+	var unlocked: bool = MetaProgress.is_achievement_unlocked_lifetime(achievement_id)
+	var hidden: bool = bool(def.get("hidden", false)) and not unlocked
+
+	var border_color: Color = Color(0.32, 0.30, 0.40)
+	if unlocked:
+		border_color = Color(0.30, 0.92, 0.42)
+
+	var panel := PanelContainer.new()
+	# Sized to fit 4 columns inside the 1060-wide scroll viewport.
+	panel.custom_minimum_size = Vector2(250.0, 130.0)
+	var bg := StyleBoxFlat.new()
+	bg.bg_color = Color(0.09, 0.07, 0.13, 0.96)
+	bg.border_color = border_color
+	bg.set_border_width_all(2)
+	bg.set_corner_radius_all(4)
+	bg.set_content_margin_all(10.0)
+	panel.add_theme_stylebox_override("panel", bg)
+
+	var col := VBoxContainer.new()
+	col.add_theme_constant_override("separation", 4)
+	panel.add_child(col)
+
+	# Header row: name + status tag
+	var header := HBoxContainer.new()
+	header.add_theme_constant_override("separation", 6)
+	col.add_child(header)
+
+	var name_lbl := Label.new()
+	if hidden:
+		name_lbl.text = "??? — HIDDEN"
+		name_lbl.add_theme_color_override("font_color", Color(0.55, 0.55, 0.62))
+	else:
+		name_lbl.text = String(def.get("name", achievement_id)).to_upper()
+		name_lbl.add_theme_color_override("font_color", border_color.lightened(0.20))
+	name_lbl.add_theme_font_size_override("font_size", 14)
+	name_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	header.add_child(name_lbl)
+
+	var status := Label.new()
+	if unlocked:
+		status.text = "UNLOCKED"
+		status.add_theme_color_override("font_color", Color(0.30, 0.92, 0.42))
+	else:
+		status.text = "LOCKED"
+		status.add_theme_color_override("font_color", Color(0.62, 0.55, 0.30))
+	status.add_theme_font_size_override("font_size", 11)
+	header.add_child(status)
+
+	# Description
+	var desc := Label.new()
+	if hidden:
+		desc.text = "A hidden achievement. Earn it to read the entry."
+		desc.add_theme_color_override("font_color", Color(0.52, 0.52, 0.58))
+	else:
+		desc.text = String(def.get("desc", ""))
+		desc.add_theme_color_override("font_color", Color(0.68, 0.68, 0.74))
+	desc.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	desc.add_theme_font_size_override("font_size", 11)
+	desc.custom_minimum_size = Vector2(226.0, 0.0)
+	col.add_child(desc)
+
+	# Reward line — show the audience-score / lifetime-shard reward so the
+	# player understands why pursuing locked achievements matters.
+	var reward := Label.new()
+	var aud: int = int(def.get("audience", 10))
+	if unlocked:
+		reward.text = "+%d audience  ·  paid %d shards" % [
+			aud, MetaProgress.SHARDS_PER_ACHIEVEMENT_FIRST_UNLOCK]
+		reward.add_theme_color_override("font_color", Color(0.55, 0.80, 1.0))
+	else:
+		reward.text = "+%d audience  ·  +%d shards on first unlock" % [
+			aud, MetaProgress.SHARDS_PER_ACHIEVEMENT_FIRST_UNLOCK]
+		reward.add_theme_color_override("font_color", Color(0.55, 0.55, 0.65))
+	reward.add_theme_font_size_override("font_size", 10)
+	col.add_child(reward)
+
+	return panel
 
 
 func _make_perk_card(perk_id: String) -> PanelContainer:
