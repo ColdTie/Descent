@@ -18,6 +18,16 @@ class_name Perks
 
 const MAX_EQUIPPED: int = 2
 
+## Run 38: milestone-gated perk requirements.
+## Each entry maps `requires.type` to a check against the player's
+## MetaProgress lifetime stats. Supported types:
+##   - "best_floor"          — player's deepest floor reached (lifetime)
+##   - "total_wins"          — full clears banked (lifetime)
+##   - "bosses_slain"        — bosses killed across all runs (lifetime)
+## The numeric `count` is the threshold the stat must equal or exceed.
+## Perks without a `requires` field are unlocked by default — backward
+## compatible with the Run-36 entries below.
+
 const DEFS: Dictionary = {
 	"seasoned": {
 		"id": "seasoned",
@@ -75,6 +85,49 @@ const DEFS: Dictionary = {
 		"cost": 35,
 		"icon": ">",
 	},
+	# Run 38: milestone-gated perks. These force the player to engage with
+	# the run loop before they're available — a depth check, a boss kill
+	# count, a first clear — so the meta wallet grows alongside genuine
+	# progression instead of just paying out across deaths.
+	"deep_diver": {
+		"id": "deep_diver",
+		"name": "Deep Diver",
+		"desc": "Start each run with +20 max HP (healed). The depths recognize the depths.",
+		"cost": 50,
+		"icon": "+",
+		"requires": {"type": "best_floor", "count": 9},
+	},
+	"bossbane": {
+		"id": "bossbane",
+		"name": "Bossbane",
+		"desc": "+2 attack at run start. Three bosses ago, that was a vague threat.",
+		"cost": 55,
+		"icon": "X",
+		"requires": {"type": "bosses_slain", "count": 3},
+	},
+	"steady_step": {
+		"id": "steady_step",
+		"name": "Steady Step",
+		"desc": "+5 max HP and +1 speed. Small numbers, compound.",
+		"cost": 40,
+		"icon": ">",
+	},
+	"war_veteran": {
+		"id": "war_veteran",
+		"name": "War Veteran",
+		"desc": "Begin every run at hero level 3 with the XP banked. Replaces Seasoned if both equipped.",
+		"cost": 65,
+		"icon": "*",
+		"requires": {"type": "total_wins", "count": 1},
+	},
+	"champions_bond": {
+		"id": "champions_bond",
+		"name": "Champion's Bond",
+		"desc": "+15 max HP, +1 attack, +1 defense, +25 gold. The dungeon's least subtle bribe.",
+		"cost": 80,
+		"icon": "*",
+		"requires": {"type": "total_wins", "count": 1},
+	},
 }
 
 
@@ -124,6 +177,72 @@ static func apply_shop_discount(raw_cost: int, equipped: Array) -> int:
 	return max(1, discounted)
 
 
+## Run 38: milestone gating helpers. Pure-data; the MetaProgress autoload
+## passes its own stats through `lifetime_stats` so this module stays
+## Node-free and testable headlessly.
+
+static func requirement(id: String) -> Dictionary:
+	## Returns the perk's `requires` clause (`{type, count}`) or `{}` when
+	## the perk has no milestone gate. Unknown ids also return `{}` so
+	## callers treat them as "no gate" rather than crashing.
+	if not DEFS.has(id):
+		return {}
+	var p: Dictionary = DEFS[id]
+	var r: Variant = p.get("requires", null)
+	if r == null or not (r is Dictionary):
+		return {}
+	return r as Dictionary
+
+
+static func has_milestone(id: String) -> bool:
+	return not requirement(id).is_empty()
+
+
+static func is_milestone_unlocked(id: String, stats: Variant) -> bool:
+	## True when the perk is either unlocked-by-default (no `requires`) or
+	## the supplied lifetime `stats` dict meets the threshold. `stats` keys
+	## map to requirement types (best_floor / total_wins / bosses_slain).
+	## Defensive: `stats` is typed Variant so callers can pass null without
+	## a hard parse error, and unknown requirement types return false so a
+	## future stat type can't accidentally bypass the gate by going missing
+	## from the caller — fail closed, never open.
+	var req: Dictionary = requirement(id)
+	if req.is_empty():
+		return true
+	if stats == null or not (stats is Dictionary):
+		return false
+	var sd: Dictionary = stats as Dictionary
+	var rtype: String = String(req.get("type", ""))
+	var rcount: int = int(req.get("count", 0))
+	if rtype == "" or rcount <= 0:
+		return true
+	var actual: int = int(sd.get(rtype, 0))
+	return actual >= rcount
+
+
+static func requirement_text(id: String) -> String:
+	## Human-readable requirement string ("Reach floor 9 (lifetime)") for
+	## the MetaScreen LOCKED-by-milestone card. Returns "" when the perk
+	## has no gate so the caller can branch on the empty string without an
+	## extra has_milestone() call.
+	var req: Dictionary = requirement(id)
+	if req.is_empty():
+		return ""
+	var rtype: String = String(req.get("type", ""))
+	var rcount: int = int(req.get("count", 0))
+	match rtype:
+		"best_floor":
+			return "Reach floor %d in any run" % rcount
+		"total_wins":
+			if rcount == 1:
+				return "Win a run (any class)"
+			return "Win %d runs" % rcount
+		"bosses_slain":
+			return "Slay %d bosses (lifetime)" % rcount
+		_:
+			return "Locked"
+
+
 static func apply_to_run(state: Object, equipped: Array) -> void:
 	## Mutates a GameState-like object in-place to apply equipped perks.
 	## Called from `GameState.start_run` after the class defaults have been
@@ -162,6 +281,31 @@ static func apply_to_run(state: Object, equipped: Array) -> void:
 				state.hero_base_stats["speed"] = spd + 1
 			"audience_darling":
 				state.audience_score += 50
+			# Run 38 milestone-gated perks. Each one is a small stacking
+			# bonus that compounds on top of the Run-36 baseline perks; the
+			# milestone gate is what keeps the early loadout from sweeping
+			# every category at once.
+			"deep_diver":
+				state.hero_max_hp += 20
+				state.hero_hp = state.hero_max_hp
+			"bossbane":
+				var b_atk: int = int(state.hero_base_stats.get("attack", 0))
+				state.hero_base_stats["attack"] = b_atk + 2
+			"steady_step":
+				state.hero_max_hp += 5
+				state.hero_hp = state.hero_max_hp
+				var s_spd: int = int(state.hero_base_stats.get("speed", 0))
+				state.hero_base_stats["speed"] = s_spd + 1
+			"war_veteran":
+				state.hero_level = max(state.hero_level, 3)
+			"champions_bond":
+				state.hero_max_hp += 15
+				state.hero_hp = state.hero_max_hp
+				var c_atk: int = int(state.hero_base_stats.get("attack", 0))
+				state.hero_base_stats["attack"] = c_atk + 1
+				var c_def: int = int(state.hero_base_stats.get("defense", 0))
+				state.hero_base_stats["defense"] = c_def + 1
+				state.hero_gold += 25
 			# `merchant_ally` is a passive discount — handled by Shop via
 			# `Perks.shop_discount_pct`, not by a state mutation.
 			_:

@@ -307,12 +307,19 @@ func _make_perk_card(perk_id: String) -> PanelContainer:
 	var owned: bool = MetaProgress.is_owned(perk_id)
 	var equipped: bool = MetaProgress.is_equipped(perk_id)
 	var cost: int = int(perk.get("cost", 0))
+	# Run 38: milestone-locked is a fourth card state. Owned perks
+	# obviously bypass the gate — once bought they're permanent.
+	var milestone_locked: bool = not owned and not MetaProgress.is_perk_milestone_unlocked(perk_id)
 
 	var border_color: Color = Color(0.32, 0.30, 0.40)
 	if equipped:
 		border_color = Color(0.30, 0.92, 0.42)  # bright green
 	elif owned:
 		border_color = Color(0.74, 0.58, 1.0)  # purple
+	elif milestone_locked:
+		# Warm amber outline distinguishes the milestone gate from the
+		# plain "haven't bought yet" cards (which keep the muted grey).
+		border_color = Color(0.85, 0.55, 0.18)
 
 	var panel := PanelContainer.new()
 	panel.custom_minimum_size = Vector2(CARD_WIDTH, CARD_HEIGHT)
@@ -354,6 +361,18 @@ func _make_perk_card(perk_id: String) -> PanelContainer:
 	desc.custom_minimum_size = Vector2(CARD_WIDTH - 24.0, 0.0)
 	col.add_child(desc)
 
+	# Run 38: milestone-requirement line for locked perks. Sits between the
+	# description and the status row so a player scanning the card sees
+	# "WHAT it does" and immediately under it "HOW to unlock it".
+	if milestone_locked:
+		var req_lbl := Label.new()
+		req_lbl.text = "REQUIRES: %s" % Perks.requirement_text(perk_id)
+		req_lbl.add_theme_font_size_override("font_size", 10)
+		req_lbl.add_theme_color_override("font_color", Color(0.95, 0.68, 0.28))
+		req_lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		req_lbl.custom_minimum_size = Vector2(CARD_WIDTH - 24.0, 0.0)
+		col.add_child(req_lbl)
+
 	# Status line
 	var status := Label.new()
 	if equipped:
@@ -362,6 +381,9 @@ func _make_perk_card(perk_id: String) -> PanelContainer:
 	elif owned:
 		status.text = "OWNED"
 		status.add_theme_color_override("font_color", Color(0.74, 0.58, 1.0))
+	elif milestone_locked:
+		status.text = "%d shards (locked)" % cost
+		status.add_theme_color_override("font_color", Color(0.70, 0.55, 0.30))
 	else:
 		status.text = "%d shards" % cost
 		status.add_theme_color_override("font_color", Color(1.0, 0.85, 0.30))
@@ -372,13 +394,24 @@ func _make_perk_card(perk_id: String) -> PanelContainer:
 	var action := Button.new()
 	action.add_theme_font_size_override("font_size", 13)
 	if not owned:
-		action.text = "BUY"
-		if MetaProgress.shards < cost:
+		if milestone_locked:
+			# Locked-by-milestone shows a non-purchase pseudo-button so the
+			# card layout matches the others — same height, same affordance
+			# pattern — but the player can't accidentally drain shards into
+			# something they haven't earned access to yet.
+			action.text = "LOCKED"
 			action.disabled = true
-			action.add_theme_color_override("font_color", Color(0.45, 0.40, 0.50))
+			action.add_theme_color_override("font_color", Color(0.95, 0.68, 0.28))
+			action.add_theme_color_override("font_color_disabled",
+				Color(0.85, 0.55, 0.18))
 		else:
-			action.add_theme_color_override("font_color", Color(1.0, 0.85, 0.30))
-		action.pressed.connect(_on_buy_pressed.bind(perk_id))
+			action.text = "BUY"
+			if MetaProgress.shards < cost:
+				action.disabled = true
+				action.add_theme_color_override("font_color", Color(0.45, 0.40, 0.50))
+			else:
+				action.add_theme_color_override("font_color", Color(1.0, 0.85, 0.30))
+			action.pressed.connect(_on_buy_pressed.bind(perk_id))
 	elif equipped:
 		action.text = "UNEQUIP"
 		action.add_theme_color_override("font_color", Color(0.55, 0.95, 0.60))

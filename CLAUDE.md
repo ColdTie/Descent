@@ -35,8 +35,30 @@ DESCENT is a turn-based tactical dungeon crawler in the spirit of **Dungeon Craw
 - **Architecture rule**: `BattleEngine._calculate_damage()` returns RAW damage (no armor). `Combatant.take_damage(amount, ignore_armor=false)` applies armor. Don't double-apply armor in both places.
 - `Combatant.take_damage(amount, ignore_armor)` — the `ignore_armor` parameter bypasses the `armor` field reduction (for backstab, env damage, etc.)
 
-## Current State (Run 37 — Achievement Lifetime Loop & Gallery)
+## Current State (Run 38 — Milestone-Locked Perks)
 ### Implemented ✅
+**Run 38 (Milestone-gated perks + lifetime boss counter — Run-36 perk depth growth + roadmap item #3):**
+- **`src/data/Perks.gd`** — 5 new perks, 3 of which are milestone-gated:
+  - **Deep Diver** (50 shards, requires best_floor ≥ 9): +20 max HP healed at run start. The first depth-reward perk.
+  - **Bossbane** (55 shards, requires 3 lifetime bosses slain): +2 attack. Tied to actual boss kills rather than just run counts.
+  - **Steady Step** (40 shards, no gate): +5 max HP + 1 speed. Light combo perk for early players.
+  - **War Veteran** (65 shards, requires 1 lifetime win): start at hero level 3 — the "Seasoned 2.0" only available after a clear.
+  - **Champion's Bond** (80 shards, requires 1 lifetime win): +15 max HP, +1 atk, +1 def, +25 gold. Capstone perk.
+  - New static helpers: `requirement(id) -> Dictionary` (returns `{type, count}` or `{}`), `has_milestone(id) -> bool`, `is_milestone_unlocked(id, stats) -> bool` (Variant stats param so callers can pass null defensively — fails closed on null/bad data), `requirement_text(id) -> String` (human-readable). Match block in `requirement_text` has a `_` fallback ("Locked") so a future requirement type without UI strings degrades gracefully.
+  - `apply_to_run` gains 5 new match arms. Variable names suffixed (`b_atk`, `c_atk`, `c_def`, `s_spd`) to avoid any GDScript match-arm scoping ambiguity vs. the existing arms.
+- **`autoloads/MetaProgress.gd`** — three additions threading milestone perks into the existing wallet:
+  - New `lifetime_bosses_slain: int` field. Accumulated in `record_run_end` (negative-guard so a defensive caller passing -1 can't decrement). Persisted in snapshot, restored in apply with a 0 default for pre-Run-38 saves (purely additive, no SAVE_VERSION bump — matches the Run-29/31/33/35/37 idiom).
+  - New `lifetime_stats() -> Dictionary` exposes `{best_floor, total_wins, bosses_slain}` — single map the milestone check consumes. Pulled out so a future stat type (longest_run, etc.) adds in one place.
+  - New `is_perk_milestone_unlocked(perk_id) -> bool` — single gate used by BOTH the purchase path AND the MetaScreen card render so the lock state is consistent.
+  - `purchase_perk` adds a milestone-locked refusal between the already-owned check and the spend — defense in depth so a hand-crafted call can't bypass the gate even if the UI somehow does.
+  - `reset_all()` clears the new counter alongside the wallet so a dev "reset progress" doesn't strand a stale boss tally.
+- **`scenes/MetaScreen.gd`** — perk cards gain a fourth state (MILESTONE_LOCKED) shown alongside LOCKED / OWNED / EQUIPPED:
+  - Warm amber border (Color(0.85, 0.55, 0.18)) distinguishes milestone-locked from the muted grey "haven't bought yet" cards.
+  - New requirement line (font_size 10, amber, autowrap) sits between description and status: `REQUIRES: Reach floor 9 in any run` / `Slay 3 bosses (lifetime)` / `Win a run (any class)`.
+  - Status line shows `50 shards (locked)` in dim amber rather than the gold "spendable" color so a glance reads as "yes you have the shards but no you can't have it yet".
+  - Action button flips to `LOCKED` (disabled, amber font_color_disabled) — same card height/layout as the other states, but unclickable so the player can't drain shards into something they haven't earned.
+- **`tests/test_run38.gd`** (28 test functions, ~85 assertions): new perk DEFS schema + distinct-cost invariants; requirement helpers (returns dict for gated, empty for ungated, empty for unknown id); `has_milestone` predicate; `is_milestone_unlocked` (threshold met / exceeded / below / ungated-passes / null stats fails closed / unknown id unlocked); `requirement_text` for each known type + empty-string for ungated; per-perk `apply_to_run` (deep_diver heal-to-new-max, bossbane attack, steady_step HP+speed combo, war_veteran level 3, war_veteran never-downgrades, champions_bond capstone, stack-with-steady_step, seasoned-doesn't-clobber-war_veteran); MetaProgress `lifetime_stats` shape + `is_perk_milestone_unlocked` defaults locked + flips on stat bump; `purchase_perk` refuses locked + succeeds after unlock; `lifetime_bosses_slain` defaults 0 + accumulates across runs + ignores negative + unlocks bossbane end-to-end; snapshot includes new field + roundtrip + pre-Run-38 save defaults to 0 (not stale 99) + reset_all clears; full 4-step milestone walkthrough (floor 8 nothing / floor 9 + 1 boss unlocks deep_diver / floor 12 + 2 bosses unlocks bossbane / win + 3 bosses unlocks war_veteran + champions_bond); every gated perk has specific requirement text (catches drift between match block and DEFS).
+
 **Run 37 (Achievement → shard payouts + Achievements gallery on MetaScreen — closing the loop Run 19 left open):**
 - **`autoloads/MetaProgress.gd`** — three additions that thread the existing Run-19 achievement system into the Run-36 meta-progression wallet:
   - New `lifetime_achievements: Dictionary` field tracks every achievement id ever unlocked across runs. Distinct from Achievements' per-run `unlocked_ids` which clears on `run_started` — this one accumulates forever.
@@ -638,6 +660,10 @@ FTL, traditional roguelikes). Status of the "what are we missing" audit:
   Dungeon Lord raises every corpse at once, Warden slam grows to range 2 /
   push 3, Abyss Keeper folds every hero in pull range simultaneously.
   Cooldown shortens to 2. New violet glow + banner — Run 34
+- Milestone-locked perks: Deep Diver (floor 9), Bossbane (3 lifetime
+  bosses), War Veteran + Champion's Bond (any win). New amber "LOCKED
+  by milestone" card state on MetaScreen + lifetime boss counter
+  tracked across runs — Run 38
 
 ### 🔜 Highest-value, easiest remaining (do next, roughly in order)
 1. **More accessibility** — colorblind-friendly hex highlights (MOVE_CLR
@@ -648,15 +674,12 @@ FTL, traditional roguelikes). Status of the "what are we missing" audit:
    in a permanent left-edge detail panel and inline durations above the
    sprite. A hover tooltip on enemy sprites would push the same info into
    the enemy HUD without changing the layout.
-3. **More perks + perk milestones** — Run 36 ships 8 starter perks with a
-   2-perk loadout cap. Next bumps: perks that ONLY unlock after a milestone
-   (e.g. "Final Stand" once the player has cleared floor 9; "Bossbane" once
-   3 bosses have ever been slain). Drives meta-loop replays. Also: an alt
-   3rd-tier perk slot unlocked after the first full clear so perk depth
-   keeps growing.
-4. **Alt-color class skins** — purely cosmetic unlocks tied to per-class
+3. **Alt-color class skins** — purely cosmetic unlocks tied to per-class
    win counts (`MetaProgress.classes_cleared` is the entrypoint). Reuses
    the Run-32 `Combatant.tint` plumbing; no new sprite art needed.
+4. **Third perk slot unlock** — Run 38 brought perk count to 13 and capped
+   the loadout at 2. Next bump: an alt 3rd slot unlocked after the first
+   full clear so the perk depth keeps growing.
 
 ### 🟡 Larger / later (note, not yet scoped)
 4. **More floor variety** — Per-tier hazards: Tier 1 crumbling bridges, Tier 2 freeze pools,

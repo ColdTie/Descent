@@ -50,6 +50,11 @@ var classes_cleared: Dictionary = {}
 # achievement id, value true. Used both for the lifetime-bonus payout gate
 # (each id pays once) AND for the MetaScreen achievements gallery.
 var lifetime_achievements: Dictionary = {}
+# Run 38: lifetime boss kill counter — survives runs so the bossbane milestone
+# perk can gate behind the player's actual boss-killing history rather than a
+# per-run reset. GameState.bosses_slain still tracks the in-run count; this
+# adds across run_end calls.
+var lifetime_bosses_slain: int = 0
 
 
 func _ready() -> void:
@@ -91,15 +96,40 @@ func is_equipped(perk_id: String) -> bool:
 	return equipped_perks.has(perk_id)
 
 
+func lifetime_stats() -> Dictionary:
+	## Run 38: snapshot of the lifetime stats Perks milestone gating reads.
+	## Pulled out so a future requirement type adds in one place (this map
+	## + a Perks.requirement_text branch + a Perks.is_milestone_unlocked
+	## case).
+	return {
+		"best_floor": best_floor,
+		"total_wins": total_wins,
+		"bosses_slain": lifetime_bosses_slain,
+	}
+
+
+func is_perk_milestone_unlocked(perk_id: String) -> bool:
+	## Run 38: gate that BOTH the purchase path AND the MetaScreen card
+	## render use, so the lock state is consistent. Perks without a
+	## `requires` clause always pass this check.
+	return Perks.is_milestone_unlocked(perk_id, lifetime_stats())
+
+
 func purchase_perk(perk_id: String) -> bool:
 	## Buy a perk with shards. Returns false on unknown id / already owned /
-	## insufficient funds. On success the perk is added to `owned_perks`
-	## but NOT auto-equipped — the player picks the loadout separately so
-	## buying a 3rd perk doesn't silently displace one of their actives.
+	## insufficient funds / milestone locked. On success the perk is added
+	## to `owned_perks` but NOT auto-equipped — the player picks the
+	## loadout separately so buying a 3rd perk doesn't silently displace
+	## one of their actives.
 	var cost: int = Perks.cost(perk_id)
 	if cost < 0:
 		return false
 	if owned_perks.has(perk_id):
+		return false
+	# Run 38: defense in depth — even if the UI passes the click through, a
+	# milestone-locked perk refuses at the wallet layer so a hand-crafted
+	# call can't bypass the gate.
+	if not is_perk_milestone_unlocked(perk_id):
 		return false
 	if not spend_shards(cost):
 		return false
@@ -202,6 +232,11 @@ func record_run_end(floor_num: int, bosses_slain: int, won: bool,
 		total_wins += 1
 		if class_id != "":
 			classes_cleared[class_id] = true
+	# Run 38: bosses always add to the lifetime tally — even on a death-run
+	# the kills already happened. Negative guard for defensive callers that
+	# pass an unexpected -1.
+	if bosses_slain > 0:
+		lifetime_bosses_slain += bosses_slain
 	if payout > 0:
 		shards += payout
 		shards_changed.emit(shards, payout)
@@ -236,6 +271,8 @@ func snapshot() -> Dictionary:
 		"best_score": best_score,
 		"classes_cleared": cc_copy,
 		"lifetime_achievements": la_copy,
+		# Run 38: cumulative boss kill counter.
+		"lifetime_bosses_slain": lifetime_bosses_slain,
 	}
 
 
@@ -278,6 +315,10 @@ func apply_snapshot(data: Dictionary) -> bool:
 	var raw_la: Dictionary = data.get("lifetime_achievements", {})
 	for k: Variant in raw_la.keys():
 		lifetime_achievements[String(k)] = bool(raw_la[k])
+	# Run 38: pre-Run-38 saves don't carry this — default to 0 so the
+	# Bossbane gate is closed for legacy saves until the next boss kill,
+	# matching the post-Run-38 baseline.
+	lifetime_bosses_slain = int(data.get("lifetime_bosses_slain", 0))
 	return true
 
 
@@ -328,6 +369,7 @@ func reset_all() -> void:
 	best_score = 0
 	classes_cleared.clear()
 	lifetime_achievements.clear()
+	lifetime_bosses_slain = 0
 	save_to_disk()
 	shards_changed.emit(0, 0)
 	perks_equipped_changed.emit(equipped_perks.duplicate())
