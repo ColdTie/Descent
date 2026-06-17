@@ -139,15 +139,23 @@ func purchase_perk(perk_id: String) -> bool:
 	return true
 
 
+func equip_cap() -> int:
+	## Run 39: single read of the dynamic equip cap. Pulled out so the
+	## MetaScreen UI and the equip_perk gate (below) read the same value.
+	## A future cap bump only edits Perks.max_equipped.
+	return Perks.max_equipped(lifetime_stats())
+
+
 func equip_perk(perk_id: String) -> bool:
 	## Add an owned perk to the active loadout. Returns false on unknown id,
-	## unowned perk, already equipped, or loadout full. The MAX_EQUIPPED cap
-	## is enforced here so callers don't have to mirror the rule.
+	## unowned perk, already equipped, or loadout full. The cap is dynamic
+	## (Run 39: 2 by default, 3 after the first lifetime win) and consulted
+	## here so callers don't have to mirror the rule.
 	if not owned_perks.has(perk_id):
 		return false
 	if equipped_perks.has(perk_id):
 		return false
-	if equipped_perks.size() >= Perks.MAX_EQUIPPED:
+	if equipped_perks.size() >= equip_cap():
 		return false
 	equipped_perks.append(perk_id)
 	perks_equipped_changed.emit(equipped_perks.duplicate())
@@ -287,11 +295,28 @@ func apply_snapshot(data: Dictionary) -> bool:
 	owned_perks.clear()
 	for v: Variant in data.get("owned_perks", []):
 		owned_perks.append(String(v))
+	# Run 39: load lifetime stats BEFORE trimming equipped, because the
+	# equip cap is now dynamic (`Perks.max_equipped(lifetime_stats())`) — a
+	# save with 3 equipped perks + a banked win should restore all 3, not
+	# get silently trimmed to 2 because we read the cap before total_wins.
+	total_runs = int(data.get("total_runs", 0))
+	total_wins = int(data.get("total_wins", 0))
+	best_floor = int(data.get("best_floor", 0))
+	best_score = int(data.get("best_score", 0))
+	# Run 38: pre-Run-38 saves don't carry this — default to 0 so the
+	# Bossbane gate is closed for legacy saves until the next boss kill,
+	# matching the post-Run-38 baseline. Loaded here (out of original Run-38
+	# order) so `lifetime_stats()` returns the post-load value when the
+	# dynamic equip cap is computed below.
+	lifetime_bosses_slain = int(data.get("lifetime_bosses_slain", 0))
 	equipped_perks.clear()
-	# Defensive equip cap: trim if a save somehow contains more than
-	# MAX_EQUIPPED equipped perks (cap may have shrunk between versions).
+	# Defensive equip cap: trim if a save somehow contains more than the
+	# active dynamic cap (a save written when the player had 3 slots, then
+	# the metaprogress was reset, would otherwise restore a 3-slot loadout
+	# the player no longer qualifies for).
+	var dyn_cap: int = Perks.max_equipped(lifetime_stats())
 	for v: Variant in data.get("equipped_perks", []):
-		if equipped_perks.size() >= Perks.MAX_EQUIPPED:
+		if equipped_perks.size() >= dyn_cap:
 			break
 		equipped_perks.append(String(v))
 	# Trim equipped to only those still owned in case a perk was removed
@@ -301,10 +326,6 @@ func apply_snapshot(data: Dictionary) -> bool:
 		if owned_perks.has(s) and Perks.DEFS.has(s):
 			filtered.append(s)
 	equipped_perks = filtered
-	total_runs = int(data.get("total_runs", 0))
-	total_wins = int(data.get("total_wins", 0))
-	best_floor = int(data.get("best_floor", 0))
-	best_score = int(data.get("best_score", 0))
 	classes_cleared = {}
 	var raw_cc: Dictionary = data.get("classes_cleared", {})
 	for k: Variant in raw_cc.keys():
@@ -315,10 +336,8 @@ func apply_snapshot(data: Dictionary) -> bool:
 	var raw_la: Dictionary = data.get("lifetime_achievements", {})
 	for k: Variant in raw_la.keys():
 		lifetime_achievements[String(k)] = bool(raw_la[k])
-	# Run 38: pre-Run-38 saves don't carry this — default to 0 so the
-	# Bossbane gate is closed for legacy saves until the next boss kill,
-	# matching the post-Run-38 baseline.
-	lifetime_bosses_slain = int(data.get("lifetime_bosses_slain", 0))
+	# (lifetime_bosses_slain is loaded earlier in this function — see the
+	#  Run 39 reorder comment near the top.)
 	return true
 
 

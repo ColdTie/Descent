@@ -83,6 +83,13 @@ var battle_speed: float = 1.0
 # damage numbers). Persist across floors within a run; reset on `start_run()`.
 var screen_shake_enabled: bool = true
 var damage_numbers_enabled: bool = true
+# Run 39: colorblind-friendly hex highlight palette. Off by default
+# (shipping behavior). When on, MOVE rings/fills shift from green to cyan
+# and ATTACK hexes shift from red to amber — both legible under
+# deuteranopia and protanopia, which are the most common forms of
+# red-green colorblindness. Persists across floors within a run; reset on
+# `start_run()`.
+var colorblind_mode_enabled: bool = false
 
 const XP_PER_LEVEL: int = 100
 const TOTAL_FLOORS: int = 18
@@ -126,6 +133,7 @@ func start_run(class_id: String, seed_val: int = -1) -> void:
 	loot_buyback_used = false
 	screen_shake_enabled = true
 	damage_numbers_enabled = true
+	colorblind_mode_enabled = false
 	var cls_data: Dictionary = Classes.get_class_data(class_id)
 	hero_max_hp = cls_data.get("hp", 100)
 	hero_hp = hero_max_hp
@@ -220,6 +228,18 @@ func toggle_damage_numbers() -> bool:
 	return damage_numbers_enabled
 
 
+func set_colorblind_mode(on: bool) -> void:
+	## Run 39: pause-menu toggle. BattleScene reads this each time it paints
+	## a highlight, so flipping mid-run repaints the next turn's move/attack
+	## rings without a scene reload.
+	colorblind_mode_enabled = on
+
+
+func toggle_colorblind_mode() -> bool:
+	colorblind_mode_enabled = not colorblind_mode_enabled
+	return colorblind_mode_enabled
+
+
 func consume_xp_bonus(base_xp: int) -> int:
 	## Run 32: the LevelUp "Combat Instincts" card stores a one-shot percentage
 	## in hero_base_stats["xp_bonus"] ("Next floor grants +50% XP"). Before this
@@ -310,6 +330,7 @@ func snapshot() -> Dictionary:
 		"loot_buyback_used": loot_buyback_used,
 		"screen_shake_enabled": screen_shake_enabled,
 		"damage_numbers_enabled": damage_numbers_enabled,
+		"colorblind_mode_enabled": colorblind_mode_enabled,
 	}
 
 
@@ -352,6 +373,10 @@ func apply_snapshot(data: Dictionary) -> bool:
 	# with shipping behavior (purely additive — no SAVE_VERSION bump needed).
 	screen_shake_enabled = bool(data.get("screen_shake_enabled", true))
 	damage_numbers_enabled = bool(data.get("damage_numbers_enabled", true))
+	# Run 39: defaults to false for pre-Run-39 saves so loading an older
+	# save doesn't surprise a player by flipping their highlight palette on
+	# resume. Purely additive — no SAVE_VERSION bump.
+	colorblind_mode_enabled = bool(data.get("colorblind_mode_enabled", false))
 	hero_abilities.clear()
 	for a: Variant in data.get("hero_abilities", []):
 		hero_abilities.append(String(a))

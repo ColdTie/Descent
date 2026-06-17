@@ -165,8 +165,15 @@ func _build_ui() -> void:
 
 func _refresh() -> void:
 	_shard_label.text = "$  %d shards" % MetaProgress.shards
-	_equipped_label.text = "Equipped: %d / %d" % [
-		MetaProgress.equipped_perks.size(), Perks.MAX_EQUIPPED]
+	# Run 39: dynamic cap — `+1 slot` after the first lifetime win. Read the
+	# live value so a player who wins mid-session sees the new ceiling on
+	# the next refresh without a scene reload. The label suffix surfaces
+	# the milestone when the bonus is active so the player notices the
+	# unlock even if they didn't open this screen right after the clear.
+	var cap: int = Perks.max_equipped(MetaProgress.lifetime_stats())
+	var suffix: String = "  ★ 3rd slot unlocked" if Perks.third_slot_unlocked(MetaProgress.lifetime_stats()) else ""
+	_equipped_label.text = "Equipped: %d / %d%s" % [
+		MetaProgress.equipped_perks.size(), cap, suffix]
 	var win_pct: int = 0
 	if MetaProgress.total_runs > 0:
 		win_pct = MetaProgress.total_wins * 100 / MetaProgress.total_runs
@@ -421,7 +428,10 @@ func _make_perk_card(perk_id: String) -> PanelContainer:
 		# Equip is greyed out — but still clickable — when the loadout is
 		# full. We still attach the handler so the SFX fires; the autoload
 		# returns false and we just don't update anything.
-		if MetaProgress.equipped_perks.size() >= Perks.MAX_EQUIPPED:
+		# Run 39: cap is dynamic — read the live value so the EQUIP button
+		# unlocks the moment the player banks their first win (and the new
+		# state propagates here via _on_equipped_changed on next refresh).
+		if MetaProgress.equipped_perks.size() >= Perks.max_equipped(MetaProgress.lifetime_stats()):
 			action.disabled = true
 			action.add_theme_color_override("font_color", Color(0.45, 0.40, 0.50))
 		else:

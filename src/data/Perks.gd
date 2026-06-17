@@ -18,6 +18,35 @@ class_name Perks
 
 const MAX_EQUIPPED: int = 2
 
+## Run 39: third perk slot unlocks after the player's first lifetime win.
+## `MAX_EQUIPPED` stays at 2 as the base cap (used by older tests / fallbacks
+## when no stats are available), and `max_equipped(stats)` is the dynamic
+## helper every live UI / engine path uses. Kept as constants rather than
+## hardcoded so a future bump (5th slot after a hard-mode clear, etc.) is
+## one-line addition here + one match arm in `max_equipped`.
+const WIN_BONUS_SLOTS: int = 1
+const MILESTONE_THIRD_SLOT_WINS: int = 1
+
+
+static func max_equipped(stats: Variant) -> int:
+	## Returns the active equip-cap given lifetime stats. Defaults to the base
+	## cap when `stats` is null / not a Dictionary / missing total_wins — fail
+	## closed so a hand-crafted call without context can't open a slot that
+	## the player hasn't earned.
+	var base: int = MAX_EQUIPPED
+	if stats == null or not (stats is Dictionary):
+		return base
+	var wins: int = int((stats as Dictionary).get("total_wins", 0))
+	if wins >= MILESTONE_THIRD_SLOT_WINS:
+		return base + WIN_BONUS_SLOTS
+	return base
+
+
+static func third_slot_unlocked(stats: Variant) -> bool:
+	## Tiny convenience predicate used by the MetaScreen to render the
+	## "3RD SLOT UNLOCKED" banner without duplicating the cap math.
+	return max_equipped(stats) > MAX_EQUIPPED
+
 ## Run 38: milestone-gated perk requirements.
 ## Each entry maps `requires.type` to a check against the player's
 ## MetaProgress lifetime stats. Supported types:

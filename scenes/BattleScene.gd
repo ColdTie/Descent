@@ -15,6 +15,15 @@ const AOE_CLR  := Color(0.9, 0.45, 0.05, 0.35)
 const SELF_CLR  := Color(0.6, 0.3, 0.9, 0.5)
 const FROST_CLR  := Color(0.25, 0.65, 1.0, 0.5)
 const LAVA_HEAT_CLR  := Color(1.0, 0.45, 0.0, 0.9)
+# Run 39: colorblind-friendly alternates for the two highlights that
+# carry game-state meaning (move vs. attack) — chosen to remain
+# distinguishable under deuteranopia + protanopia (red-green colorblind).
+# MOVE shifts from green to cyan, ATTACK shifts from red to amber. The
+# ring (drawn at higher saturation than the fill) gets a matching cyan.
+const MOVE_CLR_CB  := Color(0.20, 0.70, 1.00, 0.45)
+const ATTACK_CLR_CB  := Color(1.00, 0.78, 0.10, 0.55)
+const MOVE_RING_CLR  := Color(0.30, 1.0, 0.45, 0.95)
+const MOVE_RING_CLR_CB  := Color(0.35, 0.85, 1.00, 0.95)
 
 const DONUT_LINES: Dictionary = {
 	"floor_enter": [
@@ -2173,6 +2182,16 @@ func _update_turn_hint() -> void:
 	_turn_indicator.text = "YOUR TURN  •  GREEN = move  •  %s  •  right-click cancels" % action_segment
 
 
+func _attack_highlight_color() -> Color:
+	## Run 39: colorblind-aware palette read. Called per-highlight so a
+	## mid-run toggle from the pause menu is reflected on the next paint.
+	return ATTACK_CLR_CB if GameState.colorblind_mode_enabled else ATTACK_CLR
+
+
+func _move_ring_color() -> Color:
+	return MOVE_RING_CLR_CB if GameState.colorblind_mode_enabled else MOVE_RING_CLR
+
+
 func _update_highlights() -> void:
 	_clear_highlights()
 	if not _player_turn:
@@ -2182,6 +2201,8 @@ func _update_highlights() -> void:
 	# Run 23 (UX): drawn as a thin GREEN RING (Line2D outline) rather than a
 	# fill so they remain unmistakably "move here" even when an ability is
 	# armed and the rest of the grid is painted with attack/AOE fills.
+	# Run 39: the ring color routes through _move_ring_color() so colorblind
+	# mode swaps green→cyan without changing the affordance.
 	for n: Vector2i in HexGrid.neighbors(_hero.position):
 		if _is_valid_move_hex(n):
 			_highlight_move_ring(n)
@@ -2200,7 +2221,7 @@ func _update_highlights() -> void:
 		"single_enemy":
 			for e: Combatant in _enemies:
 				if e.is_alive() and HexGrid.is_in_range(_hero.position, e.position, abl_range):
-					_highlight_hex(e.position, ATTACK_CLR)
+					_highlight_hex(e.position, _attack_highlight_color())
 		"all_enemies":
 			if abl_range <= 1:
 				# Frost nova — show adjacent enemies
@@ -2249,7 +2270,8 @@ func _highlight_move_ring(hex: Vector2i) -> void:
 	pts.append(pts[0])  # close the loop
 	ring.points = pts
 	ring.width = 3.0
-	ring.default_color = Color(0.30, 1.0, 0.45, 0.95)
+	# Run 39: colorblind-aware ring color. Default green; cyan when toggled.
+	ring.default_color = _move_ring_color()
 	ring.joint_mode = Line2D.LINE_JOINT_ROUND
 	ring.z_index = 1   # above ability fills so the green ring is always visible
 	poly.add_child(ring)
@@ -3226,6 +3248,21 @@ func _build_pause_menu() -> void:
 	dmg_btn.pressed.connect(_on_pause_toggle_damage_numbers.bind(dmg_btn))
 	access_row.add_child(dmg_btn)
 
+	# Run 39: colorblind-friendly hex palette toggle. Sits on its own row so
+	# the longer "COLORBLIND" label doesn't crowd the existing SHAKE/DMG#s
+	# row, and so future accessibility toggles (text-size, hex-edge outline,
+	# etc.) have visible space to land alongside it.
+	var access_row2 := HBoxContainer.new()
+	access_row2.alignment = BoxContainer.ALIGNMENT_CENTER
+	access_row2.add_theme_constant_override("separation", 12)
+	vb.add_child(access_row2)
+
+	var cb_btn := Button.new()
+	cb_btn.text = ("COLORBLIND: ON" if GameState.colorblind_mode_enabled else "COLORBLIND: OFF")
+	cb_btn.custom_minimum_size = Vector2(220.0, 36.0)
+	cb_btn.pressed.connect(_on_pause_toggle_colorblind.bind(cb_btn))
+	access_row2.add_child(cb_btn)
+
 	# Action buttons
 	var resume_btn := Button.new()
 	resume_btn.text = "RESUME"
@@ -3306,6 +3343,17 @@ func _on_pause_toggle_damage_numbers(btn: Button) -> void:
 	var on: bool = GameState.toggle_damage_numbers()
 	btn.text = "DMG #s: ON" if on else "DMG #s: OFF"
 	AudioManager.play("select")
+
+
+func _on_pause_toggle_colorblind(btn: Button) -> void:
+	## Run 39: cycle the highlight palette and repaint the live highlights so
+	## the player sees the change immediately (rather than waiting for the
+	## next turn). Safe to call when the player isn't holding the turn —
+	## `_update_highlights` returns early when `_player_turn` is false.
+	var on: bool = GameState.toggle_colorblind_mode()
+	btn.text = "COLORBLIND: ON" if on else "COLORBLIND: OFF"
+	AudioManager.play("select")
+	_update_highlights()
 
 
 func _quit_to_title() -> void:

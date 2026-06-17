@@ -36,6 +36,7 @@ func _run_all() -> void:
 	_run_suite("Run36 (MetaProgression+Perks)", TestRun36.new())
 	_run_suite("Run37 (Achievement+Shards+Gallery)", TestRun37.new())
 	_run_suite("Run38 (MilestonePerks+LifetimeBosses)", TestRun38.new())
+	_run_suite("Run39 (ThirdPerkSlot+Colorblind)", TestRun39.new())
 
 func _run_suite(name: String, suite: Object) -> void:
 	print("\n--- %s ---" % name)

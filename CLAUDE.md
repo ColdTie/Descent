@@ -35,8 +35,28 @@ DESCENT is a turn-based tactical dungeon crawler in the spirit of **Dungeon Craw
 - **Architecture rule**: `BattleEngine._calculate_damage()` returns RAW damage (no armor). `Combatant.take_damage(amount, ignore_armor=false)` applies armor. Don't double-apply armor in both places.
 - `Combatant.take_damage(amount, ignore_armor)` — the `ignore_armor` parameter bypasses the `armor` field reduction (for backstab, env damage, etc.)
 
-## Current State (Run 38 — Milestone-Locked Perks)
+## Current State (Run 39 — Third Perk Slot Unlock + Colorblind Mode)
 ### Implemented ✅
+**Run 39 (3rd perk slot post-win unlock + colorblind-friendly hex palette — roadmap items #4 and #1 from the Run-38 audit):**
+- **`src/data/Perks.gd`** — dynamic equip cap. `MAX_EQUIPPED = 2` stays the base constant (preserving the Run-36/38 test contract), and a new `max_equipped(stats: Variant) -> int` returns base + `WIN_BONUS_SLOTS` once `total_wins >= MILESTONE_THIRD_SLOT_WINS` (currently 1 win → +1 slot, so the effective cap becomes 3). New constants `WIN_BONUS_SLOTS = 1` + `MILESTONE_THIRD_SLOT_WINS = 1` so a future hard-mode bump (5th slot after a no-hit clear, etc.) is one-line. Defensive: `null` stats / non-Dictionary / missing `total_wins` all return the base cap — fail closed so a hand-crafted call can't open a slot the player hasn't earned. New `third_slot_unlocked(stats)` predicate wraps `max_equipped(stats) > MAX_EQUIPPED` for the MetaScreen banner without duplicating the math.
+- **`autoloads/MetaProgress.gd`** — three plumbing edits to the existing equip path:
+  - New `equip_cap()` helper returns `Perks.max_equipped(lifetime_stats())` — the single read of the dynamic cap so the MetaScreen UI and the `equip_perk` gate stay in lockstep.
+  - `equip_perk` now reads `equip_cap()` instead of `Perks.MAX_EQUIPPED`. Fresh meta still caps at 2 (`total_wins = 0`), so the Run-36 `test_equip_cap_enforced` regression still passes without modification.
+  - `apply_snapshot` reordered: lifetime stats (`total_runs`, `total_wins`, `best_floor`, `best_score`, `lifetime_bosses_slain`) load BEFORE the equipped-perks trim. The trim now uses `Perks.max_equipped(lifetime_stats())` so a save with 3 equipped perks + a win on the books restores all 3 — pre-Run-39 the static cap silently trimmed the third. The Run-38 `lifetime_bosses_slain` load moved up from the end of the function to keep `lifetime_stats()` returning post-load values during the cap computation; a regression test (`test_apply_snapshot_lifetime_bosses_still_loads`) catches any future reorder that drops the field.
+- **`autoloads/GameState.gd`** — new `colorblind_mode_enabled: bool` (default false), setters (`set_colorblind_mode(on)` + `toggle_colorblind_mode() -> bool`), reset in `start_run()`, snapshotted in `snapshot()`, restored in `apply_snapshot()` with a `false` default so pre-Run-39 saves load cleanly (no SAVE_VERSION bump — purely additive). The toggle returns the new state so the pause-menu button can update its label in one line, matching the Run-35 toggle idiom.
+- **`scenes/BattleScene.gd`** — colorblind-aware highlight palette:
+  - Four new color constants: `MOVE_CLR_CB` (cyan-blue `Color(0.20, 0.70, 1.00, 0.45)`) replaces the green MOVE fill, `ATTACK_CLR_CB` (amber `Color(1.00, 0.78, 0.10, 0.55)`) replaces the red ATTACK fill, `MOVE_RING_CLR_CB` (matching cyan ring) replaces the green move ring, `MOVE_RING_CLR` is the existing green ring extracted as a constant so the live wiring reads symmetrically.
+  - Two new helpers `_attack_highlight_color()` and `_move_ring_color()` branch on `GameState.colorblind_mode_enabled` so every per-paint highlight reads the toggle live — flipping mid-run repaints the next turn's rings without a scene reload.
+  - `_update_highlights` swaps the inline `ATTACK_CLR` for `_attack_highlight_color()`. `_highlight_move_ring` swaps the inline green `Color(...)` literal for `_move_ring_color()`.
+  - Pause menu gains a new accessibility row (`access_row2`) below the existing SHAKE / DMG#s row, holding a 220×36 `COLORBLIND: ON/OFF` button. New row instead of crowding the existing one because the 480px panel can't fit three buttons without label clipping, and the new row leaves space for future accessibility toggles (text-size, hex-edge outline) without re-flowing the layout.
+  - `_on_pause_toggle_colorblind` flips `GameState.toggle_colorblind_mode()`, updates the button label, and calls `_update_highlights()` so the live grid repaints immediately rather than waiting for the next turn — important because the pause overlay would otherwise hide the change until the player resumed.
+  - Palette choice rationale: cyan vs. amber keeps both highlights legible under deuteranopia AND protanopia (the two most common red-green colorblindness variants). The amber attack hex keeps a high red component (>= 0.8) so it still reads as "danger" to non-colorblind players who flip the toggle by accident, and the cyan move ring is unambiguous against the cave's brown-orange floor palette.
+- **`scenes/MetaScreen.gd`** — surfaces the dynamic cap:
+  - `_refresh()` computes `Perks.max_equipped(MetaProgress.lifetime_stats())` and renders `Equipped: N / dyn_cap` instead of the static `Perks.MAX_EQUIPPED`. When `Perks.third_slot_unlocked(lifetime_stats())` is true, a warm `★ 3rd slot unlocked` suffix appends so a returning player who hasn't opened the screen since their win sees the milestone landed.
+  - `_make_perk_card` EQUIP button gate reads the dynamic cap. A player who banks a win mid-session sees the previously-grey-EQUIP buttons re-enable on the next refresh (which fires via `perks_equipped_changed` whenever they equip something).
+- **`tests/test_run39.gd`** (24 test functions, ~46 assertions): `max_equipped` for the win threshold (0 → 2, 1 → 3, 99 → 3 — no further bumps), defensive cases (null / non-Dictionary / missing field / random int / random string all return base), `third_slot_unlocked` predicate matches `max_equipped` truthiness; base constant locked at 2; bonus constants > 0 and threshold = 1; MetaProgress `equip_cap()` defaults / bumps; `equip_perk` refuses 3rd before win + allows 3rd after + refuses 4th even after win (cap is bumped, not unlimited); `apply_snapshot` preserves 3 equipped when win is on the books, trims to 2 when not; Run-38 `lifetime_bosses_slain` still loads (catches the reorder regression); `record_run_end` win flips the cap end-to-end. GameState: colorblind defaults off, set/toggle persistence, snapshot inclusion, JSON roundtrip, pre-Run-39 save defaults to false (not stale true).
+- **Test suite total: 2337 passed, 0 failed** (up from 2291 in Run 38; +46 new).
+
 **Run 38 (Milestone-gated perks + lifetime boss counter — Run-36 perk depth growth + roadmap item #3):**
 - **`src/data/Perks.gd`** — 5 new perks, 3 of which are milestone-gated:
   - **Deep Diver** (50 shards, requires best_floor ≥ 9): +20 max HP healed at run start. The first depth-reward perk.
@@ -664,12 +684,19 @@ FTL, traditional roguelikes). Status of the "what are we missing" audit:
   bosses), War Veteran + Champion's Bond (any win). New amber "LOCKED
   by milestone" card state on MetaScreen + lifetime boss counter
   tracked across runs — Run 38
+- Colorblind-friendly hex highlight palette (cyan MOVE + amber ATTACK
+  swap from green + red, distinguishable under deuteranopia and
+  protanopia) with a pause-menu toggle that repaints live; 3rd perk
+  slot unlocks after the first lifetime win via dynamic
+  `Perks.max_equipped(stats)` — `MAX_EQUIPPED` constant preserved at 2
+  for back-compat — Run 39
 
 ### 🔜 Highest-value, easiest remaining (do next, roughly in order)
-1. **More accessibility** — colorblind-friendly hex highlights (MOVE_CLR
-   green vs ATTACK_CLR red is the obvious risk), text size slider. Run 35
-   shipped the screen-shake + damage-numbers toggles in the pause menu;
-   that row has space for two more.
+1. **Text size slider** — Run 39 added the colorblind hex toggle on a new
+   pause-menu row that has space for one more accessibility control. A
+   1.0×/1.25×/1.5× text-size cycle (modifying the theme default font
+   size) would close the second half of the Run-35 accessibility roadmap
+   item.
 2. **Status-effect hover tooltips** — Run 35 surfaces every active status
    in a permanent left-edge detail panel and inline durations above the
    sprite. A hover tooltip on enemy sprites would push the same info into
@@ -677,9 +704,10 @@ FTL, traditional roguelikes). Status of the "what are we missing" audit:
 3. **Alt-color class skins** — purely cosmetic unlocks tied to per-class
    win counts (`MetaProgress.classes_cleared` is the entrypoint). Reuses
    the Run-32 `Combatant.tint` plumbing; no new sprite art needed.
-4. **Third perk slot unlock** — Run 38 brought perk count to 13 and capped
-   the loadout at 2. Next bump: an alt 3rd slot unlocked after the first
-   full clear so the perk depth keeps growing.
+4. **Second milestone-slot bump** — Run 39 capped the post-win loadout at
+   3 perks. A `MILESTONE_FOURTH_SLOT_WINS = 3` constant (already wired
+   into `Perks.max_equipped` shape) could surface a 4th slot at the
+   3-class-clear mark for the "completionist" capstone.
 
 ### 🟡 Larger / later (note, not yet scoped)
 4. **More floor variety** — Per-tier hazards: Tier 1 crumbling bridges, Tier 2 freeze pools,
@@ -792,6 +820,8 @@ tests/
   test_run35.gd      — StatusEffect short_code/display_name/summarize/stack helpers (every known id + defensive cases + duplicate collapse), GameState screen-shake + damage-numbers toggles (defaults / set / toggle / snapshot roundtrip / pre-Run-35 save default / start_run reset), integration label-format assertion (Run 35)
   test_run36.gd      — Perks DEFS schema + apply_to_run per-perk + null/empty/unknown defenses, MetaProgress currency (award/spend/overdraft), perk lifecycle (purchase/equip/unequip/cap/duplicate), shard payout matrix (death/win/repeat/first-class-win), record_run_end stat plumbing, snapshot/apply roundtrip + defensive trim-to-cap + drop-not-owned + drop-not-in-DEFS (Run 36)
   test_run37.gd      — Achievement → meta-shards loop: lifetime ledger defaults + first-time payout + duplicate gate + blank-id defense + multi-id accumulation, snapshot includes + apply roundtrip + pre-Run-37 save default + malformed-entry coercion, reset_all clears ledger, every Achievements.DEFS id pays once (auto-participation lock), achievement payout stacks with record_run_end (Run 37)
+  test_run38.gd      — Milestone-gated perks: requirement helpers + is_milestone_unlocked thresholds (met/exceeded/below/ungated/null/unknown) + requirement_text per type, apply_to_run for each Run-38 perk (deep_diver heal-to-max, bossbane atk, steady_step combo, war_veteran level-3 never-downgrades, champions_bond capstone, stack ordering), MetaProgress lifetime_stats + is_perk_milestone_unlocked + purchase refuses-locked + accumulates lifetime_bosses_slain + snapshot pre-Run-38 default, end-to-end 4-step walkthrough (Run 38)
+  test_run39.gd      — Perks.max_equipped dynamic cap (0/1/many wins + null/missing/non-Dict defenses) + third_slot_unlocked predicate + MAX_EQUIPPED constant pin; MetaProgress equip_cap helper + 3rd refused pre-win + 3rd ok post-win + 4th still capped; apply_snapshot keeps 3 with win banked, trims to 2 without, Run-38 lifetime_bosses_slain still loads after reorder; record_run_end win flips cap end-to-end; GameState colorblind defaults off / set / toggle / snapshot roundtrip / pre-Run-39 save default (Run 39)
 
 tools/
   tour_bot.gd        — Run 32: screenshot-audit auto-play bot (see Run 32 notes for usage;
