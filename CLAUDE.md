@@ -35,8 +35,17 @@ DESCENT is a turn-based tactical dungeon crawler in the spirit of **Dungeon Craw
 - **Architecture rule**: `BattleEngine._calculate_damage()` returns RAW damage (no armor). `Combatant.take_damage(amount, ignore_armor=false)` applies armor. Don't double-apply armor in both places.
 - `Combatant.take_damage(amount, ignore_armor)` — the `ignore_armor` parameter bypasses the `armor` field reduction (for backstab, env damage, etc.)
 
-## Current State (Run 39 — Third Perk Slot Unlock + Colorblind Mode)
+## Current State (Run 40 — Text-Size Accessibility Cycle)
 ### Implemented ✅
+**Run 40 (Text-size accessibility cycle — roadmap item #1 from the Run-39 audit; closes the second half of the Run-35 accessibility roadmap item):**
+- **`autoloads/GameState.gd`** — new run-scoped `text_size_scale: float = 1.0` field paired with two constants: `TEXT_SIZE_OPTIONS: Array[float] = [1.0, 1.25, 1.5]` (the cycle) and `TEXT_SIZE_DEFAULT: float = 1.0` (locked at the head of the cycle so a player who never opens the pause menu sees shipping behavior). Reset in `start_run()` alongside the Run-35/39 accessibility toggles (followed convention for consistency — a player who needs a permanent default can flip it on their next class pick), snapshotted in `snapshot()`, restored in `apply_snapshot()` with a 1.0 default for pre-Run-40 saves (purely additive — no SAVE_VERSION bump, matches the Run-29/31/33/35/37/39 idiom).
+- **Apply mechanism** — `apply_text_size_to_window()` pushes the live value to `get_window().content_scale_factor`. This is the cleanest accessibility win: scaling the window's content factor uniformly enlarges every Control node, including labels with per-node `font_size` overrides (a theme-default-font-size override would be shadowed by those overrides, so the original roadmap suggestion of "modify the theme default font size" wouldn't actually move the needle on most of BattleScene's HUD — there are ~40+ inline font_size_override calls). Guard: `if not is_inside_tree(): return` so test instances (`GAMESTATE_SCRIPT.new()` outside the tree) can't crash reaching for a window that isn't there. Mirrors the `MetaProgress.save_to_disk()` test-isolation pattern.
+- **Snap defense** — `set_text_size_scale(scale)` routes through `_nearest_text_size_option(scale)` so a hand-crafted call OR a corrupted-save value collapses to the nearest allowed option. Without this, a stale value like 1.27 would leave the cycle unable to find the current index on the next click. `cycle_text_size_scale()` itself uses `TEXT_SIZE_OPTIONS.find(text_size_scale)` and falls back to index 0 when the current value isn't a known option — defense in depth, so even a `text_size_scale = 2.3` direct-write recovers on the next cycle.
+- **`scenes/BattleScene.gd`** — pause menu's `access_row2` (the colorblind row from Run 39) gains a sibling `TEXT: 1x` button at 160×36 px. The 480px panel comfortably fits the 220 + 12 + 160 layout. Handler `_on_pause_cycle_text_size(btn)` calls `GameState.cycle_text_size_scale()` and updates the label via `_text_size_button_label()` (single source of truth so the build-time render + post-cycle relabel agree). `_format_text_size_value(scale)` drops the trailing `.0` so the default option reads as `1x` rather than `1.0x` — same idiom as the Run-27 battle-speed pips.
+- **Live affordance** — clicking the cycle button repaints the *pause panel itself* mid-click because `content_scale_factor` immediately reflows the GUI on the next frame. That's the intended UX ("I can see the change"). The QUIT/RESUME buttons re-render at the new size without needing a re-open.
+- **`tests/test_run40.gd`** (15 test functions, ~27 assertions): defaults + cycle ordering invariants (default 1.0 is in the option list, options strictly increase, first option is 1.0); `set_text_size_scale` snap (exact / 1.27→1.25 / 1.44→1.5 / out-of-range low→1.0 / out-of-range high→1.5); cycle behavior (single step, full 3-step loop wraps back to 1.0, recovers from off-list value); snapshot/apply roundtrip + pre-Run-40 default (missing key → 1.0, not stale 1.5) + corrupted-value snap-on-apply; safe-when-detached invariant (an instance outside the SceneTree can call `apply_text_size_to_window()` without crashing — `is_inside_tree()` guard works as documented).
+- **Test suite total: 2364 passed, 0 failed** (up from 2337 in Run 39; +27 new).
+
 **Run 39 (3rd perk slot post-win unlock + colorblind-friendly hex palette — roadmap items #4 and #1 from the Run-38 audit):**
 - **`src/data/Perks.gd`** — dynamic equip cap. `MAX_EQUIPPED = 2` stays the base constant (preserving the Run-36/38 test contract), and a new `max_equipped(stats: Variant) -> int` returns base + `WIN_BONUS_SLOTS` once `total_wins >= MILESTONE_THIRD_SLOT_WINS` (currently 1 win → +1 slot, so the effective cap becomes 3). New constants `WIN_BONUS_SLOTS = 1` + `MILESTONE_THIRD_SLOT_WINS = 1` so a future hard-mode bump (5th slot after a no-hit clear, etc.) is one-line. Defensive: `null` stats / non-Dictionary / missing `total_wins` all return the base cap — fail closed so a hand-crafted call can't open a slot the player hasn't earned. New `third_slot_unlocked(stats)` predicate wraps `max_equipped(stats) > MAX_EQUIPPED` for the MetaScreen banner without duplicating the math.
 - **`autoloads/MetaProgress.gd`** — three plumbing edits to the existing equip path:
@@ -690,24 +699,29 @@ FTL, traditional roguelikes). Status of the "what are we missing" audit:
   slot unlocks after the first lifetime win via dynamic
   `Perks.max_equipped(stats)` — `MAX_EQUIPPED` constant preserved at 2
   for back-compat — Run 39
+- Text-size accessibility cycle (1.0× / 1.25× / 1.5×) on the same
+  pause-menu accessibility row. Implemented via the live window's
+  `content_scale_factor` so labels with per-node font_size overrides
+  scale too (which a theme-default approach wouldn't catch) — Run 40
 
 ### 🔜 Highest-value, easiest remaining (do next, roughly in order)
-1. **Text size slider** — Run 39 added the colorblind hex toggle on a new
-   pause-menu row that has space for one more accessibility control. A
-   1.0×/1.25×/1.5× text-size cycle (modifying the theme default font
-   size) would close the second half of the Run-35 accessibility roadmap
-   item.
-2. **Status-effect hover tooltips** — Run 35 surfaces every active status
+1. **Status-effect hover tooltips** — Run 35 surfaces every active status
    in a permanent left-edge detail panel and inline durations above the
    sprite. A hover tooltip on enemy sprites would push the same info into
    the enemy HUD without changing the layout.
-3. **Alt-color class skins** — purely cosmetic unlocks tied to per-class
+2. **Alt-color class skins** — purely cosmetic unlocks tied to per-class
    win counts (`MetaProgress.classes_cleared` is the entrypoint). Reuses
    the Run-32 `Combatant.tint` plumbing; no new sprite art needed.
-4. **Second milestone-slot bump** — Run 39 capped the post-win loadout at
+3. **Second milestone-slot bump** — Run 39 capped the post-win loadout at
    3 perks. A `MILESTONE_FOURTH_SLOT_WINS = 3` constant (already wired
    into `Perks.max_equipped` shape) could surface a 4th slot at the
    3-class-clear mark for the "completionist" capstone.
+4. **Persistent accessibility prefs** — Runs 35/39/40 all reset their
+   pause-menu toggles in `start_run()` for consistency, which forces a
+   player who needs (e.g.) 1.5× text or colorblind palette to re-toggle
+   every run. Moving these to MetaProgress so they persist across runs
+   would be a real accessibility win — current behavior is friction, not
+   a feature.
 
 ### 🟡 Larger / later (note, not yet scoped)
 4. **More floor variety** — Per-tier hazards: Tier 1 crumbling bridges, Tier 2 freeze pools,
@@ -822,6 +836,7 @@ tests/
   test_run37.gd      — Achievement → meta-shards loop: lifetime ledger defaults + first-time payout + duplicate gate + blank-id defense + multi-id accumulation, snapshot includes + apply roundtrip + pre-Run-37 save default + malformed-entry coercion, reset_all clears ledger, every Achievements.DEFS id pays once (auto-participation lock), achievement payout stacks with record_run_end (Run 37)
   test_run38.gd      — Milestone-gated perks: requirement helpers + is_milestone_unlocked thresholds (met/exceeded/below/ungated/null/unknown) + requirement_text per type, apply_to_run for each Run-38 perk (deep_diver heal-to-max, bossbane atk, steady_step combo, war_veteran level-3 never-downgrades, champions_bond capstone, stack ordering), MetaProgress lifetime_stats + is_perk_milestone_unlocked + purchase refuses-locked + accumulates lifetime_bosses_slain + snapshot pre-Run-38 default, end-to-end 4-step walkthrough (Run 38)
   test_run39.gd      — Perks.max_equipped dynamic cap (0/1/many wins + null/missing/non-Dict defenses) + third_slot_unlocked predicate + MAX_EQUIPPED constant pin; MetaProgress equip_cap helper + 3rd refused pre-win + 3rd ok post-win + 4th still capped; apply_snapshot keeps 3 with win banked, trims to 2 without, Run-38 lifetime_bosses_slain still loads after reorder; record_run_end win flips cap end-to-end; GameState colorblind defaults off / set / toggle / snapshot roundtrip / pre-Run-39 save default (Run 39)
+  test_run40.gd      — Text-size accessibility cycle: default 1.0 + option list ordering invariants + first option lock; set_text_size_scale snap (exact / above / below / out-of-range), cycle wrap (3 steps + back to start) + recovery from off-list value; snapshot/apply roundtrip + pre-Run-40 default (missing key → 1.0, not stale 1.5) + corrupted-value snap-on-apply; apply_text_size_to_window safe-when-detached (Run 40)
 
 tools/
   tour_bot.gd        — Run 32: screenshot-audit auto-play bot (see Run 32 notes for usage;

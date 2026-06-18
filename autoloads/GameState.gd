@@ -90,6 +90,16 @@ var damage_numbers_enabled: bool = true
 # red-green colorblindness. Persists across floors within a run; reset on
 # `start_run()`.
 var colorblind_mode_enabled: bool = false
+# Run 40: accessibility text/UI scale. 1.0 = shipping default. Cycles
+# through TEXT_SIZE_OPTIONS via the pause-menu button. Applied via the
+# main window's `content_scale_factor`, which scales the entire GUI
+# layer uniformly — labels with per-node font_size overrides still grow
+# (whereas a theme default font_size override would be shadowed by them).
+# Persists across floors within a run; reset on `start_run()` to mirror
+# the Run-35/39 accessibility-toggle idiom.
+var text_size_scale: float = 1.0
+const TEXT_SIZE_OPTIONS: Array[float] = [1.0, 1.25, 1.5]
+const TEXT_SIZE_DEFAULT: float = 1.0
 
 const XP_PER_LEVEL: int = 100
 const TOTAL_FLOORS: int = 18
@@ -134,6 +144,8 @@ func start_run(class_id: String, seed_val: int = -1) -> void:
 	screen_shake_enabled = true
 	damage_numbers_enabled = true
 	colorblind_mode_enabled = false
+	text_size_scale = TEXT_SIZE_DEFAULT
+	apply_text_size_to_window()
 	var cls_data: Dictionary = Classes.get_class_data(class_id)
 	hero_max_hp = cls_data.get("hp", 100)
 	hero_hp = hero_max_hp
@@ -240,6 +252,60 @@ func toggle_colorblind_mode() -> bool:
 	return colorblind_mode_enabled
 
 
+func set_text_size_scale(scale: float) -> void:
+	## Run 40: snap the requested scale to the nearest allowed option so the
+	## pause-menu cycle and a hand-crafted call can't drift into in-between
+	## values that the UI doesn't render labels for. Then apply to the live
+	## window so the change lands immediately.
+	text_size_scale = _nearest_text_size_option(scale)
+	apply_text_size_to_window()
+
+
+func cycle_text_size_scale() -> float:
+	## Pause-menu helper: advance to the next option in TEXT_SIZE_OPTIONS and
+	## wrap back to the first after the last. Returns the new value so the
+	## button can relabel itself in one line, mirroring the toggle idiom used
+	## by `toggle_screen_shake` and friends.
+	var idx: int = TEXT_SIZE_OPTIONS.find(text_size_scale)
+	if idx < 0:
+		idx = 0
+	else:
+		idx = (idx + 1) % TEXT_SIZE_OPTIONS.size()
+	text_size_scale = TEXT_SIZE_OPTIONS[idx]
+	apply_text_size_to_window()
+	return text_size_scale
+
+
+func apply_text_size_to_window() -> void:
+	## Push the current `text_size_scale` to the live window's
+	## `content_scale_factor`. Guarded with `is_inside_tree()` so test
+	## instances (`GAMESTATE_SCRIPT.new()` not attached to the tree) don't
+	## reach for a window that isn't there — matches the defensive pattern
+	## in `start_run()`'s GameRng lookup. Safe to call any time.
+	if not is_inside_tree():
+		return
+	var w: Window = get_window()
+	if w == null:
+		return
+	w.content_scale_factor = text_size_scale
+
+
+func _nearest_text_size_option(scale: float) -> float:
+	## Defensive snap so an arbitrary float (from a stale save or a hand-
+	## crafted call) collapses to one of the allowed options. Returns the
+	## default when the list is somehow empty.
+	if TEXT_SIZE_OPTIONS.is_empty():
+		return TEXT_SIZE_DEFAULT
+	var best: float = TEXT_SIZE_OPTIONS[0]
+	var best_diff: float = abs(scale - best)
+	for opt: float in TEXT_SIZE_OPTIONS:
+		var d: float = abs(scale - opt)
+		if d < best_diff:
+			best = opt
+			best_diff = d
+	return best
+
+
 func consume_xp_bonus(base_xp: int) -> int:
 	## Run 32: the LevelUp "Combat Instincts" card stores a one-shot percentage
 	## in hero_base_stats["xp_bonus"] ("Next floor grants +50% XP"). Before this
@@ -331,6 +397,7 @@ func snapshot() -> Dictionary:
 		"screen_shake_enabled": screen_shake_enabled,
 		"damage_numbers_enabled": damage_numbers_enabled,
 		"colorblind_mode_enabled": colorblind_mode_enabled,
+		"text_size_scale": text_size_scale,
 	}
 
 
@@ -377,6 +444,13 @@ func apply_snapshot(data: Dictionary) -> bool:
 	# save doesn't surprise a player by flipping their highlight palette on
 	# resume. Purely additive — no SAVE_VERSION bump.
 	colorblind_mode_enabled = bool(data.get("colorblind_mode_enabled", false))
+	# Run 40: text-size scale. Pre-Run-40 saves default to 1.0 so resume
+	# never blows up a returning player's UI by mistake. Snap through
+	# `_nearest_text_size_option` so a corrupted float collapses to a known
+	# option rather than scaling to a value the toggle can't cycle off of.
+	# Purely additive — no SAVE_VERSION bump.
+	text_size_scale = _nearest_text_size_option(float(data.get("text_size_scale", TEXT_SIZE_DEFAULT)))
+	apply_text_size_to_window()
 	hero_abilities.clear()
 	for a: Variant in data.get("hero_abilities", []):
 		hero_abilities.append(String(a))

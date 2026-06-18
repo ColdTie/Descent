@@ -3263,6 +3263,18 @@ func _build_pause_menu() -> void:
 	cb_btn.pressed.connect(_on_pause_toggle_colorblind.bind(cb_btn))
 	access_row2.add_child(cb_btn)
 
+	# Run 40: text-size accessibility cycle. Shares the colorblind row since
+	# both controls are uniformly about "accessibility one-tap toggles" and
+	# the 480-wide panel can comfortably fit a 160px sibling. Wraps through
+	# TEXT_SIZE_OPTIONS (1.0× / 1.25× / 1.5×). The cycle drives the live
+	# window's content_scale_factor, so the pause menu itself rescales
+	# mid-click — that's the desired affordance ("I can see the change").
+	var ts_btn := Button.new()
+	ts_btn.text = _text_size_button_label()
+	ts_btn.custom_minimum_size = Vector2(160.0, 36.0)
+	ts_btn.pressed.connect(_on_pause_cycle_text_size.bind(ts_btn))
+	access_row2.add_child(ts_btn)
+
 	# Action buttons
 	var resume_btn := Button.new()
 	resume_btn.text = "RESUME"
@@ -3354,6 +3366,32 @@ func _on_pause_toggle_colorblind(btn: Button) -> void:
 	btn.text = "COLORBLIND: ON" if on else "COLORBLIND: OFF"
 	AudioManager.play("select")
 	_update_highlights()
+
+
+func _on_pause_cycle_text_size(btn: Button) -> void:
+	## Run 40: advance to the next text-size step and relabel. GameState
+	## applies the new scale to the window directly — no extra plumbing
+	## needed here, the whole UI (pause panel included) reflows on the next
+	## frame from the new `content_scale_factor`.
+	GameState.cycle_text_size_scale()
+	btn.text = _text_size_button_label()
+	AudioManager.play("select")
+
+
+func _text_size_button_label() -> String:
+	## Single source of truth for the cycle button's caption so the build +
+	## post-cycle relabel agree. Format mirrors the SHAKE/DMG #s/COLORBLIND
+	## "LABEL: VALUE" idiom on the same row.
+	return "TEXT: %sx" % _format_text_size_value(GameState.text_size_scale)
+
+
+func _format_text_size_value(scale: float) -> String:
+	## "1.0" / "1.25" / "1.5" rendering. Drop the trailing ".0" so the
+	## default option reads as a clean "1x" rather than "1.0x" — same idiom
+	## as the Run-27 battle-speed pips.
+	if is_equal_approx(scale, round(scale)):
+		return "%d" % int(round(scale))
+	return "%s" % String.num(scale, 2).rstrip("0").rstrip(".")
 
 
 func _quit_to_title() -> void:
