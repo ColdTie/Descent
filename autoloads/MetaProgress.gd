@@ -56,6 +56,24 @@ var lifetime_achievements: Dictionary = {}
 # adds across run_end calls.
 var lifetime_bosses_slain: int = 0
 
+# Run 41: persistent accessibility preferences.
+# Runs 35/39/40 each reset their pause-menu toggle in `GameState.start_run()`
+# for consistency with the per-run state, which forced a player who needs
+# (e.g.) 1.5× text or the colorblind palette to re-toggle on every new run —
+# real friction for the players these toggles exist to help. This dict is the
+# persistent store; `GameState.start_run()` seeds the per-run fields from here
+# (falling back to shipping defaults when MetaProgress isn't registered, i.e.
+# `--script` test mode), and the toggle setters write back here so a flip
+# survives the next class-pick. The pause menu still controls the live value
+# via GameState — this only changes the seed source.
+const ACCESS_PREF_KEYS: Array[String] = [
+	"screen_shake",
+	"damage_numbers",
+	"colorblind",
+	"text_size_scale",
+]
+var accessibility_prefs: Dictionary = _accessibility_prefs_defaults()
+
 
 func _ready() -> void:
 	## Load on boot so the title screen can show CONTINUE-like cues for
@@ -159,6 +177,44 @@ func equip_perk(perk_id: String) -> bool:
 		return false
 	equipped_perks.append(perk_id)
 	perks_equipped_changed.emit(equipped_perks.duplicate())
+	save_to_disk()
+	return true
+
+
+# ── Run 41: persistent accessibility prefs ────────────────────────────────
+
+static func _accessibility_prefs_defaults() -> Dictionary:
+	## Shipping defaults — the values that ship in a fresh meta save. Kept as
+	## a static helper so the field initializer, the `apply_snapshot` fill-in
+	## path, and `reset_all` share the same source of truth.
+	return {
+		"screen_shake": true,
+		"damage_numbers": true,
+		"colorblind": false,
+		"text_size_scale": 1.0,
+	}
+
+
+func get_access_pref(key: String, default_val: Variant) -> Variant:
+	## Single read path for the seed step in `GameState.start_run()`. Returns
+	## the caller's default on unknown keys so a future toggle being added to
+	## the cycle button (or removed) degrades gracefully.
+	if not ACCESS_PREF_KEYS.has(key):
+		return default_val
+	return accessibility_prefs.get(key, default_val)
+
+
+func set_access_pref(key: String, value: Variant) -> bool:
+	## Persist a single accessibility preference. Returns true on a real write.
+	## Called by the GameState setters whenever the player flips a pause-menu
+	## toggle, so the next run inherits the same setting. No-op + false for
+	## unknown keys — defense in depth so a typo from a future toggle can't
+	## quietly extend the dict with a key nothing else reads.
+	if not ACCESS_PREF_KEYS.has(key):
+		return false
+	if accessibility_prefs.get(key, null) == value:
+		return false
+	accessibility_prefs[key] = value
 	save_to_disk()
 	return true
 
@@ -268,6 +324,9 @@ func snapshot() -> Dictionary:
 	var la_copy: Dictionary = {}
 	for k: Variant in lifetime_achievements.keys():
 		la_copy[String(k)] = bool(lifetime_achievements[k])
+	# Run 41: deep-copy the prefs dict so a future caller mutating the
+	# snapshot output can't bleed into live state.
+	var ap_copy: Dictionary = accessibility_prefs.duplicate(true)
 	return {
 		"version": SAVE_VERSION,
 		"shards": shards,
@@ -281,6 +340,8 @@ func snapshot() -> Dictionary:
 		"lifetime_achievements": la_copy,
 		# Run 38: cumulative boss kill counter.
 		"lifetime_bosses_slain": lifetime_bosses_slain,
+		# Run 41: persistent pause-menu accessibility toggles.
+		"accessibility_prefs": ap_copy,
 	}
 
 
@@ -338,7 +399,48 @@ func apply_snapshot(data: Dictionary) -> bool:
 		lifetime_achievements[String(k)] = bool(raw_la[k])
 	# (lifetime_bosses_slain is loaded earlier in this function — see the
 	#  Run 39 reorder comment near the top.)
+	# Run 41: accessibility prefs — start from defaults and overlay any keys
+	# the save carries. Missing-key tolerance keeps pre-Run-41 saves loading
+	# cleanly (purely additive — no SAVE_VERSION bump). Type coercion: bool()
+	# on the on/off toggles so a stale int 0/1 still reads right; the text
+	# scale is rebuilt as a float and snapped to a known option via the same
+	# helper the GameState side uses, so a hand-edited save can't park the
+	# cycle on an in-between value.
+	accessibility_prefs = _accessibility_prefs_defaults()
+	var raw_ap: Variant = data.get("accessibility_prefs", {})
+	if raw_ap is Dictionary:
+		var ap_dict: Dictionary = raw_ap as Dictionary
+		if ap_dict.has("screen_shake"):
+			accessibility_prefs["screen_shake"] = bool(ap_dict["screen_shake"])
+		if ap_dict.has("damage_numbers"):
+			accessibility_prefs["damage_numbers"] = bool(ap_dict["damage_numbers"])
+		if ap_dict.has("colorblind"):
+			accessibility_prefs["colorblind"] = bool(ap_dict["colorblind"])
+		if ap_dict.has("text_size_scale"):
+			var ts_raw: float = float(ap_dict["text_size_scale"])
+			accessibility_prefs["text_size_scale"] = _snap_text_size_pref(ts_raw)
 	return true
+
+
+func _snap_text_size_pref(scale: float) -> float:
+	## Mirror GameState._nearest_text_size_option so a corrupted persistent
+	## text-size pref collapses to a known cycle option. Local copy (rather
+	## than calling into GameState) because MetaProgress is loaded first on
+	## boot — touching the GameState autoload from `_ready -> load_from_disk
+	## -> apply_snapshot` would risk a circular load order in test mode.
+	var script: GDScript = load("res://autoloads/GameState.gd")
+	var opts: Array = script.TEXT_SIZE_OPTIONS
+	var default_v: float = script.TEXT_SIZE_DEFAULT
+	if opts.is_empty():
+		return default_v
+	var best: float = float(opts[0])
+	var best_diff: float = abs(scale - best)
+	for opt: Variant in opts:
+		var d: float = abs(scale - float(opt))
+		if d < best_diff:
+			best = float(opt)
+			best_diff = d
+	return best
 
 
 func save_to_disk() -> bool:
@@ -389,6 +491,10 @@ func reset_all() -> void:
 	classes_cleared.clear()
 	lifetime_achievements.clear()
 	lifetime_bosses_slain = 0
+	# Run 41: a reset wipes accessibility prefs back to the shipping defaults
+	# alongside the wallet so the player's next run starts clean. A returning
+	# player who liked their settings can re-toggle from the pause menu.
+	accessibility_prefs = _accessibility_prefs_defaults()
 	save_to_disk()
 	shards_changed.emit(0, 0)
 	perks_equipped_changed.emit(equipped_perks.duplicate())

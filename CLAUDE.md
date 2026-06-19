@@ -35,8 +35,20 @@ DESCENT is a turn-based tactical dungeon crawler in the spirit of **Dungeon Craw
 - **Architecture rule**: `BattleEngine._calculate_damage()` returns RAW damage (no armor). `Combatant.take_damage(amount, ignore_armor=false)` applies armor. Don't double-apply armor in both places.
 - `Combatant.take_damage(amount, ignore_armor)` — the `ignore_armor` parameter bypasses the `armor` field reduction (for backstab, env damage, etc.)
 
-## Current State (Run 40 — Text-Size Accessibility Cycle)
+## Current State (Run 41 — Persistent Accessibility Prefs)
 ### Implemented ✅
+**Run 41 (Persistent accessibility prefs across runs — roadmap item #4 from the Run-40 audit; closes the friction loop the Run-35/39/40 toggles all left open):**
+- **`autoloads/MetaProgress.gd`** — new `accessibility_prefs: Dictionary` field initialized from a `_accessibility_prefs_defaults()` static helper (single source of truth for the shipping defaults: `screen_shake=true`, `damage_numbers=true`, `colorblind=false`, `text_size_scale=1.0`). New typed `ACCESS_PREF_KEYS: Array[String]` constant locks the four toggle ids so an unknown-key write from a future caller (typo, removed toggle) refuses cleanly. Two helpers thread the read/write contract: `get_access_pref(key, default_val) -> Variant` returns the stored value or the caller's fallback (unknown key / missing value both fall through), and `set_access_pref(key, value) -> bool` writes + immediately persists (returns false on unknown key OR no-op same-value write — the no-op skip avoids redundant `save_to_disk()` calls when a setter is hit repeatedly with the same value).
+- **Snapshot / apply round-trip** — `snapshot()` deep-copies the dict so a caller mutating the snapshot output can't bleed into live state. `apply_snapshot()` overlays each known key onto a fresh defaults dict rather than blind-assigning the saved sub-dict whole, so a partial save (e.g., a forward-migrated meta with only some keys) keeps shipping defaults for the missing ones. Type coercion: `bool()` on the three boolean toggles so a stale int 0/1 from a hand-edited save still reads right, and `float()` on `text_size_scale` routed through a new `_snap_text_size_pref(scale)` helper that mirrors `GameState._nearest_text_size_option` — a corrupted free-form float collapses to a known `TEXT_SIZE_OPTIONS` value so the pause-menu cycle can still find the current index. Non-`Dictionary` `accessibility_prefs` (e.g., a save where the field came back as a string after corruption) falls back to the defaults — defense in depth.
+- **`_snap_text_size_pref` rationale** — local copy (rather than calling into `GameState._nearest_text_size_option`) because MetaProgress is loaded first on boot and reaches `_ready -> load_from_disk -> apply_snapshot` BEFORE GameState's `_ready` runs. Touching the GameState autoload from inside that path would risk a circular load order in test mode. The helper still reads `TEXT_SIZE_OPTIONS` from the GameState script (which loads as a resource on demand without needing the autoload to be registered) so the cycle definition stays single-sourced.
+- **`reset_all()`** — wipes accessibility prefs back to defaults alongside the wallet so a dev "reset progress" doesn't strand stale toggle settings across the wipe. A returning player who liked their previous settings can re-toggle from the pause menu — purely additive UX cost, and the alternative (preserving prefs across reset) would mean a "reset" doesn't reset.
+- **`autoloads/GameState.gd`** — `start_run()` now seeds the four accessibility fields from MetaProgress instead of hardcoding shipping defaults. Duck-typed `get_node_or_null("/root/MetaProgress")` (gated by `is_inside_tree()` so detached test instances don't trip the "absolute paths outside the active scene tree" warning) mirrors the existing GameRng/MetaProgress equipped-perks lookups in the same function. When MetaProgress isn't registered (i.e., `--script` test mode) the seed step falls through to the shipping defaults, so the Run-35/39/40 default-defended tests still pass without modification. `text_size_scale` snaps through `_nearest_text_size_option` on the way out of the seed step so a corrupted persistent pref can't park the cycle on an in-between value.
+- **Setter back-write** — every accessibility setter (`set_screen_shake`, `toggle_screen_shake`, `set_damage_numbers`, `toggle_damage_numbers`, `set_colorblind_mode`, `toggle_colorblind_mode`, `set_text_size_scale`, `cycle_text_size_scale`) calls a new `_persist_access_pref(key, value)` AFTER the local mutation. The helper duck-types `/root/MetaProgress` and routes through `MetaProgress.set_access_pref` so the same write path the pause menu touches lands in the persistent store too. Critical ordering: local mutation FIRST (the engine reads `GameState.screen_shake_enabled` every frame and we don't want to gate that on a MetaProgress write succeeding), persist SECOND. `is_inside_tree()` guard keeps test-mode logs clean — the GameState side of the setter contract is fully covered by unit tests, and the persist hook is verified at runtime via the new smoke script + the pause-menu screenshot path (no per-setter test is needed for the MetaProgress write because `set_access_pref` is tested in isolation).
+- **No SAVE_VERSION bump on either save** — both the in-run GameState save and the MetaProgress save are purely additive; pre-Run-41 saves load with the shipping defaults via the new fields' missing-key fallbacks. Matches the Run-29/31/33/35/37/38/39/40 idiom.
+- **`tests/test_run41.gd`** (22 test functions, ~64 assertions): defaults + key-list invariants; `get_access_pref` known/unknown key + missing-value fallbacks; `set_access_pref` write / no-op / unknown-key refusal / text-size float carry; snapshot deep-copy isolation; full roundtrip (all four prefs); pre-Run-41 save → shipping defaults; partial-prefs overlay (missing keys kept default); corrupted text-size snap on apply; non-Dictionary prefs → defaults; `reset_all()` clears prefs; GameState `start_run` shipping-default fallback when MetaProgress isn't registered; setters mutate local state + return correct values without MetaProgress (regression protection so the persist hook can't swallow the return); end-to-end set-via-MetaProgress → snapshot → reload → read returns toggled value (the "actual win for Run 41" — a closed loop without needing both autoloads live).
+- **Runtime smoke** — temporary `/tmp/r41_check.gd` script (NOT shipped) verified the live persist path: toggle colorblind via GameState → MetaProgress.get_access_pref returns true → restart-equivalent `gs.colorblind_mode_enabled = false; gs.start_run(...)` → field re-seeded to true. Confirms the autoload-attached path works that the unit tests can't exercise.
+- **Test suite total: 2428 passed, 0 failed** (up from 2364 in Run 40; +64 new).
+
 **Run 40 (Text-size accessibility cycle — roadmap item #1 from the Run-39 audit; closes the second half of the Run-35 accessibility roadmap item):**
 - **`autoloads/GameState.gd`** — new run-scoped `text_size_scale: float = 1.0` field paired with two constants: `TEXT_SIZE_OPTIONS: Array[float] = [1.0, 1.25, 1.5]` (the cycle) and `TEXT_SIZE_DEFAULT: float = 1.0` (locked at the head of the cycle so a player who never opens the pause menu sees shipping behavior). Reset in `start_run()` alongside the Run-35/39 accessibility toggles (followed convention for consistency — a player who needs a permanent default can flip it on their next class pick), snapshotted in `snapshot()`, restored in `apply_snapshot()` with a 1.0 default for pre-Run-40 saves (purely additive — no SAVE_VERSION bump, matches the Run-29/31/33/35/37/39 idiom).
 - **Apply mechanism** — `apply_text_size_to_window()` pushes the live value to `get_window().content_scale_factor`. This is the cleanest accessibility win: scaling the window's content factor uniformly enlarges every Control node, including labels with per-node `font_size` overrides (a theme-default-font-size override would be shadowed by those overrides, so the original roadmap suggestion of "modify the theme default font size" wouldn't actually move the needle on most of BattleScene's HUD — there are ~40+ inline font_size_override calls). Guard: `if not is_inside_tree(): return` so test instances (`GAMESTATE_SCRIPT.new()` outside the tree) can't crash reaching for a window that isn't there. Mirrors the `MetaProgress.save_to_disk()` test-isolation pattern.
@@ -703,6 +715,13 @@ FTL, traditional roguelikes). Status of the "what are we missing" audit:
   pause-menu accessibility row. Implemented via the live window's
   `content_scale_factor` so labels with per-node font_size overrides
   scale too (which a theme-default approach wouldn't catch) — Run 40
+- Persistent accessibility prefs across runs (screen shake, damage
+  numbers, colorblind palette, text-size scale) — `start_run` now seeds
+  the four pause-menu toggles from `MetaProgress.accessibility_prefs`
+  instead of hardcoding shipping defaults; every setter back-writes to
+  the persistent store so a flip survives the next class pick. A
+  partial-overlay apply means future toggle additions stay backward
+  compatible without a SAVE_VERSION bump — Run 41
 
 ### 🔜 Highest-value, easiest remaining (do next, roughly in order)
 1. **Status-effect hover tooltips** — Run 35 surfaces every active status
@@ -716,12 +735,12 @@ FTL, traditional roguelikes). Status of the "what are we missing" audit:
    3 perks. A `MILESTONE_FOURTH_SLOT_WINS = 3` constant (already wired
    into `Perks.max_equipped` shape) could surface a 4th slot at the
    3-class-clear mark for the "completionist" capstone.
-4. **Persistent accessibility prefs** — Runs 35/39/40 all reset their
-   pause-menu toggles in `start_run()` for consistency, which forces a
-   player who needs (e.g.) 1.5× text or colorblind palette to re-toggle
-   every run. Moving these to MetaProgress so they persist across runs
-   would be a real accessibility win — current behavior is friction, not
-   a feature.
+4. **Pause-menu pref-management UX** — Run 41 made accessibility toggles
+   persistent, but there's no "reset to shipping defaults" button on the
+   pause menu and the live label doesn't surface that the value came
+   from the persistent store vs. a same-run flip. A small `RESET ACCESS`
+   button on the access row (or a `★` glyph next to non-default toggles)
+   would close the discoverability gap without adding new state.
 
 ### 🟡 Larger / later (note, not yet scoped)
 4. **More floor variety** — Per-tier hazards: Tier 1 crumbling bridges, Tier 2 freeze pools,

@@ -141,10 +141,31 @@ func start_run(class_id: String, seed_val: int = -1) -> void:
 	merchant_favor_used = false
 	last_skipped_loot = {}
 	loot_buyback_used = false
-	screen_shake_enabled = true
-	damage_numbers_enabled = true
-	colorblind_mode_enabled = false
-	text_size_scale = TEXT_SIZE_DEFAULT
+	# Run 41: accessibility toggles seed from the persistent MetaProgress prefs
+	# rather than hardcoding shipping defaults. A player who flipped colorblind
+	# / damage-numbers / text size in their last run no longer has to re-toggle
+	# on every class pick. Duck-typed lookup mirrors the GameRng pattern above
+	# so the script still compiles under `--script` test mode (MetaProgress not
+	# registered → defaults preserved). `is_inside_tree()` short-circuits the
+	# lookup for detached test instances — same pattern as
+	# `apply_text_size_to_window` — to keep the test-mode log clean.
+	var mp_pref: Node = (
+		get_node_or_null("/root/MetaProgress") if is_inside_tree() else null
+	)
+	if mp_pref != null:
+		screen_shake_enabled = bool(mp_pref.call("get_access_pref",
+			"screen_shake", true))
+		damage_numbers_enabled = bool(mp_pref.call("get_access_pref",
+			"damage_numbers", true))
+		colorblind_mode_enabled = bool(mp_pref.call("get_access_pref",
+			"colorblind", false))
+		text_size_scale = _nearest_text_size_option(float(mp_pref.call(
+			"get_access_pref", "text_size_scale", TEXT_SIZE_DEFAULT)))
+	else:
+		screen_shake_enabled = true
+		damage_numbers_enabled = true
+		colorblind_mode_enabled = false
+		text_size_scale = TEXT_SIZE_DEFAULT
 	apply_text_size_to_window()
 	var cls_data: Dictionary = Classes.get_class_data(class_id)
 	hero_max_hp = cls_data.get("hp", 100)
@@ -221,6 +242,7 @@ func set_screen_shake(on: bool) -> void:
 	## when disabled — every existing call site goes through the helper,
 	## so this single flag fully gates motion.
 	screen_shake_enabled = on
+	_persist_access_pref("screen_shake", on)
 
 
 func set_damage_numbers(on: bool) -> void:
@@ -228,15 +250,18 @@ func set_damage_numbers(on: bool) -> void:
 	## disabled. The HP bar still drains and the combat log still records
 	## the hit, so disabling this only suppresses the floating "-N" labels.
 	damage_numbers_enabled = on
+	_persist_access_pref("damage_numbers", on)
 
 
 func toggle_screen_shake() -> bool:
 	screen_shake_enabled = not screen_shake_enabled
+	_persist_access_pref("screen_shake", screen_shake_enabled)
 	return screen_shake_enabled
 
 
 func toggle_damage_numbers() -> bool:
 	damage_numbers_enabled = not damage_numbers_enabled
+	_persist_access_pref("damage_numbers", damage_numbers_enabled)
 	return damage_numbers_enabled
 
 
@@ -245,10 +270,12 @@ func set_colorblind_mode(on: bool) -> void:
 	## a highlight, so flipping mid-run repaints the next turn's move/attack
 	## rings without a scene reload.
 	colorblind_mode_enabled = on
+	_persist_access_pref("colorblind", on)
 
 
 func toggle_colorblind_mode() -> bool:
 	colorblind_mode_enabled = not colorblind_mode_enabled
+	_persist_access_pref("colorblind", colorblind_mode_enabled)
 	return colorblind_mode_enabled
 
 
@@ -259,6 +286,7 @@ func set_text_size_scale(scale: float) -> void:
 	## window so the change lands immediately.
 	text_size_scale = _nearest_text_size_option(scale)
 	apply_text_size_to_window()
+	_persist_access_pref("text_size_scale", text_size_scale)
 
 
 func cycle_text_size_scale() -> float:
@@ -273,7 +301,23 @@ func cycle_text_size_scale() -> float:
 		idx = (idx + 1) % TEXT_SIZE_OPTIONS.size()
 	text_size_scale = TEXT_SIZE_OPTIONS[idx]
 	apply_text_size_to_window()
+	_persist_access_pref("text_size_scale", text_size_scale)
 	return text_size_scale
+
+
+func _persist_access_pref(key: String, value: Variant) -> void:
+	## Run 41: push the new pause-menu toggle value to MetaProgress so the
+	## preference survives the next class pick. The `is_inside_tree()` guard
+	## mirrors `apply_text_size_to_window` — detached test instances would
+	## otherwise warn "Can't use get_node() with absolute paths from outside
+	## the active scene tree". The setter still mutates GameState locally
+	## (before this call), so unit tests of GameState alone work as expected.
+	if not is_inside_tree():
+		return
+	var mp_pref: Node = get_node_or_null("/root/MetaProgress")
+	if mp_pref == null:
+		return
+	mp_pref.call("set_access_pref", key, value)
 
 
 func apply_text_size_to_window() -> void:
