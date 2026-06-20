@@ -39,6 +39,7 @@ func _run_all() -> void:
 	_run_suite("Run39 (ThirdPerkSlot+Colorblind)", TestRun39.new())
 	_run_suite("Run40 (TextSizeAccessibility)", TestRun40.new())
 	_run_suite("Run41 (PersistentAccessibilityPrefs)", TestRun41.new())
+	_run_suite("Run42 (AltColorClassSkins)", TestRun42.new())
 
 func _run_suite(name: String, suite: Object) -> void:
 	print("\n--- %s ---" % name)

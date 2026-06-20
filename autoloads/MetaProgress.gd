@@ -18,6 +18,10 @@ extends Node
 signal shards_changed(total: int, delta: int)
 signal perk_unlocked(id: String)
 signal perks_equipped_changed(equipped: Array)
+# Run 42: emitted whenever the player swaps the equipped skin for a class, or
+# a fresh skin becomes available (a class win bumps the per-class counter
+# across an unlock threshold). MetaScreen rebuilds its SKINS tab on this.
+signal skins_changed
 
 const SAVE_PATH: String = "user://descent_meta.json"
 const SAVE_VERSION: int = 1
@@ -55,6 +59,19 @@ var lifetime_achievements: Dictionary = {}
 # per-run reset. GameState.bosses_slain still tracks the in-run count; this
 # adds across run_end calls.
 var lifetime_bosses_slain: int = 0
+# Run 42: per-class win counter — bumped on every win in `record_run_end`,
+# distinct from `classes_cleared` (which is a one-time flag for the first
+# class-win shard bonus). Drives the Skins unlock threshold (1 win → veteran
+# skin, 3 wins → mastery skin). Keyed by class id, value int. Additive — a
+# pre-Run-42 save loads with an empty dict and the dict back-fills as the
+# player banks wins from then on.
+var class_wins: Dictionary = {}
+# Run 42: per-class chosen skin. Keyed by class id, value the skin id the
+# player has equipped (one slot per class). Missing key → default skin via
+# `Skins.default_for(class_id)`. Owned-ness is derived from `class_wins` +
+# `Skins.is_unlocked`; there's no separate `owned_skins` field because
+# skins auto-unlock on win-count and can't be sold back or hidden.
+var equipped_skins: Dictionary = {}
 
 # Run 41: persistent accessibility preferences.
 # Runs 35/39/40 each reset their pause-menu toggle in `GameState.start_run()`
@@ -250,6 +267,101 @@ func award_for_achievement(id: String) -> int:
 	return payout
 
 
+# ── Run 42: alt-color class skins ─────────────────────────────────────────
+
+func class_win_count(class_id: String) -> int:
+	## Single read of the per-class lifetime win counter — the gate Skins
+	## unlock against. Defaults to 0 for an unknown class id so the skin
+	## tab can iterate every class without a separate has() check.
+	if class_id == "":
+		return 0
+	return int(class_wins.get(class_id, 0))
+
+
+func is_skin_unlocked(skin_id: String) -> bool:
+	## Wraps `Skins.is_unlocked` against the live per-class counter so the
+	## MetaScreen card render and the `equip_skin` gate read the same rule.
+	## Unknown skin ids fall through to false (Skins itself fails closed).
+	var cid: String = Skins.class_id_for(skin_id)
+	if cid == "":
+		return false
+	return Skins.is_unlocked(skin_id, class_win_count(cid))
+
+
+func equipped_skin_for(class_id: String) -> String:
+	## Returns the skin id currently equipped for this class — the explicit
+	## `equipped_skins[class_id]` if present and still unlocked, otherwise
+	## the class's default. The "still unlocked" gate matters because a save
+	## written when the player had an alt skin equipped could be loaded
+	## after a `reset_all()` wiped their class_wins — falling through to
+	## the default skin keeps the live render honest. Unknown class id
+	## returns "" so BattleScene can branch on the empty string and skip
+	## the tint write entirely.
+	if class_id == "":
+		return ""
+	var raw: Variant = equipped_skins.get(class_id, null)
+	if raw != null:
+		var sid: String = String(raw)
+		if sid != "" and is_skin_unlocked(sid):
+			return sid
+	return Skins.default_for(class_id)
+
+
+func equipped_skin_tint(class_id: String) -> Color:
+	## Convenience for BattleScene._build_encounter — single call returns the
+	## live tint Color to assign to `_hero.tint`. Unknown class id → WHITE
+	## (no tint), matching the Combatant default so the hero sprite renders
+	## untinted instead of crashing.
+	var sid: String = equipped_skin_for(class_id)
+	return Skins.tint_for(sid)
+
+
+func equip_skin(skin_id: String) -> bool:
+	## Pick a skin for a class. Returns false on unknown skin id, locked
+	## skin (player hasn't earned it yet), or no-op write (the skin is
+	## already the equipped one for its class). Defense in depth: even if
+	## the MetaScreen button is somehow clicked on a locked card, this
+	## refuses the write so a hand-crafted call can't cheat unlocks.
+	var cid: String = Skins.class_id_for(skin_id)
+	if cid == "":
+		return false
+	if not is_skin_unlocked(skin_id):
+		return false
+	if equipped_skins.get(cid, "") == skin_id:
+		return false
+	equipped_skins[cid] = skin_id
+	skins_changed.emit()
+	save_to_disk()
+	return true
+
+
+func unequip_skin(class_id: String) -> bool:
+	## Swap a class back to its default skin. Returns false when nothing
+	## non-default was equipped (so the MetaScreen button on a default-equipped
+	## card is a no-op rather than a fake save). Internally this clears the
+	## `equipped_skins[class_id]` entry — the read path
+	## (`equipped_skin_for`) falls through to the default.
+	if class_id == "":
+		return false
+	if not equipped_skins.has(class_id):
+		return false
+	equipped_skins.erase(class_id)
+	skins_changed.emit()
+	save_to_disk()
+	return true
+
+
+func unlocked_skin_count() -> int:
+	## How many skins are currently unlocked across all classes — used by the
+	## MetaScreen SKINS tab header. Pure scan over Skins.DEFS so adding a new
+	## skin auto-participates without code changes here.
+	var total: int = 0
+	for sid: String in Skins.all_ids():
+		if is_skin_unlocked(sid):
+			total += 1
+	return total
+
+
 func unequip_perk(perk_id: String) -> bool:
 	var idx: int = equipped_perks.find(perk_id)
 	if idx < 0:
@@ -296,6 +408,12 @@ func record_run_end(floor_num: int, bosses_slain: int, won: bool,
 		total_wins += 1
 		if class_id != "":
 			classes_cleared[class_id] = true
+			# Run 42: bump the per-class lifetime counter so Skins.is_unlocked
+			# sees the new threshold immediately. The counter is additive —
+			# `classes_cleared` is the first-win bonus gate, this is the
+			# unlock ramp. Both stay live so the existing first-class-win
+			# shard payout keeps working unchanged.
+			class_wins[class_id] = int(class_wins.get(class_id, 0)) + 1
 	# Run 38: bosses always add to the lifetime tally — even on a death-run
 	# the kills already happened. Negative guard for defensive callers that
 	# pass an unexpected -1.
@@ -305,6 +423,12 @@ func record_run_end(floor_num: int, bosses_slain: int, won: bool,
 		shards += payout
 		shards_changed.emit(shards, payout)
 	save_to_disk()
+	# Run 42: a win can cross a skin's unlock threshold. Emit AFTER the save
+	# so a MetaScreen listener that rebuilds on this signal sees the same
+	# class_wins value that just got persisted. Cheap to emit even on a
+	# death (the MetaScreen rebuild is a single grid repaint and no skin
+	# state changed) so we don't bother gating on `won`.
+	skins_changed.emit()
 	return payout
 
 
@@ -327,6 +451,15 @@ func snapshot() -> Dictionary:
 	# Run 41: deep-copy the prefs dict so a future caller mutating the
 	# snapshot output can't bleed into live state.
 	var ap_copy: Dictionary = accessibility_prefs.duplicate(true)
+	# Run 42: per-class win counts + equipped skin per class. Both are
+	# string-keyed dicts so JSON round-trips cleanly. Deep-copy not needed
+	# because the values are primitive (int / String).
+	var cw_copy: Dictionary = {}
+	for k: Variant in class_wins.keys():
+		cw_copy[String(k)] = int(class_wins[k])
+	var es_copy: Dictionary = {}
+	for k: Variant in equipped_skins.keys():
+		es_copy[String(k)] = String(equipped_skins[k])
 	return {
 		"version": SAVE_VERSION,
 		"shards": shards,
@@ -342,6 +475,9 @@ func snapshot() -> Dictionary:
 		"lifetime_bosses_slain": lifetime_bosses_slain,
 		# Run 41: persistent pause-menu accessibility toggles.
 		"accessibility_prefs": ap_copy,
+		# Run 42: per-class win counter + equipped skin per class.
+		"class_wins": cw_copy,
+		"equipped_skins": es_copy,
 	}
 
 
@@ -419,6 +555,42 @@ func apply_snapshot(data: Dictionary) -> bool:
 		if ap_dict.has("text_size_scale"):
 			var ts_raw: float = float(ap_dict["text_size_scale"])
 			accessibility_prefs["text_size_scale"] = _snap_text_size_pref(ts_raw)
+	# Run 42: per-class win counter + equipped skin. Both default to empty
+	# for pre-Run-42 saves (purely additive — no SAVE_VERSION bump, matches
+	# the Run-29/31/33/35/37/38/39/40/41 idiom). Negative counts coerce to 0
+	# so a hand-edited save can't park a class below the unlock threshold.
+	class_wins = {}
+	var raw_cw: Variant = data.get("class_wins", {})
+	if raw_cw is Dictionary:
+		var cw_dict: Dictionary = raw_cw as Dictionary
+		for k: Variant in cw_dict.keys():
+			var v: int = int(cw_dict[k])
+			if v < 0:
+				v = 0
+			class_wins[String(k)] = v
+	# Equipped skins: drop entries whose skin_id isn't in Skins.DEFS (defense
+	# against future skin removal) AND whose class_id no longer has that skin
+	# unlocked (defense against a save where the player had an alt skin
+	# equipped, then a `reset_all` wiped class_wins). A stale entry falls
+	# through to the default via `equipped_skin_for` either way, but trimming
+	# at load keeps the dict honest so the snapshot of the next save doesn't
+	# round-trip phantom entries.
+	equipped_skins = {}
+	var raw_es: Variant = data.get("equipped_skins", {})
+	if raw_es is Dictionary:
+		var es_dict: Dictionary = raw_es as Dictionary
+		for k: Variant in es_dict.keys():
+			var cid_k: String = String(k)
+			var sid: String = String(es_dict[k])
+			if not Skins.DEFS.has(sid):
+				continue
+			if Skins.class_id_for(sid) != cid_k:
+				continue
+			# class_wins is loaded first (above), so is_skin_unlocked reads
+			# the post-load value.
+			if not Skins.is_unlocked(sid, class_win_count(cid_k)):
+				continue
+			equipped_skins[cid_k] = sid
 	return true
 
 
@@ -495,6 +667,12 @@ func reset_all() -> void:
 	# alongside the wallet so the player's next run starts clean. A returning
 	# player who liked their settings can re-toggle from the pause menu.
 	accessibility_prefs = _accessibility_prefs_defaults()
+	# Run 42: a reset wipes per-class wins + equipped skins. Without this the
+	# player would keep their unlocked skin tints across a "reset progress",
+	# which would look like the reset didn't reset.
+	class_wins.clear()
+	equipped_skins.clear()
 	save_to_disk()
 	shards_changed.emit(0, 0)
 	perks_equipped_changed.emit(equipped_perks.duplicate())
+	skins_changed.emit()

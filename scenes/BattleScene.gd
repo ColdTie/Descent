@@ -344,6 +344,17 @@ func _build_encounter() -> void:
 	)
 	_hero.armor = GameState.hero_base_stats.get("defense", 0)
 	_hero.attack_bonus = GameState.hero_base_stats.get("attack", 0)
+	# Run 42: apply the equipped class skin tint via the Combatant.tint plumb
+	# that Run 32 added for enemy variants. The same `sprite.self_modulate`
+	# line in `_spawn_combatant_sprite` paints both heroes and enemies, so no
+	# new render code is needed — only this one assignment. Duck-typed
+	# autoload lookup (matches the Run-36 perks pattern) so the script still
+	# loads under `--script` mode where MetaProgress isn't registered; the
+	# default Combatant.tint of WHITE is what BattleScene already renders for
+	# heroes today, so the fallback is a no-op.
+	var mp_skin: Node = get_node_or_null("/root/MetaProgress")
+	if mp_skin != null:
+		_hero.tint = mp_skin.call("equipped_skin_tint", GameState.hero_class)
 	var raw_abilities: Array = GameState.hero_abilities.duplicate()
 	var typed_abilities: Array[String] = []
 	for a: String in raw_abilities:
