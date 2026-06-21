@@ -188,8 +188,16 @@ func _refresh() -> void:
 	# the next refresh without a scene reload. The label suffix surfaces
 	# the milestone when the bonus is active so the player notices the
 	# unlock even if they didn't open this screen right after the clear.
-	var cap: int = Perks.max_equipped(MetaProgress.lifetime_stats())
-	var suffix: String = "  ★ 3rd slot unlocked" if Perks.third_slot_unlocked(MetaProgress.lifetime_stats()) else ""
+	# Run 43: 4th-slot milestone takes precedence in the suffix so the player
+	# sees the highest-tier unlock they've earned. Two stars distinguishes it
+	# from the single-star 3rd-slot banner without inventing new copy.
+	var stats: Dictionary = MetaProgress.lifetime_stats()
+	var cap: int = Perks.max_equipped(stats)
+	var suffix: String = ""
+	if Perks.fourth_slot_unlocked(stats):
+		suffix = "  ★★ 4th slot unlocked"
+	elif Perks.third_slot_unlocked(stats):
+		suffix = "  ★ 3rd slot unlocked"
 	_equipped_label.text = "Equipped: %d / %d%s" % [
 		MetaProgress.equipped_perks.size(), cap, suffix]
 	var win_pct: int = 0

@@ -35,8 +35,16 @@ DESCENT is a turn-based tactical dungeon crawler in the spirit of **Dungeon Craw
 - **Architecture rule**: `BattleEngine._calculate_damage()` returns RAW damage (no armor). `Combatant.take_damage(amount, ignore_armor=false)` applies armor. Don't double-apply armor in both places.
 - `Combatant.take_damage(amount, ignore_armor)` — the `ignore_armor` parameter bypasses the `armor` field reduction (for backstab, env damage, etc.)
 
-## Current State (Run 42 — Alt-Color Class Skins)
+## Current State (Run 43 — 4th Perk Slot at the All-Class-Clear Milestone)
 ### Implemented ✅
+**Run 43 (4th perk slot at the all-class-clear milestone — roadmap item #2 from the Run-42 audit; capstone for the "completionist" loop Run 42's `class_wins` dict made addressable):**
+- **`src/data/Perks.gd`** — `max_equipped(stats)` is now composable: each milestone contributes its own additive bump rather than picking a single tier. Two new constants pin the new gate: `FOURTH_SLOT_BONUS_SLOTS = 1` and `MILESTONE_FOURTH_SLOT_CLASSES_WON = 3` (clear with every class). The function reads `classes_won` from the stats dict (MetaProgress derives it from `class_wins.size()` — see below), so a player who wins 5× with Brawler has `total_wins=5` AND `classes_won=1` — only the 3rd-slot bonus fires. Past the 3-distinct-class threshold both bonuses stack (today: base 2 + win 1 + classes 1 = 4 slots). Sentinel-safe: a missing `classes_won` key falls through to 0 (so pre-Run-42 stats dicts keep their 3rd-slot bonus intact), and null/non-Dictionary input still returns the base cap. New `fourth_slot_unlocked(stats)` predicate wraps `max_equipped(stats) > MAX_EQUIPPED + WIN_BONUS_SLOTS` — the MetaScreen uses this to swap the 3rd-slot banner for the brighter 4th-slot one without duplicating the cap math. Run-39 constants (`MAX_EQUIPPED`, `WIN_BONUS_SLOTS`, `MILESTONE_THIRD_SLOT_WINS`) and the `third_slot_unlocked` predicate stay pinned — the bump is purely additive.
+- **`autoloads/MetaProgress.gd`** — `lifetime_stats()` gains a `classes_won` entry derived from `class_wins.size()`. Distinct from `total_wins` (which a player can rack up by winning with the same class repeatedly); the 4th-slot milestone is the explicit "completionist" gate, so it must count distinct classes, not runs. Existing keys (`best_floor`, `total_wins`, `bosses_slain`) stay in place — the lifetime stats dict only grows.
+- **`apply_snapshot` reorder** — `class_wins` now loads BEFORE the `equipped_perks` trim, mirroring the Run-39 reorder that moved `lifetime_bosses_slain` up. Without this, a save with 4 equipped perks + an all-class clear would silently trim back to 3 because the dynamic cap (`Perks.max_equipped(lifetime_stats())`) would see `classes_won = 0` from the still-empty live dict. The early-load block duplicates the negative-clamp coercion the original Run-42 load used (`if v < 0: v = 0`) so a hand-edited save can't park a count below the unlock threshold. The lower Run-42 `class_wins` load block was converted to a pointer comment (the early load already populated the field) — removing it outright instead of running it twice avoids any chance of a future edit re-introducing a divergence between the two paths.
+- **`scenes/MetaScreen.gd`** — `_refresh()` reads `Perks.fourth_slot_unlocked(stats)` first, then falls back to `third_slot_unlocked`. The header label now shows `★★ 4th slot unlocked` (two stars) for the completionist tier vs. the single-star 3rd-slot banner — same affordance, brighter signal. The dynamic cap (`Perks.max_equipped(stats)`) drives the `Equipped: N / cap` digit as before, so the cap and the suffix can't drift.
+- **`tests/test_run43.gd`** (24 test functions, ~78 assertions): constants pinned (4th-slot bonus > 0, threshold = 3); Run-39 constants regression-checked (MAX_EQUIPPED / WIN_BONUS_SLOTS / MILESTONE_THIRD_SLOT_WINS); `max_equipped` covers each milestone combination (none / 3rd only / both / never further bumps); composability check (`classes_won=3` alone grants the 4th-slot bonus independent of `total_wins`, matching the additive design); defensive cases (null / int / string / array / missing `classes_won` key — last one specifically asserts pre-Run-43 stats keep their 3rd-slot bonus); `fourth_slot_unlocked` predicate matches `max_equipped`; `third_slot_unlocked` regression. MetaProgress: `lifetime_stats` carries `classes_won`, value tracks `class_wins.size()` (a single-class 5-win player has `classes_won=1`, not 5), Run 38/39 fields preserved alongside the new one. Equip cap: 4-slot cap activates with three distinct class wins, 4th equip succeeds, 5th refuses, 4th refused before all three classes; `record_run_end` end-to-end walks through Brawler→Rogue→Arcanist wins and confirms the cap only flips on the third distinct class; same-class repeats don't advance the milestone. `apply_snapshot`: 4 equipped perks restore correctly with an all-class clear on the books (the critical reorder regression), 4 equipped trim to 3 with only a single-class clear, Run-38 `lifetime_bosses_slain` still loads after the reorder, Run-42 `class_wins` still loads correctly via the new early path, pre-Run-42 saves (no class_wins key) keep the 4th slot locked but the 3rd slot active, negative class_wins values still clamp to 0. End-to-end walkthrough mirrors the live player path: 2 slots → first win unlocks 3rd → same-class repeats don't help → 2 classes don't help → 3rd distinct class unlocks the 4th slot.
+- **Test suite total: 2709 passed, 0 failed** (up from 2631 in Run 42; +78 new).
+
 **Run 42 (Alt-color class skins — roadmap item #2 from the Run-41 audit; closes the loop on "what does winning with a specific class give me?"):**
 - **`src/data/Skins.gd`** — NEW pure data module. 9 skins total = 3 classes × 3 tiers each. Per class: a default skin (always unlocked, WHITE tint = no modulate), a "veteran" alt-color skin (1 class win), and a "mastery" alt-color skin (3 class wins). Tints picked to read distinctly against the cave's brown-orange floor and to differ from each class's faction-ring color (a separate lookup). Constants pull the unlock thresholds out as `DEFAULT_REQUIRES_CLASS_WINS=0`, `VETERAN_REQUIRES_CLASS_WINS=1`, `MASTERY_REQUIRES_CLASS_WINS=3` so a future skin can be added in two places — DEFS entry + the unchanged helpers consume the constants from each skin's `requires_class_wins` field.
   - Helpers: `get_skin(id)`, `all_ids()`, `class_id_for(id)`, `for_class(class_id)` (DEFS-order preserved so the MetaScreen renders default → veteran → mastery left to right), `tint_for(id)` (WHITE fallback for unknown ids — the Combatant.tint pipeline skips the `self_modulate` write at WHITE, so unknown ids degrade to untinted), `default_for(class_id)`, `requires_wins(id)` (returns sentinel 9999 for unknown ids — fail closed so a typo can't silently unlock), `is_unlocked(id, class_wins)` (clamps negative wins to 0; unknown id stays locked at any count), `requirement_text(id)` (singular "Win a run" / plural "Win N runs" forms + class display name pulled from `Classes.get_class_data` so a future class rename auto-propagates).
@@ -753,29 +761,41 @@ FTL, traditional roguelikes). Status of the "what are we missing" audit:
   drops equipped-skin entries whose skin id / class id / unlock state
   has gone stale, so a `reset_all` cleanly returns the player to
   default-only — Run 42
+- 4th perk slot at the all-class-clear milestone — `Perks.max_equipped`
+  now composes additive bumps from each milestone (3rd slot at first
+  lifetime win, 4th slot at `class_wins.size() >= 3`). New
+  `FOURTH_SLOT_BONUS_SLOTS = 1` + `MILESTONE_FOURTH_SLOT_CLASSES_WON =
+  3` constants; new `fourth_slot_unlocked(stats)` predicate; new
+  `lifetime_stats().classes_won` derived from `class_wins.size()`.
+  MetaScreen banner shows `★★ 4th slot unlocked` (two stars) for the
+  completionist tier. `apply_snapshot` reorder loads `class_wins`
+  before the equipped-perk trim so a save with 4 equipped perks +
+  all-class clear restores all 4 — mirrors the Run-39 reorder that
+  moved `lifetime_bosses_slain` up. Same-class repeats don't help; the
+  gate counts distinct classes — Run 43
 
 ### 🔜 Highest-value, easiest remaining (do next, roughly in order)
 1. **Status-effect hover tooltips** — Run 35 surfaces every active status
    in a permanent left-edge detail panel and inline durations above the
    sprite. A hover tooltip on enemy sprites would push the same info into
    the enemy HUD without changing the layout.
-2. **Second milestone-slot bump** — Run 39 capped the post-win loadout at
-   3 perks. A `MILESTONE_FOURTH_SLOT_WINS = 3` constant (already wired
-   into `Perks.max_equipped` shape) could surface a 4th slot at the
-   3-class-clear mark for the "completionist" capstone. Now that Run 42
-   added `MetaProgress.class_wins`, "clear with all 3 classes" is a
-   direct dict-size check rather than a sum across `classes_cleared`.
-3. **Pause-menu pref-management UX** — Run 41 made accessibility toggles
+2. **Pause-menu pref-management UX** — Run 41 made accessibility toggles
    persistent, but there's no "reset to shipping defaults" button on the
    pause menu and the live label doesn't surface that the value came
    from the persistent store vs. a same-run flip. A small `RESET ACCESS`
    button on the access row (or a `★` glyph next to non-default toggles)
    would close the discoverability gap without adding new state.
-4. **Skin reward toast on win** — Run 42 unlocks skins silently on
+3. **Skin reward toast on win** — Run 42 unlocks skins silently on
    `record_run_end` — the WinScreen could surface a "+1 skin unlocked!"
    banner when `MetaProgress.unlocked_skin_count()` ticks up across the
    run boundary, mirroring the Run-37 achievement toast pattern. Pure
    UI work, no new state needed.
+4. **Perk-slot toast on win** — Run 43 unlocks the 3rd and 4th perk
+   slots silently. The WinScreen could surface a "★★ 4th perk slot
+   unlocked!" banner when `Perks.max_equipped` ticks up across the
+   run boundary (similar shape to the skin-unlock toast). Both
+   milestones share the same WinScreen hook so the visible reward
+   matches the actual cap bump.
 
 ### 🟡 Larger / later (note, not yet scoped)
 4. **More floor variety** — Per-tier hazards: Tier 1 crumbling bridges, Tier 2 freeze pools,
@@ -894,6 +914,7 @@ tests/
   test_run40.gd      — Text-size accessibility cycle: default 1.0 + option list ordering invariants + first option lock; set_text_size_scale snap (exact / above / below / out-of-range), cycle wrap (3 steps + back to start) + recovery from off-list value; snapshot/apply roundtrip + pre-Run-40 default (missing key → 1.0, not stale 1.5) + corrupted-value snap-on-apply; apply_text_size_to_window safe-when-detached (Run 40)
   test_run41.gd      — Persistent accessibility prefs: defaults + ACCESS_PREF_KEYS invariants, get/set_access_pref happy + defensive paths (unknown key / missing value / no-op write), snapshot deep-copy isolation, full apply roundtrip, pre-Run-41 save defaults, partial-overlay path, corrupted text-size snap, non-Dict prefs fallback, reset_all clears, GameState start_run shipping fallback when MetaProgress absent, setter return contract preserved, end-to-end set-via-MetaProgress → snapshot → reload → read closes the loop (Run 41)
   test_run42.gd      — Alt-color class skins: DEFS schema (9 skins / 3 per class) + exactly-one-default + strictly-increasing thresholds + non-WHITE alt tints; lookup defensiveness (unknown id → WHITE / 9999 / empty); is_unlocked thresholds + clamped negatives + fail-closed-unknown; requirement_text singular/plural + class display name; MetaProgress.class_wins per-class isolation + win-only bump + empty-id ignore; equipped_skin_for default fallthrough + stale-relocked safety net; equip_skin gate (unknown / locked / same-value / unlocked) + swap-within-class; unequip + unlocked_skin_count tally; snapshot apply roundtrip + pre-Run-42 defaults + negative clamp + equipped-skin trim (unknown id / now-relocked / wrong-class); reset_all clears both fields; end-to-end win → unlock → equip → tint loop (Run 42)
+  test_run43.gd      — 4th perk slot at all-class-clear: FOURTH_SLOT_BONUS_SLOTS / MILESTONE_FOURTH_SLOT_CLASSES_WON constants + Run-39 constants pinned, Perks.max_equipped composability (none / 3rd only / both / no-further-bumps / independent milestones / missing classes_won keeps 3rd-slot bonus / null/non-Dict defenses), fourth_slot_unlocked + third_slot_unlocked predicates, MetaProgress.lifetime_stats carries classes_won = class_wins.size() + preserves Run 38/39 fields, equip_cap 4-slot activation + 4th equip ok + 5th refused + 4th refused before all-class clear, record_run_end three-distinct-class walkthrough + same-class repeats don't advance the milestone, apply_snapshot reorder regression (4 equipped restored with all-class clear, trim to 3 with single-class clear, Run-38 lifetime_bosses_slain still loads, Run-42 class_wins still loads via new early path, pre-Run-42 keeps 4th slot locked but 3rd active, negative clamp), end-to-end walkthrough (Run 43)
 
 tools/
   tour_bot.gd        — Run 32: screenshot-audit auto-play bot (see Run 32 notes for usage;

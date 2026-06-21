@@ -136,10 +136,16 @@ func lifetime_stats() -> Dictionary:
 	## Pulled out so a future requirement type adds in one place (this map
 	## + a Perks.requirement_text branch + a Perks.is_milestone_unlocked
 	## case).
+	## Run 43: `classes_won` is the count of distinct classes that have ever
+	## banked a win — derived from `class_wins.size()` (Run 42's per-class
+	## counter). Distinct from `total_wins` (which a player can rack up by
+	## winning with the same class repeatedly); the 4th-slot milestone is
+	## explicitly the "completionist" gate, so it must count classes, not runs.
 	return {
 		"best_floor": best_floor,
 		"total_wins": total_wins,
 		"bosses_slain": lifetime_bosses_slain,
+		"classes_won": class_wins.size(),
 	}
 
 
@@ -506,6 +512,22 @@ func apply_snapshot(data: Dictionary) -> bool:
 	# order) so `lifetime_stats()` returns the post-load value when the
 	# dynamic equip cap is computed below.
 	lifetime_bosses_slain = int(data.get("lifetime_bosses_slain", 0))
+	# Run 43: class_wins also threads into the dynamic equip cap via
+	# lifetime_stats().classes_won (the 4th-slot milestone). Loaded BEFORE the
+	# equipped_perks trim for the same reason Run 39 moved lifetime_bosses_slain
+	# up — otherwise a save with 4 equipped perks + an all-class clear would
+	# silently trim back to 3. Negative count coercion mirrors the post-trim
+	# Run-42 load below; we duplicate it here because the post-trim load gets
+	# overwritten so the trim block needs a primed dict.
+	class_wins = {}
+	var raw_cw_early: Variant = data.get("class_wins", {})
+	if raw_cw_early is Dictionary:
+		var cw_early: Dictionary = raw_cw_early as Dictionary
+		for k: Variant in cw_early.keys():
+			var v: int = int(cw_early[k])
+			if v < 0:
+				v = 0
+			class_wins[String(k)] = v
 	equipped_perks.clear()
 	# Defensive equip cap: trim if a save somehow contains more than the
 	# active dynamic cap (a save written when the player had 3 slots, then
@@ -555,19 +577,10 @@ func apply_snapshot(data: Dictionary) -> bool:
 		if ap_dict.has("text_size_scale"):
 			var ts_raw: float = float(ap_dict["text_size_scale"])
 			accessibility_prefs["text_size_scale"] = _snap_text_size_pref(ts_raw)
-	# Run 42: per-class win counter + equipped skin. Both default to empty
-	# for pre-Run-42 saves (purely additive — no SAVE_VERSION bump, matches
-	# the Run-29/31/33/35/37/38/39/40/41 idiom). Negative counts coerce to 0
-	# so a hand-edited save can't park a class below the unlock threshold.
-	class_wins = {}
-	var raw_cw: Variant = data.get("class_wins", {})
-	if raw_cw is Dictionary:
-		var cw_dict: Dictionary = raw_cw as Dictionary
-		for k: Variant in cw_dict.keys():
-			var v: int = int(cw_dict[k])
-			if v < 0:
-				v = 0
-			class_wins[String(k)] = v
+	# Run 42 + Run 43: `class_wins` is loaded earlier (before the equipped_perks
+	# trim) so the Run-43 4th-slot milestone reads the post-load count when the
+	# dynamic equip cap is computed. The block formerly here is intentionally
+	# absent — the field is already populated above.
 	# Equipped skins: drop entries whose skin_id isn't in Skins.DEFS (defense
 	# against future skin removal) AND whose class_id no longer has that skin
 	# unlocked (defense against a save where the player had an alt skin

@@ -26,26 +26,51 @@ const MAX_EQUIPPED: int = 2
 ## one-line addition here + one match arm in `max_equipped`.
 const WIN_BONUS_SLOTS: int = 1
 const MILESTONE_THIRD_SLOT_WINS: int = 1
+## Run 43: fourth perk slot unlocks after the player has cleared the game
+## with every class (3 of 3). Reads `classes_won` from the stats dict —
+## MetaProgress derives this from `class_wins.size()` so the count is the
+## number of distinct classes that have ever banked a win (NOT total wins).
+## Constants split out so a future 4th-class additions (or a 5th slot after a
+## hard-mode clear) only touches one place. Each milestone contributes its own
+## additive bump, so a player who has 1 win but no full class-clear gets only
+## the 3rd slot (cap = 3) and the player who clears all three classes gets
+## both (cap = 4).
+const FOURTH_SLOT_BONUS_SLOTS: int = 1
+const MILESTONE_FOURTH_SLOT_CLASSES_WON: int = 3
 
 
 static func max_equipped(stats: Variant) -> int:
 	## Returns the active equip-cap given lifetime stats. Defaults to the base
-	## cap when `stats` is null / not a Dictionary / missing total_wins — fail
+	## cap when `stats` is null / not a Dictionary / missing fields — fail
 	## closed so a hand-crafted call without context can't open a slot that
-	## the player hasn't earned.
-	var base: int = MAX_EQUIPPED
+	## the player hasn't earned. Each milestone contributes its own additive
+	## bump so completing both gives base + WIN_BONUS_SLOTS + FOURTH_SLOT_BONUS_SLOTS
+	## (today: 2 + 1 + 1 = 4).
+	var cap: int = MAX_EQUIPPED
 	if stats == null or not (stats is Dictionary):
-		return base
-	var wins: int = int((stats as Dictionary).get("total_wins", 0))
+		return cap
+	var sd: Dictionary = stats as Dictionary
+	var wins: int = int(sd.get("total_wins", 0))
 	if wins >= MILESTONE_THIRD_SLOT_WINS:
-		return base + WIN_BONUS_SLOTS
-	return base
+		cap += WIN_BONUS_SLOTS
+	var classes_won: int = int(sd.get("classes_won", 0))
+	if classes_won >= MILESTONE_FOURTH_SLOT_CLASSES_WON:
+		cap += FOURTH_SLOT_BONUS_SLOTS
+	return cap
 
 
 static func third_slot_unlocked(stats: Variant) -> bool:
 	## Tiny convenience predicate used by the MetaScreen to render the
 	## "3RD SLOT UNLOCKED" banner without duplicating the cap math.
 	return max_equipped(stats) > MAX_EQUIPPED
+
+
+static func fourth_slot_unlocked(stats: Variant) -> bool:
+	## Run 43: predicate the MetaScreen uses to swap the 3rd-slot banner for
+	## the brighter 4th-slot one once the all-classes-clear milestone lands.
+	## Reads the dynamic cap so a future bonus-stacking change keeps this
+	## helper honest without an edit here.
+	return max_equipped(stats) > MAX_EQUIPPED + WIN_BONUS_SLOTS
 
 ## Run 38: milestone-gated perk requirements.
 ## Each entry maps `requires.type` to a check against the player's
