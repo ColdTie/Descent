@@ -72,6 +72,18 @@ static func fourth_slot_unlocked(stats: Variant) -> bool:
 	## helper honest without an edit here.
 	return max_equipped(stats) > MAX_EQUIPPED + WIN_BONUS_SLOTS
 
+
+static func slots_gained(prev_stats: Variant, new_stats: Variant) -> int:
+	## Run 44: how many equip slots the player just earned between two
+	## lifetime-stats snapshots. The WinScreen toast banner reads this to
+	## decide whether to render the "★ PERK SLOT UNLOCKED" line. Negative
+	## results (a save that somehow shrank the cap — purely defensive) clamp
+	## to zero so the UI never claims an unlock that didn't happen.
+	var delta: int = max_equipped(new_stats) - max_equipped(prev_stats)
+	if delta < 0:
+		return 0
+	return delta
+
 ## Run 38: milestone-gated perk requirements.
 ## Each entry maps `requires.type` to a check against the player's
 ## MetaProgress lifetime stats. Supported types:

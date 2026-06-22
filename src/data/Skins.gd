@@ -185,6 +185,30 @@ static func is_unlocked(skin_id: String, class_wins: int) -> bool:
 	return have >= need
 
 
+static func newly_unlocked_in_range(class_id: String, prev_class_wins: int,
+		new_class_wins: int) -> Array[String]:
+	## Run 44: returns the skin ids for `class_id` whose unlock threshold sits in
+	## the half-open range `(prev_class_wins, new_class_wins]` — i.e. just got
+	## unlocked by a win that bumped the counter. Empty when nothing crossed.
+	## Negative counts are clamped at 0 so a corrupted prev value can't widen
+	## the range upward. Unknown class id returns empty.
+	## Used by the WinScreen banner: a player who clears as Brawler for the
+	## first time gets a single "Onyx Veteran unlocked" toast; a Brawler hitting
+	## their 3rd win sees the mastery skin pop.
+	var out: Array[String] = []
+	if class_id == "":
+		return out
+	var lo: int = max(0, prev_class_wins)
+	var hi: int = max(0, new_class_wins)
+	if hi <= lo:
+		return out
+	for sid: String in for_class(class_id):
+		var need: int = requires_wins(sid)
+		if need > lo and need <= hi:
+			out.append(sid)
+	return out
+
+
 static func requirement_text(skin_id: String) -> String:
 	## Human-readable unlock string for the MetaScreen LOCKED card. Returns
 	## "" for the default skin (it has no lock) so the UI can branch on the

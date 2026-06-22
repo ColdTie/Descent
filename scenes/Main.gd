@@ -26,6 +26,14 @@ var _pending_next_floor: int = 0
 # Run 36: ensures `_record_meta_end` only fires once per run (death OR win,
 # whichever happens first). Reset in `_on_run_started`.
 var _meta_recorded: bool = false
+# Run 44: skins / perk-slot unlocks the win just earned. Captured in
+# `_record_meta_end(true)` by comparing pre/post `MetaProgress` state, then
+# passed through `_load_scene` → `WinScreen.prepare` so the win screen can
+# show a single-paint toast banner instead of forcing the player to open the
+# MetaScreen to notice. Reset in `_on_run_started` so a death-then-new-run
+# can't leak the previous win's toasts onto the next win.
+var _pending_unlocked_skins: Array[String] = []
+var _pending_unlocked_perk_slots: int = 0
 
 func _ready() -> void:
 	GameState.run_started.connect(_on_run_started)
@@ -52,6 +60,9 @@ func _on_new_run_requested() -> void:
 func _on_run_started() -> void:
 	# Run 36: clear the meta-record guard so the next run-end pays out.
 	_meta_recorded = false
+	# Run 44: clear any pending unlock toasts so the next win starts clean.
+	_pending_unlocked_skins.clear()
+	_pending_unlocked_perk_slots = 0
 	GameState.descend()
 
 func _on_floor_changed(_floor_num: int) -> void:
@@ -81,6 +92,13 @@ func _record_meta_end(won: bool) -> void:
 	if _meta_recorded:
 		return
 	_meta_recorded = true
+	# Run 44: capture pre-record state so a winning run can show "you just
+	# unlocked X" toasts on the WinScreen. Both deltas are derived from the
+	# same pre/post snapshot pair, so a single record_run_end call can't
+	# desync them. Done unconditionally (the cost is two cheap reads) so we
+	# don't have to branch the variable initialization on `won`.
+	var prev_class_wins: int = MetaProgress.class_win_count(GameState.hero_class)
+	var prev_stats: Dictionary = MetaProgress.lifetime_stats()
 	MetaProgress.record_run_end(
 		GameState.floor_num,
 		GameState.bosses_slain,
@@ -88,6 +106,12 @@ func _record_meta_end(won: bool) -> void:
 		GameState.run_score(),
 		GameState.hero_class,
 	)
+	if won:
+		var new_class_wins: int = MetaProgress.class_win_count(GameState.hero_class)
+		var new_stats: Dictionary = MetaProgress.lifetime_stats()
+		_pending_unlocked_skins = Skins.newly_unlocked_in_range(
+			GameState.hero_class, prev_class_wins, new_class_wins)
+		_pending_unlocked_perk_slots = Perks.slots_gained(prev_stats, new_stats)
 
 
 func _persist_run() -> void:
@@ -137,11 +161,15 @@ func _load_scene(path: String) -> void:
 		return
 	_current_scene = packed.instantiate()
 	# Pass pending data to scenes that accept it (e.g. VictoryScreen, PatchNotes)
+	# Run 44: include the win-unlock deltas so WinScreen.prepare() can surface
+	# them. Other scenes silently ignore unknown keys via dict.get() defaults.
 	if _current_scene.has_method("prepare"):
 		_current_scene.call("prepare", {
 			"xp": _pending_xp,
 			"kills": _pending_kills,
 			"floor": _pending_next_floor,
+			"unlocked_skins": _pending_unlocked_skins.duplicate(),
+			"unlocked_perk_slots": _pending_unlocked_perk_slots,
 		})
 	add_child(_current_scene)
 	# Connect signals

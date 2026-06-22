@@ -4,6 +4,29 @@ extends Control
 
 signal play_again
 
+# Run 44: meta-unlock toasts surfaced by this run. Populated by `prepare()`
+# from Main.gd's pre/post-`record_run_end` delta capture. Empty when the win
+# didn't cross any unlock threshold (e.g. a 2nd-class repeat clear) — the
+# banner section is skipped entirely in that case.
+var _unlocked_skins: Array[String] = []
+var _unlocked_perk_slots: int = 0
+
+func prepare(data: Dictionary) -> void:
+	## Read the unlock deltas Main.gd captured around `record_run_end`. Called
+	## by `_load_scene` BEFORE `_ready`, so the values are live when the UI
+	## builds. Defensive: unknown keys / wrong types fall through to the
+	## empty defaults so a future Main.gd reorder can't crash this scene.
+	var sk_raw: Variant = data.get("unlocked_skins", [])
+	if sk_raw is Array:
+		_unlocked_skins.clear()
+		for v: Variant in sk_raw:
+			var sid: String = String(v)
+			# Drop entries that aren't in Skins.DEFS — a stale field from a
+			# future variant removal would otherwise crash `Skins.get_skin`.
+			if Skins.DEFS.has(sid):
+				_unlocked_skins.append(sid)
+	_unlocked_perk_slots = max(0, int(data.get("unlocked_perk_slots", 0)))
+
 func _ready() -> void:
 	# Run 19: finishing the descent is itself an achievement.
 	Achievements.unlock("descended")
@@ -121,6 +144,13 @@ func _build_ui() -> void:
 	shard_row.add_theme_color_override("font_color", Color(0.86, 0.66, 1.0))
 	vbox.add_child(shard_row)
 
+	# Run 44: meta-unlock toasts — surface skin/perk-slot milestones the win
+	# just earned so the player doesn't have to open the MetaScreen to notice.
+	# Skipped entirely when nothing unlocked (zero visual cost on a repeat
+	# class win, which is the steady-state for a returning player).
+	if not _unlocked_skins.is_empty() or _unlocked_perk_slots > 0:
+		_build_unlock_banners(vbox)
+
 	# Run 19: achievement roster — show what the player earned this run.
 	var ach_count: int = Achievements.unlocked_ids.size()
 	var ach_total: int = Achievements.DEFS.size()
@@ -156,6 +186,69 @@ func _build_ui() -> void:
 	btn.add_theme_color_override("font_color", Color(1.0, 0.86, 0.12))
 	btn.pressed.connect(_on_play_again)
 	btn_row.add_child(btn)
+
+
+func _build_unlock_banners(parent: VBoxContainer) -> void:
+	## Run 44: render one banner per unlock the win earned. Two kinds:
+	##  - "★ PERK SLOT UNLOCKED" — fires when `Perks.max_equipped` grew across
+	##    record_run_end. The label brightens to two stars (★★) for the
+	##    capstone 4th slot so the all-class clear feels distinct from the
+	##    first-win 3rd slot.
+	##  - "NEW SKIN UNLOCKED — <name>" — one row per skin id in
+	##    `_unlocked_skins`. Carries a 22×22 color swatch tinted to the
+	##    skin's actual color so the player previews the palette before
+	##    opening the MetaScreen → SKINS tab.
+	## The whole section is wrapped in a soft-purple-bordered PanelContainer so
+	## it reads as a peer to the shard-payout strip above it (meta-progression
+	## rewards land in the same visual band).
+	var panel := PanelContainer.new()
+	var ps := StyleBoxFlat.new()
+	ps.bg_color = Color(0.08, 0.05, 0.13, 0.92)
+	ps.border_color = Color(0.78, 0.52, 1.0, 0.72)
+	ps.set_border_width_all(2)
+	ps.set_corner_radius_all(5)
+	ps.set_content_margin_all(10.0)
+	panel.add_theme_stylebox_override("panel", ps)
+	parent.add_child(panel)
+
+	var col := VBoxContainer.new()
+	col.add_theme_constant_override("separation", 6)
+	panel.add_child(col)
+
+	if _unlocked_perk_slots > 0:
+		# Two-star prefix when the cap crossed past the 3rd slot (today: the
+		# 4th-slot all-class milestone) — single-star otherwise. The exact
+		# `Perks.max_equipped(lifetime_stats())` value is the new cap; reading
+		# from MetaProgress live ensures the displayed N matches whatever a
+		# future bonus-stacking change produces.
+		var new_cap: int = Perks.max_equipped(MetaProgress.lifetime_stats())
+		var stars: String = "**" if new_cap >= Perks.MAX_EQUIPPED + Perks.WIN_BONUS_SLOTS + Perks.FOURTH_SLOT_BONUS_SLOTS else "*"
+		var slot_lbl := Label.new()
+		slot_lbl.text = "%s  PERK SLOT UNLOCKED — %d slots equippable" % [stars, new_cap]
+		slot_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		slot_lbl.add_theme_font_size_override("font_size", 16)
+		slot_lbl.add_theme_color_override("font_color", Color(1.0, 0.86, 0.30))
+		col.add_child(slot_lbl)
+
+	for sid: String in _unlocked_skins:
+		var def: Dictionary = Skins.get_skin(sid)
+		var row := HBoxContainer.new()
+		row.alignment = BoxContainer.ALIGNMENT_CENTER
+		row.add_theme_constant_override("separation", 8)
+		col.add_child(row)
+
+		var swatch := ColorRect.new()
+		swatch.color = Skins.tint_for(sid)
+		swatch.custom_minimum_size = Vector2(22.0, 22.0)
+		swatch.mouse_filter = MOUSE_FILTER_IGNORE
+		row.add_child(swatch)
+
+		var lbl := Label.new()
+		var name_text: String = String(def.get("name", sid))
+		lbl.text = "NEW SKIN UNLOCKED — %s" % name_text
+		lbl.add_theme_font_size_override("font_size", 14)
+		lbl.add_theme_color_override("font_color", Color(0.86, 0.72, 1.0))
+		row.add_child(lbl)
 
 
 func _stat_card(parent: Node, icon: String, label_text: String,
