@@ -507,6 +507,9 @@ func _load_effect_textures() -> void:
 		"bone_volley":  "res://assets/effects/fx_impact.png",
 		"hellfire_aoe":  "res://assets/effects/fx_fireball.png",
 		# Run 33: enemy-variant + boss-signature abilities
+		# Run 46: Eviscerate reuses the backstab dagger flash — the bleed itself
+		# reads via the BLD short-code that sticks above the target.
+		"eviscerate":  "res://assets/effects/fx_backstab.png",
 		"plague_bite":  "res://assets/effects/fx_poison.png",
 		"ember_claw":  "res://assets/effects/fx_lava_heat.png",
 		"ground_slam":  "res://assets/effects/fx_impact.png",
@@ -1932,6 +1935,24 @@ func _do_hero_attack(target: Combatant) -> void:
 		SystemVoice.speak_direct(
 			"Poison applied. %s has %d turns to regret being adjacent to you." \
 			% [target.display_name, dur])
+
+	# Run 46: bleed application — Eviscerate (and any future bleed ability)
+	# routes through the same on-hit window. The factory reads the target's
+	# `max_hp` at apply time so the dpt is locked at strike — Boss Phase 2
+	# max-HP grants don't retroactively scale an in-flight bleed.
+	if target.is_alive() and abl_data.get("applies_bleed", false):
+		var b_dur: int = abl_data.get("bleed_duration", 3)
+		var b_pct: int = abl_data.get("bleed_pct", 8)
+		var bleed_eff: Dictionary = StatusEffect.bleed(b_dur, target.max_hp, b_pct)
+		target.apply_status(bleed_eff)
+		_update_status_label(target)
+		var dpt: int = int(bleed_eff.get("damage_per_turn", 0))
+		_combat_log_add("%s -> %s BLEED %d/turn x%d" % [
+			_short_name(_hero), _short_name(target), dpt, b_dur],
+			Color(0.95, 0.20, 0.30))
+		SystemVoice.speak_direct(
+			"Arterial work. %s bleeds for %d each turn — the dungeon hates a messy floor." \
+			% [target.display_name, dpt])
 
 	# Consume the charge
 	if abl_obj != null:

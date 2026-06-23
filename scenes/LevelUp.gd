@@ -15,7 +15,10 @@ var _chosen: String = ""
 # Abilities each class can unlock (abilities NOT in their starting kit)
 const CLASS_UNLOCKS: Dictionary = {
 	"brawler":  ["shield_bash"],
-	"rogue":  ["shadow_step", "frost_nova"],
+	# Run 46: `eviscerate` heads the rogue list as their class-unique unlock
+	# (mirrors the Run-21 pattern that put `mana_shield` first for arcanist).
+	# Order matters — first available wins.
+	"rogue":  ["eviscerate", "shadow_step", "frost_nova"],
 	# Run 21: arcanist now has a class-unique unlock (mana_shield) ahead of the
 	# generic cross-class options. Order matters — first available wins.
 	"arcanist": ["mana_shield", "backstab", "taunt"],

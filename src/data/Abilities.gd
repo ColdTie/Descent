@@ -141,6 +141,29 @@ const DATA: Dictionary = {
 		"icon_key": "fire",
 		"ignore_armor": true,
 	},
+	## Run 46: Rogue's percent-of-max-HP bleed strike. Modest direct damage so
+	## the bleed is the headline — a 3-turn tick at 8% of the target's max HP
+	## scales the payoff against tanky targets (a 200-HP boss bleeds for
+	## 48 over 3 turns vs. the 18 direct hit; against a 30-HP goblin it's
+	## ~7 — direct hit dominates). Pairs naturally with the Rogue's other
+	## armor-ignoring strikes (backstab, shadow_step) and gives the class a
+	## reason to engage rather than burst-and-vanish.
+	"eviscerate": {
+		"id": "eviscerate",
+		"display_name": "Eviscerate",
+		"description": "Carve a gash that won't close. Direct damage plus bleed (8% of target max HP for 3 turns, bypasses armor).",
+		"type": "attack",
+		"target": "single_enemy",
+		"base_damage": 18,
+		"max_charges": 2,
+		"cooldown_turns": 3,
+		"range": 1,
+		"xp_cost": 50,
+		"icon_key": "dagger",
+		"applies_bleed": true,
+		"bleed_duration": 3,
+		"bleed_pct": 8,
+	},
 	"shadow_step": {
 		"id": "shadow_step",
 		"display_name": "Shadow Step",

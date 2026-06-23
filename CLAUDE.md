@@ -35,8 +35,19 @@ DESCENT is a turn-based tactical dungeon crawler in the spirit of **Dungeon Craw
 - **Architecture rule**: `BattleEngine._calculate_damage()` returns RAW damage (no armor). `Combatant.take_damage(amount, ignore_armor=false)` applies armor. Don't double-apply armor in both places.
 - `Combatant.take_damage(amount, ignore_armor)` — the `ignore_armor` parameter bypasses the `armor` field reduction (for backstab, env damage, etc.)
 
-## Current State (Run 45 — Death-Screen Meta Toast)
+## Current State (Run 46 — Bleed Status + Eviscerate Ability)
 ### Implemented ✅
+**Run 46 (Bleed status effect + Eviscerate ability — gameplay-depth addition; rounds the status palette to 7 effects and gives the Rogue a class-unique unlock distinct from the existing armor-ignoring strikes):**
+- **`src/combat/StatusEffect.gd`** — new `bleed(duration, target_max_hp, pct_per_turn) -> Dictionary` factory. Computes `damage_per_turn = max(1, target_max_hp * pct_per_turn / 100)` at apply-time, so the dpt is locked when the strike lands — a future Boss Phase 2 max_hp grant (Run 15 enrage) doesn't retroactively scale an in-flight bleed. Defensive: negative `target_max_hp` and `pct_per_turn` clamp to 0 (which floors dpt to 1 via the existing `max(1, ...)`); negative `duration` clamps to 0 so a hand-edited save can't drop a -1-turn bleed. Stores `bleed_pct` in the dict for future HUD tooltip surfacing (today not rendered — `summarize()` reads `damage_per_turn` which already carries the computed dpt).
+- **`SHORT_CODES` + `DISPLAY_NAMES`** — `"bleed" → "BLD"` + `"bleed" → "Bleeding"` so the above-the-sprite label renders `[BLD 3]` and the hero detail panel shows `Bleeding · 3t · 8/turn`. No StatusEffect.summarize edit needed — bleed reuses the same builder as poisoned/burning since both stash dpt in `damage_per_turn`.
+- **Design rationale** — bleed is the 7th status effect, distinct from the existing six. Burning/poisoned tick a FLAT dpt; bleed scales with target max_hp. A 200-HP boss bleeds for 16/turn at the default 8% (48 total over the 3-turn default); a 30-HP goblin bleeds for 2/turn (6 total). This punishes the tanky-armor archetype the existing armor-ignoring strikes (backstab, shadow_step, arcane_surge) already excel against, so it doubles down on the "armor doesn't save you" theme without overlapping with them. Bypasses armor via the existing `Combatant.tick_statuses` direct-HP-drain path — same as burning/poisoned, so the engine integration is zero-edit.
+- **`src/data/Abilities.gd`** — new `eviscerate` ability. Schema: `type: attack`, `target: single_enemy`, `range: 1` (melee), `base_damage: 18`, `max_charges: 2`, `cooldown_turns: 3`, `xp_cost: 50`, `icon_key: dagger`, `applies_bleed: true`, `bleed_duration: 3`, `bleed_pct: 8`. Direct damage tuned modestly so the bleed is the headline — a 200-HP boss takes 18 + 48 = 66 over the 3-turn window vs. backstab's 35-on-strike for the same 50 XP, with the trade-off being delayed payoff (Eviscerate is worse if the target dies on hit; better if they survive to bleed out). Cost mirrors backstab + frost_nova so the Rogue's level-up pool reads consistently.
+- **`scenes/LevelUp.gd`** — `CLASS_UNLOCKS["rogue"]` now reads `["eviscerate", "shadow_step", "frost_nova"]`. Eviscerate FIRST so it's the class-unique pick the Rogue sees at level 2 (mirrors the Run-21 idiom that put `mana_shield` first for Arcanist). Order matters — `LevelUp._make_unlock_card` walks the list and picks the first ability the player doesn't already own.
+- **`scenes/BattleScene.gd`** — new `applies_bleed` branch in the on-hit status loop, sitting alongside the existing `applies_poisoned` branch. Reads `bleed_duration` + `bleed_pct` from the ability data + `target.max_hp` from the live combatant, calls `StatusEffect.bleed(...)`, applies via `target.apply_status`, and refreshes the status label. Emits a combat-log line in `Color(0.95, 0.20, 0.30)` (warm red — distinct from the green crit / yellow attack lines) reading `Carl -> Goblin BLEED 8/turn x3`. Speaks a System line via `speak_direct` carrying the dpt so the player sees both the visual feedback AND the auditory cue when the bleed lands. Effect-texture map gains `eviscerate -> fx_backstab.png` (reuses the existing dagger flash — bleed needs no new VFX since the BLD short-code above the target carries the visual weight on subsequent turns).
+- **`tests/test_run46.gd`** (22 test functions, ~43 assertions): factory shape (default invocation locks the seven-field schema), dpt scales with max_hp (200×8% = 16, 30×8% = 2, 100×8% = 8), dpt floor of 1 (a 5-HP rat still ticks for 1 vs. mathematical 0), negative-input clamps (max_hp / pct go to 0 then floor to 1), zero-duration allowed (apply_status takes it; expires on next tick), negative-duration clamps to 0; HUD helpers — short_code returns "BLD", display_name returns "Bleeding", summarize includes "Bleeding · 3t · 8/turn", stack collapses two bleeds with summed dpt (16) and longer duration (3 vs 2); Eviscerate schema — in `Abilities.DATA`, has all required fields, in `LevelUp.CLASS_UNLOCKS["rogue"]` at index 0, 2 charges / 3-turn cooldown / 50 xp tuning locked. End-to-end via Combatant: bleed ticks the computed dpt, full 3-turn duration deals 3× ticks then expires from `status_effects`, bypasses armor (10 armor doesn't reduce DoT damage), dpt is locked at apply not tick (a mid-bleed `max_hp` increase doesn't rescale the dpt), two bleeds stack (combined 32/turn on a 200-HP target).
+- **Test suite total: 2821 passed, 0 failed** (up from 2778 in Run 45; +43 new).
+- **Visual audit** — temporary `tools/r46_eviscerate_smoke.gd` autoload (NOT shipped) drove the game from title → Rogue ClassSelect → BattleScene → killed all enemies → routed through VictoryScreen → LevelUp. Confirmed in the screenshot: the LEVEL 2 screen shows three cards, leftmost is `* Learn: Eviscerate` with the full description ("Carve a gash that won't close. Direct damage plus bleed (8% of target max HP for 3 turns, bypasses armor)."). Card border is the warm-gold class-unique tint matching the existing mana_shield / shield_bash unlock cards. The smoke autoload was removed after the audit.
+
 **Run 45 (Death-screen meta toast — roadmap item #3 from the Run-44 audit; closes the loop for the run-doesn't-end-in-a-win case, which is most of them):**
 - **`autoloads/MetaProgress.gd`** — new `newly_affordable_perks(prev_shards: int) -> int` helper. Pure read against live state: counts perks where (1) not already owned, (2) milestone gate passes against `lifetime_stats()`, (3) `cost > prev_shards` (couldn't afford before the just-landed payout), (4) `cost <= shards` (can afford now). Reads the milestone gate via `Perks.is_milestone_unlocked(pid, lifetime_stats())` so a death that bumped `best_floor` past 9 surfaces `deep_diver` in the count iff the player can also afford it — the gate flips at the same `record_run_end` call site that produced the shard delta, so a single post-record read is consistent. Defensive: negative `prev_shards` clamps to 0 via `max(0, prev)` so a stale sentinel can't widen the band downward and over-count. Cost <= 0 (an unknown perk id returning -1 from `Perks.cost`) is skipped so a future DEFS removal can't toast a phantom unlock.
 - **`scenes/BattleScene.gd`** — `_show_death_overlay` now emits a new `hero_meta_died` signal BEFORE rendering content. Snapshots `MetaProgress.shards` before the emit, reads it after, and computes the payout delta + newly-affordable count for display. The emit-then-read pattern is synchronous (Main's connected handler runs the record inline), so by the time the overlay reads the wallet for display the record has already landed. Without the signal hop, `Main._on_battle_complete(false)` only fires when the player clicks TRY AGAIN — too late to show the breakdown on the overlay the player is staring at.
@@ -821,6 +832,19 @@ FTL, traditional roguelikes). Status of the "what are we missing" audit:
   entirely (not just empty) when zero perks crossed — keeps the
   overlay calm on early deaths. Closes the loop for the most common
   outcome (a failed run) — Run 45
+- Bleed status effect + Rogue's Eviscerate ability — new percent-of-max-HP
+  DoT that scales with the target's hit-point pool (8% per turn for 3 turns
+  by default), bypassing armor via the existing `Combatant.tick_statuses`
+  path. Distinct from burning/poisoned (which tick flat dpt) — bleed
+  punishes the tanky-armor archetype, doubling down on the "armor doesn't
+  save you" theme the Rogue's existing armor-ignoring strikes already lean
+  into. Locked at apply-time (factory reads `target.max_hp` once) so a
+  Boss Phase 2 max_hp grant can't retroactively scale an in-flight bleed.
+  Eviscerate (18 direct + bleed) heads the Rogue's `CLASS_UNLOCKS` pool
+  as their class-unique level-2 unlock, mirroring the Run-21 idiom that
+  put `mana_shield` first for Arcanist. Adds the 7th entry to the
+  StatusEffect ecosystem with HUD code `BLD` / display name `Bleeding` —
+  Run 46
 
 ### 🔜 Highest-value, easiest remaining (do next, roughly in order)
 1. **Status-effect hover tooltips** — Run 35 surfaces every active status
@@ -833,13 +857,18 @@ FTL, traditional roguelikes). Status of the "what are we missing" audit:
    from the persistent store vs. a same-run flip. A small `RESET ACCESS`
    button on the access row (or a `★` glyph next to non-default toggles)
    would close the discoverability gap without adding new state.
-3. **Achievement-unlock toast mid-run** — Run 19 added the achievement
-   system + audience-score payout; Run 37 added the shard payout. But
-   the player doesn't see either land mid-run — they have to wait for
-   the WinScreen / DeathScreen roster to read what just happened. A
-   tiny 2-second banner above the combat log when `Achievements.unlock`
-   fires would close that immediate-feedback gap and lean into the DCC
-   reality-show framing (the System narrates milestones as they earn).
+3. **Stun status effect** — Run 46 added bleed (the 7th status), but the
+   roadmap's "status-effect depth" item still calls out stun and
+   vulnerability. Stun = skip next turn (akin to frozen but applied via
+   strike rather than ranged spell). Pairs naturally with Brawler's
+   shield_bash. Adding it via a `skips_turn: true` field on the StatusEffect
+   factory (already used by `frozen`) means the engine integration is
+   zero-edit — same as bleed routed through `tick_statuses`.
+4. **Crumbling-bridge hazard on Tier 1 floors** — adds a per-tier
+   environmental hazard distinct from lava. A tile that collapses after
+   N steps would force movement planning and reward Rogue's high-speed
+   mobility. Requires DungeonMap + BattleScene tile-type support, so
+   it's a meaningful but not overwhelming addition.
 
 ### 🟡 Larger / later (note, not yet scoped)
 4. **More floor variety** — Per-tier hazards: Tier 1 crumbling bridges, Tier 2 freeze pools,
@@ -961,6 +990,7 @@ tests/
   test_run43.gd      — 4th perk slot at all-class-clear: FOURTH_SLOT_BONUS_SLOTS / MILESTONE_FOURTH_SLOT_CLASSES_WON constants + Run-39 constants pinned, Perks.max_equipped composability (none / 3rd only / both / no-further-bumps / independent milestones / missing classes_won keeps 3rd-slot bonus / null/non-Dict defenses), fourth_slot_unlocked + third_slot_unlocked predicates, MetaProgress.lifetime_stats carries classes_won = class_wins.size() + preserves Run 38/39 fields, equip_cap 4-slot activation + 4th equip ok + 5th refused + 4th refused before all-class clear, record_run_end three-distinct-class walkthrough + same-class repeats don't advance the milestone, apply_snapshot reorder regression (4 equipped restored with all-class clear, trim to 3 with single-class clear, Run-38 lifetime_bosses_slain still loads, Run-42 class_wins still loads via new early path, pre-Run-42 keeps 4th slot locked but 3rd active, negative clamp), end-to-end walkthrough (Run 43)
   test_run44.gd      — WinScreen unlock toasts: Skins.newly_unlocked_in_range (first-win unlock, mastery at 3rd win, multi-threshold range, no-change cases, equal/backwards bounds, negative-clamp, empty/unknown class id, per-class isolation), Perks.slots_gained (first-win 3rd slot, third-class 4th slot, repeat-class zero, second-distinct-class still 1-short, capped-out no-bump, backwards-clamp, null/empty/bad-types safety, dual-milestone additive), end-to-end via MetaProgress.record_run_end (first ever clear → skin + slot, second-class win → skin only, third-class win → skin + 4th slot, three-brawler-clear grind cadence, death-run → no toasts) (Run 44)
   test_run45.gd      — Death-screen meta toast: MetaProgress.newly_affordable_perks math (empty band returns 0, single perk crossed, already-owned excluded, milestone-locked excluded even when affordable, milestone-just-unlocked counts, negative prev clamps to 0, multiple perks in band), end-to-end via record_run_end (death pays expected shards, post-record wallet delta surfaces newly-affordable count, already-owned excluded across the record, post-record best_floor=9 unlocks deep_diver in count), edge cases (zero-band, exact-cost match counts, unowned+unaffordable doesn't count) (Run 45)
+  test_run46.gd      — Bleed status + Eviscerate ability: StatusEffect.bleed factory (default shape, dpt scales with max_hp, floor of 1, negative-input clamps, zero/negative duration), HUD helpers (BLD short code, Bleeding display, summarize includes dpt, stack collapses with summed dpt + longer duration), Eviscerate schema (in DEFS, all required fields, in rogue CLASS_UNLOCKS at index 0, tuning constants locked), end-to-end via Combatant (ticks correct dpt, expires after 3 ticks, bypasses armor, dpt locked at apply not tick, two bleeds stack to combined 32/turn) (Run 46)
 
 tools/
   tour_bot.gd        — Run 32: screenshot-audit auto-play bot (see Run 32 notes for usage;

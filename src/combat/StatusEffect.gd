@@ -16,6 +16,31 @@ static func fortified(duration: int = 2, armor_bonus: int = 3) -> Dictionary:
 static func poisoned(duration: int = 4, dpt: int = 3) -> Dictionary:
 	return {"id": "poisoned", "name": "Poisoned", "duration": duration, "damage_per_turn": dpt, "armor_mod": 0}
 
+## Run 46: percent-of-max-HP DoT. Distinct from `burning`/`poisoned` (flat
+## per-tick) — bleed scales with the target's hit-point pool, so it punishes
+## tanky enemies (a 200-HP boss bleeds for 16/turn at the default 8%) while
+## staying mostly-flavor on a 10-HP rat (floor of 1 per turn). The dpt is
+## computed at apply-time so it reads the target's max_hp once and locks the
+## tick math — a future Boss Phase 3 max_hp grant doesn't retroactively
+## accelerate an in-flight bleed. Bypasses armor via `tick_statuses`'s direct
+## HP drain (same path burning/poisoned use today).
+##
+## Stacks with itself: two 8% applications run as 16% per turn (the existing
+## `stack()` summer sums `damage_per_turn`, so the player's "stack bleed"
+## strategy compounds the way the HUD shows it).
+##
+## Floor of 1 per turn even when `target_max_hp * pct_per_turn / 100` rounds
+## to 0 — a bleed that ticks for 0 damage is just a typo. Negative inputs
+## clamp to 0 / 1 so a defensive caller can't accidentally over-damage.
+static func bleed(duration: int = 3, target_max_hp: int = 0, pct_per_turn: int = 8) -> Dictionary:
+	var dur: int = max(0, duration)
+	var max_hp_clamped: int = max(0, target_max_hp)
+	var pct: int = max(0, pct_per_turn)
+	var dpt: int = max(1, int(max_hp_clamped * pct / 100))
+	return {"id": "bleed", "name": "Bleeding", "duration": dur,
+		"damage_per_turn": dpt, "armor_mod": 0,
+		"bleed_pct": pct}
+
 ## Run 21: Arcanist barrier. Holds a damage pool; Combatant.take_damage() drains
 ## it BEFORE armor is applied (and before HP). When the pool hits 0 the effect
 ## expires immediately. Long nominal duration is intentional — it only ends
@@ -40,6 +65,7 @@ const SHORT_CODES: Dictionary = {
 	"fortified": "DEF",
 	"vanished": "HID",
 	"mana_shield": "SHD",
+	"bleed": "BLD",
 }
 
 const DISPLAY_NAMES: Dictionary = {
@@ -49,6 +75,7 @@ const DISPLAY_NAMES: Dictionary = {
 	"fortified": "Fortified",
 	"vanished": "Vanished",
 	"mana_shield": "Mana Shield",
+	"bleed": "Bleeding",
 }
 
 static func short_code(eff: Dictionary) -> String:
