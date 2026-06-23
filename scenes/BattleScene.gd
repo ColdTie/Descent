@@ -3,6 +3,12 @@ extends Node2D
 ## Run 3: ability charges/cooldowns in HUD, lava heat damage, floor scaling, enemy collision fix.
 
 signal battle_complete(hero_won: bool, xp_earned: int, enemies_killed: int)
+## Run 45: emitted just before the death overlay renders so Main can route the
+## meta-progression record-and-pay through its idempotent `_record_meta_end`.
+## The signal carries no payload — Main reads GameState fields directly. This
+## decouples death-side meta from the deferred `battle_complete(false)` path
+## (which only fires on TRY AGAIN click, too late to show the payout breakdown).
+signal hero_meta_died
 
 const HEX_SIZE: float = 38.0
 const HERO_COLOR  := Color(0.25, 0.55, 1.0)
@@ -2578,6 +2584,26 @@ func _on_system_line(text: String, _dur: float) -> void:
 ## ─── Death Overlay ────────────────────────────────────────────────────────────
 
 func _show_death_overlay() -> void:
+	# Run 45: route the meta-progression payout through Main so the existing
+	# `_meta_recorded` flag enforces single-pay (this signal fires now AND a
+	# pause-menu QUIT TO TITLE could later land on `_on_hero_died` for the
+	# same run; only the first record actually pays). Snapshot shards BEFORE
+	# emitting so we can compute the "newly affordable" delta after the record
+	# lands. Main connects to `hero_meta_died` synchronously, so by the time
+	# the next line runs the wallet has already been credited.
+	var death_payout: int = 0
+	var newly_affordable: int = 0
+	var total_shards: int = 0
+	var mp_node: Node = get_node_or_null("/root/MetaProgress")
+	var prev_shards: int = 0
+	if mp_node != null:
+		prev_shards = int(mp_node.get("shards"))
+	hero_meta_died.emit()
+	if mp_node != null:
+		total_shards = int(mp_node.get("shards"))
+		death_payout = total_shards - prev_shards
+		newly_affordable = int(mp_node.call("newly_affordable_perks", prev_shards))
+
 	var cl := CanvasLayer.new()
 	cl.layer = 10
 	add_child(cl)
@@ -2635,10 +2661,52 @@ func _show_death_overlay() -> void:
 	]
 	cl.add_child(stats_lbl)
 
-	# TRY AGAIN button
+	# Run 45: meta-progression toast — soft-purple-bordered panel that reads
+	# as a peer to the Run-44 WinScreen unlock banner. Only rendered when the
+	# run actually banked shards (a zero-floor / zero-boss instant death pays
+	# 0 and skips this entirely so the overlay stays compact). The "M new
+	# perks affordable" line only appends when the payout actually crossed
+	# at least one perk cost gate — silence keeps the screen calm when the
+	# player isn't close to a buy.
+	if death_payout > 0:
+		var meta_panel := PanelContainer.new()
+		meta_panel.position = Vector2(340.0, 390.0)
+		meta_panel.custom_minimum_size = Vector2(600.0, 0.0)
+		var meta_sb := StyleBoxFlat.new()
+		meta_sb.bg_color = Color(0.08, 0.05, 0.13, 0.92)
+		meta_sb.border_color = Color(0.78, 0.52, 1.0, 0.72)
+		meta_sb.set_border_width_all(2)
+		meta_sb.set_corner_radius_all(5)
+		meta_sb.set_content_margin_all(10.0)
+		meta_panel.add_theme_stylebox_override("panel", meta_sb)
+		cl.add_child(meta_panel)
+
+		var meta_col := VBoxContainer.new()
+		meta_col.add_theme_constant_override("separation", 4)
+		meta_panel.add_child(meta_col)
+
+		var shard_lbl := Label.new()
+		shard_lbl.text = "$  +%d shards earned  ·  total %d" % [death_payout, total_shards]
+		shard_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		shard_lbl.add_theme_font_size_override("font_size", 15)
+		shard_lbl.add_theme_color_override("font_color", Color(0.86, 0.66, 1.0))
+		meta_col.add_child(shard_lbl)
+
+		if newly_affordable > 0:
+			var perks_lbl := Label.new()
+			var noun: String = "perk" if newly_affordable == 1 else "perks"
+			perks_lbl.text = "*  %d new %s affordable  ·  spend at META on the title screen" % [
+				newly_affordable, noun]
+			perks_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+			perks_lbl.add_theme_font_size_override("font_size", 13)
+			perks_lbl.add_theme_color_override("font_color", Color(1.0, 0.86, 0.30))
+			meta_col.add_child(perks_lbl)
+
+	# TRY AGAIN button — Run 45: nudged down to 470 so the new meta panel
+	# (~50px tall at y=390 with one or two lines) doesn't crowd the click target.
 	var btn := Button.new()
 	btn.text = "TRY AGAIN"
-	btn.position = Vector2(515.0, 430.0)
+	btn.position = Vector2(515.0, 470.0)
 	btn.custom_minimum_size = Vector2(250.0, 55.0)
 	btn.add_theme_font_size_override("font_size", 20)
 	btn.pressed.connect(_on_death_restart)

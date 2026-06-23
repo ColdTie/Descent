@@ -35,8 +35,22 @@ DESCENT is a turn-based tactical dungeon crawler in the spirit of **Dungeon Craw
 - **Architecture rule**: `BattleEngine._calculate_damage()` returns RAW damage (no armor). `Combatant.take_damage(amount, ignore_armor=false)` applies armor. Don't double-apply armor in both places.
 - `Combatant.take_damage(amount, ignore_armor)` — the `ignore_armor` parameter bypasses the `armor` field reduction (for backstab, env damage, etc.)
 
-## Current State (Run 44 — WinScreen Unlock Toasts for Skins & Perk Slots)
+## Current State (Run 45 — Death-Screen Meta Toast)
 ### Implemented ✅
+**Run 45 (Death-screen meta toast — roadmap item #3 from the Run-44 audit; closes the loop for the run-doesn't-end-in-a-win case, which is most of them):**
+- **`autoloads/MetaProgress.gd`** — new `newly_affordable_perks(prev_shards: int) -> int` helper. Pure read against live state: counts perks where (1) not already owned, (2) milestone gate passes against `lifetime_stats()`, (3) `cost > prev_shards` (couldn't afford before the just-landed payout), (4) `cost <= shards` (can afford now). Reads the milestone gate via `Perks.is_milestone_unlocked(pid, lifetime_stats())` so a death that bumped `best_floor` past 9 surfaces `deep_diver` in the count iff the player can also afford it — the gate flips at the same `record_run_end` call site that produced the shard delta, so a single post-record read is consistent. Defensive: negative `prev_shards` clamps to 0 via `max(0, prev)` so a stale sentinel can't widen the band downward and over-count. Cost <= 0 (an unknown perk id returning -1 from `Perks.cost`) is skipped so a future DEFS removal can't toast a phantom unlock.
+- **`scenes/BattleScene.gd`** — `_show_death_overlay` now emits a new `hero_meta_died` signal BEFORE rendering content. Snapshots `MetaProgress.shards` before the emit, reads it after, and computes the payout delta + newly-affordable count for display. The emit-then-read pattern is synchronous (Main's connected handler runs the record inline), so by the time the overlay reads the wallet for display the record has already landed. Without the signal hop, `Main._on_battle_complete(false)` only fires when the player clicks TRY AGAIN — too late to show the breakdown on the overlay the player is staring at.
+  - **New `hero_meta_died` signal** — declared next to `battle_complete` so the wiring reads symmetrically. Documented inline as the "death-side equivalent of `_on_loot_chosen` win-condition record" — both end-of-run paths now route their meta-record through Main's idempotent `_record_meta_end`, distinct from the deferred `battle_complete(false)` that fires on the click.
+  - **Toast panel** — `if death_payout > 0` gates the entire panel so a 0-floor / 0-boss death (impossible in practice but the runtime invariant holds) doesn't render an empty banner. Soft-purple-bordered PanelContainer (border `Color(0.78, 0.52, 1.0, 0.72)`, bg `Color(0.08, 0.05, 0.13, 0.92)`) — identical styling to the Run-44 WinScreen unlock banner so the two screens read as peers in the meta-progression visual band.
+    - **Shards line**: `$ +N shards earned · total M` in the soft-purple WinScreen accent color (`Color(0.86, 0.66, 1.0)`), font 15. Always rendered when the panel fires.
+    - **Perks line** (only when `newly_affordable > 0`): `* X new perks affordable · spend at META on the title screen` in the WinScreen gold accent (`Color(1.0, 0.86, 0.30)`), font 13. Pluralizes "perk"/"perks" via a 1-vs-N branch so a single-perk run reads naturally.
+  - **Button reflow** — TRY AGAIN nudged from `y=430` to `y=470` so the new panel (one or two lines at `y=390`) doesn't crowd the click target. Same panel height in both states because the second line is omitted entirely (not just empty) when zero perks crossed.
+- **`scenes/Main.gd`** — new `_on_hero_meta_died()` handler routes the `hero_meta_died` signal through the existing idempotent `_record_meta_end(false)`. The `_meta_recorded` flag (Run 36, kept) prevents a double-pay if both `hero_meta_died` AND `_on_hero_died` fire for the same run — the latter is today only reachable via QUIT TO TITLE (hidden behind the death overlay, so unreachable in the live flow) but defense in depth still matters. New `_load_scene` connection block mirrors the existing `battle_complete` / `floor_cleared` / `loot_chosen` wiring so future signals stay grouped.
+- **Architecture choice** — kept the idempotency at Main's `_meta_recorded` flag rather than adding a second guard inside `MetaProgress.record_run_end`. The lower-layer guard would have forced every test in Runs 36–44 that simulates multiple distinct runs on one MP instance (test_run42, test_run43, test_run44 — ~20 functions) to insert an explicit reset between calls. The signal-into-Main approach keeps the existing test contract intact while still single-paying any run.
+- **`tests/test_run45.gd`** (16 test functions, ~25 assertions): `newly_affordable_perks` math — empty band returns 0 (1 shard crosses nothing, equal prev/current returns 0, broke prev = broke now), exact-cost match counts (20 shards at exactly wealthy's price returns 1), single perk crossed (20 ← 19), already-owned excluded (wealthy in `owned_perks` drops the count), milestone-locked excluded (deep_diver at cost 50 with best_floor=0 doesn't count even at 50 shards), milestone-just-unlocked counts (best_floor bumped to 9 adds exactly 1 to the band over the same shard delta), negative prev clamps to 0 (helper output matches prev=0), multiple perks in band (50 shards from 0 surfaces ≥4 unlocked perks). End-to-end via `record_run_end`: death on floor 8 + 2 bosses pays 16 shards (8 + 8), helper called post-record reflects new affordability (18→28 surfaces wealthy + seasoned = 2), already-owned excluded across record (band crossed both but count is 0), post-record `best_floor=9` unlocks deep_diver AND adds it to count when affordable. Edge cases: zero band returns zero, exact-cost match counts, unowned + unaffordable post-band excluded.
+- **Test suite total: 2778 passed, 0 failed** (up from 2753 in Run 44; +25 new).
+- **Visual audit** — a temporary `tools/r45_death_smoke.gd` autoload (NOT shipped) seeded `MetaProgress.shards = 19` + bumped `GameState.floor_num = 8` + `GameState.bosses_slain = 1`, then killed the hero via `_hero.take_damage(9999, true)`. Confirmed in the screenshot: the purple-bordered panel sits between the stats line and TRY AGAIN, reads `$ +12 shards earned · total 31` on top and `* 5 new perks affordable · spend at META on the title screen` below (wealthy/seasoned/iron_blood/lucky_strike/audience_darling all crossed the 19→31 band). A second pass with `MetaProgress.shards = 0` + floor 1 + 0 bosses (payout = 1, nothing crossed) verified the perks line is correctly omitted — the panel shrinks to just the shards line. The smoke autoload was removed after the audit.
+
 **Run 44 (Skin + perk-slot unlock toasts on WinScreen — roadmap items #3 and #4 from the Run-43 audit; closes the discoverability gap Run 42 + 43 left open):**
 - **`src/data/Skins.gd`** — new static helper `newly_unlocked_in_range(class_id, prev_class_wins, new_class_wins) -> Array[String]` returns the skin ids whose unlock threshold sits in the half-open range `(prev, new]` — exactly the skins that just crossed because a win bumped the per-class counter. Empty when the win crossed no threshold (e.g. the 2nd-win-as-class case where veteran was already unlocked at win 1 and mastery isn't due until win 3). Defensive: empty class id returns empty (so a defensive caller passing `""` from a `_record_meta_end(false)` death path can't toast a phantom unlock), unknown class id returns empty (no skins for it in `for_class`), negative `prev_class_wins` clamps to 0 via `max(0, prev)` (so a hand-edited save can't widen the range upward and toast unlocks that already fired), backwards range (`new < prev`, only reachable via save corruption) returns empty. Pure data, fully testable.
 - **`src/data/Perks.gd`** — new static helper `slots_gained(prev_stats, new_stats) -> int` computes `max(0, max_equipped(new) - max_equipped(prev))`. Routes through the existing `max_equipped(stats)` so a future milestone bump (5th slot at hard-mode clear, etc.) auto-participates. The `max(0, ...)` clamp is purely defensive — a backwards delta can't claim an unlock that didn't occur. `null` / non-Dictionary inputs fall through to the base cap on both sides (delta 0) via `max_equipped`'s existing null tolerance.
@@ -794,6 +808,19 @@ FTL, traditional roguelikes). Status of the "what are we missing" audit:
   the 3rd slot (first win) so the rarer milestone reads brighter. The
   skin banner shows a 22×22 swatch tinted to the unlocked palette so
   the player previews it before opening MetaScreen → SKINS — Run 44
+- Death-screen meta toast — soft-purple banner between the run-summary
+  stats line and TRY AGAIN, showing `$ +N shards earned · total M` plus
+  (when crossed) `* X new perks affordable · spend at META on the title
+  screen`. Routed through a new `hero_meta_died` signal that
+  `_show_death_overlay` emits BEFORE rendering, so Main's idempotent
+  `_record_meta_end(false)` lands the payout before the overlay reads
+  the wallet for display. New `MetaProgress.newly_affordable_perks(prev_shards)`
+  computes the "perks now in band" count off post-record state so a
+  death that bumped `best_floor` past 9 surfaces `deep_diver` in the
+  count iff the player can also afford it. Perks line is omitted
+  entirely (not just empty) when zero perks crossed — keeps the
+  overlay calm on early deaths. Closes the loop for the most common
+  outcome (a failed run) — Run 45
 
 ### 🔜 Highest-value, easiest remaining (do next, roughly in order)
 1. **Status-effect hover tooltips** — Run 35 surfaces every active status
@@ -806,14 +833,13 @@ FTL, traditional roguelikes). Status of the "what are we missing" audit:
    from the persistent store vs. a same-run flip. A small `RESET ACCESS`
    button on the access row (or a `★` glyph next to non-default toggles)
    would close the discoverability gap without adding new state.
-3. **Death-screen meta toast** — Run 44 added the win-side unlock banner
-   but the death overlay still drops the player back to ClassSelect
-   without surfacing the shard payout / new perks they could afford. A
-   tiny "+N shards · M new perks available" line on the death summary
-   would close the loop for the run-doesn't-end-in-a-win case (which is
-   most of them). The Run-36 `shards_for_run(floor, bosses, false, ...)`
-   helper already produces the right number; the screen just doesn't
-   read it.
+3. **Achievement-unlock toast mid-run** — Run 19 added the achievement
+   system + audience-score payout; Run 37 added the shard payout. But
+   the player doesn't see either land mid-run — they have to wait for
+   the WinScreen / DeathScreen roster to read what just happened. A
+   tiny 2-second banner above the combat log when `Achievements.unlock`
+   fires would close that immediate-feedback gap and lean into the DCC
+   reality-show framing (the System narrates milestones as they earn).
 
 ### 🟡 Larger / later (note, not yet scoped)
 4. **More floor variety** — Per-tier hazards: Tier 1 crumbling bridges, Tier 2 freeze pools,
@@ -934,6 +960,7 @@ tests/
   test_run42.gd      — Alt-color class skins: DEFS schema (9 skins / 3 per class) + exactly-one-default + strictly-increasing thresholds + non-WHITE alt tints; lookup defensiveness (unknown id → WHITE / 9999 / empty); is_unlocked thresholds + clamped negatives + fail-closed-unknown; requirement_text singular/plural + class display name; MetaProgress.class_wins per-class isolation + win-only bump + empty-id ignore; equipped_skin_for default fallthrough + stale-relocked safety net; equip_skin gate (unknown / locked / same-value / unlocked) + swap-within-class; unequip + unlocked_skin_count tally; snapshot apply roundtrip + pre-Run-42 defaults + negative clamp + equipped-skin trim (unknown id / now-relocked / wrong-class); reset_all clears both fields; end-to-end win → unlock → equip → tint loop (Run 42)
   test_run43.gd      — 4th perk slot at all-class-clear: FOURTH_SLOT_BONUS_SLOTS / MILESTONE_FOURTH_SLOT_CLASSES_WON constants + Run-39 constants pinned, Perks.max_equipped composability (none / 3rd only / both / no-further-bumps / independent milestones / missing classes_won keeps 3rd-slot bonus / null/non-Dict defenses), fourth_slot_unlocked + third_slot_unlocked predicates, MetaProgress.lifetime_stats carries classes_won = class_wins.size() + preserves Run 38/39 fields, equip_cap 4-slot activation + 4th equip ok + 5th refused + 4th refused before all-class clear, record_run_end three-distinct-class walkthrough + same-class repeats don't advance the milestone, apply_snapshot reorder regression (4 equipped restored with all-class clear, trim to 3 with single-class clear, Run-38 lifetime_bosses_slain still loads, Run-42 class_wins still loads via new early path, pre-Run-42 keeps 4th slot locked but 3rd active, negative clamp), end-to-end walkthrough (Run 43)
   test_run44.gd      — WinScreen unlock toasts: Skins.newly_unlocked_in_range (first-win unlock, mastery at 3rd win, multi-threshold range, no-change cases, equal/backwards bounds, negative-clamp, empty/unknown class id, per-class isolation), Perks.slots_gained (first-win 3rd slot, third-class 4th slot, repeat-class zero, second-distinct-class still 1-short, capped-out no-bump, backwards-clamp, null/empty/bad-types safety, dual-milestone additive), end-to-end via MetaProgress.record_run_end (first ever clear → skin + slot, second-class win → skin only, third-class win → skin + 4th slot, three-brawler-clear grind cadence, death-run → no toasts) (Run 44)
+  test_run45.gd      — Death-screen meta toast: MetaProgress.newly_affordable_perks math (empty band returns 0, single perk crossed, already-owned excluded, milestone-locked excluded even when affordable, milestone-just-unlocked counts, negative prev clamps to 0, multiple perks in band), end-to-end via record_run_end (death pays expected shards, post-record wallet delta surfaces newly-affordable count, already-owned excluded across the record, post-record best_floor=9 unlocks deep_diver in count), edge cases (zero-band, exact-cost match counts, unowned+unaffordable doesn't count) (Run 45)
 
 tools/
   tour_bot.gd        — Run 32: screenshot-audit auto-play bot (see Run 32 notes for usage;

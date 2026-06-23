@@ -380,6 +380,41 @@ func unequip_perk(perk_id: String) -> bool:
 
 # ── Run-end shard math ────────────────────────────────────────────────────
 
+func newly_affordable_perks(prev_shards: int) -> int:
+	## Run 45: count perks the player can now afford to buy that they couldn't
+	## before this run's shard payout landed. Used by the death-overlay meta
+	## toast so a death-run still surfaces "M new perks available · spend at
+	## META." Pure read against live state — call AFTER `record_run_end` so
+	## both `shards` (current balance) and the milestone-gate result reflect
+	## any boss-kills / depth-records this run just locked in.
+	##
+	## A perk counts when:
+	##   1. The player doesn't already own it.
+	##   2. Its milestone gate (if any) passes against the post-record
+	##      lifetime stats — a perk unlocked by THIS run's boss kills counts
+	##      iff the player can also afford it.
+	##   3. `cost > prev_shards` (i.e., couldn't afford before the payout).
+	##   4. `cost <= shards` (i.e., can afford now).
+	##
+	## Negative prev_shards clamps to 0 so a future caller passing a stale
+	## sentinel doesn't widen the band downward and over-count.
+	if prev_shards < 0:
+		prev_shards = 0
+	var stats: Dictionary = lifetime_stats()
+	var count: int = 0
+	for pid: String in Perks.all_ids():
+		if owned_perks.has(pid):
+			continue
+		if not Perks.is_milestone_unlocked(pid, stats):
+			continue
+		var c: int = Perks.cost(pid)
+		if c <= 0:
+			continue
+		if c > prev_shards and c <= shards:
+			count += 1
+	return count
+
+
 func shards_for_run(floor_num: int, bosses_slain: int, won: bool,
 		class_id: String = "") -> int:
 	## Pure math — no state mutation. Called by `record_run_end` and exposed

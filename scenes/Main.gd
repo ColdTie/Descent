@@ -85,6 +85,16 @@ func _on_hero_died() -> void:
 	_go_to_class_select()
 
 
+func _on_hero_meta_died() -> void:
+	## Run 45: BattleScene's death overlay signals that the hero just died and
+	## the overlay is about to render. Run the meta-record now so the overlay
+	## can read MetaProgress.shards for the payout breakdown. The existing
+	## `_record_meta_end` guard prevents a double-pay if `_on_hero_died` later
+	## fires for the same run (today only reachable via QUIT TO TITLE, which is
+	## hidden behind the death overlay — but defense in depth).
+	_record_meta_end(false)
+
+
 func _record_meta_end(won: bool) -> void:
 	## Run 36: idempotent run-end meta hook. Called from both the death path
 	## and the WinScreen route — guarded by `_meta_recorded` so a quick win
@@ -175,6 +185,15 @@ func _load_scene(path: String) -> void:
 	# Connect signals
 	if _current_scene.has_signal("battle_complete"):
 		_current_scene.battle_complete.connect(_on_battle_complete)
+	# Run 45: BattleScene emits `hero_meta_died` right before rendering its
+	# death overlay so the meta-progression payout lands BEFORE the overlay
+	# reads MetaProgress.shards for display. Routed through the same idempotent
+	# `_record_meta_end(false)` the pause-menu QUIT-TO-TITLE path uses, so the
+	# Main-level `_meta_recorded` flag prevents a double-pay if both paths fire
+	# for the same run (impossible today — the pause menu is hidden behind the
+	# death overlay — but defense in depth).
+	if _current_scene.has_signal("hero_meta_died"):
+		_current_scene.hero_meta_died.connect(_on_hero_meta_died)
 	if _current_scene.has_signal("floor_cleared"):
 		_current_scene.floor_cleared.connect(_on_floor_cleared)
 	if _current_scene.has_signal("loot_chosen"):
