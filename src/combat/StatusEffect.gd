@@ -41,6 +41,24 @@ static func bleed(duration: int = 3, target_max_hp: int = 0, pct_per_turn: int =
 		"damage_per_turn": dpt, "armor_mod": 0,
 		"bleed_pct": pct}
 
+## Run 47: stun = skip the next turn. Mirrors `frozen`'s `skips_turn: true`
+## payload but without the armor debuff — frozen is a ranged-spell control
+## that locks the target down AND softens them up; stun is a melee impact
+## that only steals tempo. Default 1-turn duration so a single Concussive
+## Slam reads as "they lose one action," matching the player's expectation
+## from the Brawler shield_bash idiom. The engine integration is zero-edit:
+## `is_combatant_stunned` parallels `is_combatant_frozen`, and the AI gate
+## checks both.
+##
+## Stacks with itself via the existing `stack()` collapser (the `duration`
+## summer takes MAX), so re-stunning a target that's already stunned does
+## NOT chain into multi-turn lockdowns — the longer of the two durations
+## wins. That keeps stun from spiraling into a perma-CC strategy.
+static func stunned(duration: int = 1) -> Dictionary:
+	var dur: int = max(0, duration)
+	return {"id": "stunned", "name": "Stunned", "duration": dur,
+		"damage_per_turn": 0, "armor_mod": 0, "skips_turn": true}
+
 ## Run 21: Arcanist barrier. Holds a damage pool; Combatant.take_damage() drains
 ## it BEFORE armor is applied (and before HP). When the pool hits 0 the effect
 ## expires immediately. Long nominal duration is intentional — it only ends
@@ -66,6 +84,7 @@ const SHORT_CODES: Dictionary = {
 	"vanished": "HID",
 	"mana_shield": "SHD",
 	"bleed": "BLD",
+	"stunned": "STN",
 }
 
 const DISPLAY_NAMES: Dictionary = {
@@ -76,6 +95,7 @@ const DISPLAY_NAMES: Dictionary = {
 	"vanished": "Vanished",
 	"mana_shield": "Mana Shield",
 	"bleed": "Bleeding",
+	"stunned": "Stunned",
 }
 
 static func short_code(eff: Dictionary) -> String:
@@ -116,6 +136,12 @@ static func summarize(eff: Dictionary) -> String:
 			parts.append("+%d armor" % armor_mod)
 		elif armor_mod < 0:
 			parts.append("%d armor" % armor_mod)
+		# Run 47: stun (and any future skips_turn effect) carries no dpt
+		# and no armor mod, so without this surface the summary would
+		# read "Stunned · 1t" — accurate but the player can't tell what
+		# the effect does. The "skip turn" segment makes the cost legible.
+		if bool(eff.get("skips_turn", false)):
+			parts.append("skip turn")
 	return " · ".join(parts)
 
 static func stack(effects: Array) -> Array[Dictionary]:

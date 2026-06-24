@@ -510,6 +510,11 @@ func _load_effect_textures() -> void:
 		# Run 46: Eviscerate reuses the backstab dagger flash — the bleed itself
 		# reads via the BLD short-code that sticks above the target.
 		"eviscerate":  "res://assets/effects/fx_backstab.png",
+		# Run 47: Concussive Slam reuses the power-strike VFX — the heavy
+		# overhead visual lands the impact, while the STN short-code that
+		# sticks above the target carries the lingering "this turn was lost"
+		# beat over the following round.
+		"concussive_slam": "res://assets/effects/fx_power_strike.png",
 		"plague_bite":  "res://assets/effects/fx_poison.png",
 		"ember_claw":  "res://assets/effects/fx_lava_heat.png",
 		"ground_slam":  "res://assets/effects/fx_impact.png",
@@ -1922,6 +1927,7 @@ func _do_hero_attack(target: Combatant) -> void:
 	match _selected_ability:
 		"backstab":  SystemVoice.speak("ability_backstab")
 		"shield_bash":  SystemVoice.speak("shield_bash")
+		"concussive_slam":  SystemVoice.speak("concussive_slam")  # Run 47
 		"shadow_step":  pass  # quip already played above during teleport
 		_:  SystemVoice.speak("hit")
 	if _battle_rng.randf() < 0.22:
@@ -1953,6 +1959,21 @@ func _do_hero_attack(target: Combatant) -> void:
 		SystemVoice.speak_direct(
 			"Arterial work. %s bleeds for %d each turn — the dungeon hates a messy floor." \
 			% [target.display_name, dpt])
+
+	# Run 47: stun application — Concussive Slam (and any future stun ability)
+	# routes through the same on-hit window. The target's next AI turn is
+	# silently skipped via the BattleEngine.is_combatant_stunned gate; this
+	# branch handles the visible feedback (combat log + System line).
+	if target.is_alive() and abl_data.get("applies_stunned", false):
+		var s_dur: int = abl_data.get("stun_duration", 1)
+		target.apply_status(StatusEffect.stunned(s_dur))
+		_update_status_label(target)
+		_combat_log_add("%s -> %s STUNNED x%d" % [
+			_short_name(_hero), _short_name(target), s_dur],
+			Color(0.86, 0.72, 0.20))
+		SystemVoice.speak_direct(
+			"Concussion event logged. %s loses %d turn — the System docks them an action." \
+			% [target.display_name, s_dur])
 
 	# Consume the charge
 	if abl_obj != null:

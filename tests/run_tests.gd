@@ -44,6 +44,7 @@ func _run_all() -> void:
 	_run_suite("Run44 (WinScreenUnlockToasts)", TestRun44.new())
 	_run_suite("Run45 (DeathScreenMetaToast)", TestRun45.new())
 	_run_suite("Run46 (BleedStatus+Eviscerate)", TestRun46.new())
+	_run_suite("Run47 (StunStatus+ConcussiveSlam)", TestRun47.new())
 
 func _run_suite(name: String, suite: Object) -> void:
 	print("\n--- %s ---" % name)

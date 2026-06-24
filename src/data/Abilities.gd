@@ -112,6 +112,28 @@ const DATA: Dictionary = {
 		"icon_key": "shield",
 		"pushback": 2,
 	},
+	## Run 47: Brawler's tempo-control strike. Modest direct damage so the
+	## stun is the headline — a 1-turn skip on a tier-3 boss is worth more
+	## than the 14 hit on its own. Pairs with shield_bash as the Brawler's
+	## second class-unique unlock (mirrors the Run-46 idiom that gave the
+	## Rogue an eviscerate alternative to backstab/shadow_step). 2 charges
+	## + 3-turn cooldown matches Eviscerate's tempo cost so the pool reads
+	## consistently across classes.
+	"concussive_slam": {
+		"id": "concussive_slam",
+		"display_name": "Concussive Slam",
+		"description": "Bring your weight down on a target's skull. Modest damage, but they skip their next turn.",
+		"type": "attack",
+		"target": "single_enemy",
+		"base_damage": 14,
+		"max_charges": 2,
+		"cooldown_turns": 3,
+		"range": 1,
+		"xp_cost": 50,
+		"icon_key": "axe",
+		"applies_stunned": true,
+		"stun_duration": 1,
+	},
 	"poison_blade": {
 		"id": "poison_blade",
 		"display_name": "Poison Blade",

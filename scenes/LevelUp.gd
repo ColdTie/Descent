@@ -14,7 +14,11 @@ var _chosen: String = ""
 
 # Abilities each class can unlock (abilities NOT in their starting kit)
 const CLASS_UNLOCKS: Dictionary = {
-	"brawler":  ["shield_bash"],
+	# Run 47: `concussive_slam` heads the brawler list as their class-unique
+	# unlock (mirrors the Run-46 idiom that put `eviscerate` first for rogue).
+	# shield_bash remains as the secondary fallback. Order matters — first
+	# available wins.
+	"brawler":  ["concussive_slam", "shield_bash"],
 	# Run 46: `eviscerate` heads the rogue list as their class-unique unlock
 	# (mirrors the Run-21 pattern that put `mana_shield` first for arcanist).
 	# Order matters — first available wins.

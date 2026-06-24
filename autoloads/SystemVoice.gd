@@ -364,6 +364,16 @@ const LINES: Dictionary = {
 		"Shield impact: successful. Trajectory: not their choice.",
 	],
 
+	# ── Ability: concussive_slam (Run 47) ─────────────────────────────────────
+	"concussive_slam": [
+		"Concussive Slam. The enemy's turn has been administratively cancelled.",
+		"You bonked them. The System logs a tempo violation against the dungeon.",
+		"One action redacted from the enemy's schedule. Standard impact accounting.",
+		"Skull contact: confirmed. Cognitive function: temporarily suspended.",
+		"The dungeon's HR department will be filing for the lost productivity.",
+		"Slam landed. They will need a moment. The dungeon does not grant moments.",
+	],
+
 	# ── Pushed into lava ──────────────────────────────────────────────────────
 	"pushed_into_lava": [
 		"Launched directly into lava. The dungeon finds this satisfying. The creature does not.",

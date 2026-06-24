@@ -207,8 +207,8 @@ func _calculate_damage(attacker: Combatant, target: Combatant, ability_id: Strin
 
 func enemy_ai_action(enemy: Combatant, map: DungeonMap = null) -> void:
 	## Smart AI based on enemy type (sprite_key)
-	if is_combatant_frozen(enemy):
-		return  # frozen enemies skip their turn
+	if is_combatant_frozen(enemy) or is_combatant_stunned(enemy):
+		return  # frozen / stunned enemies skip their turn (Run 47: stun added)
 	var heroes: Array[Combatant] = []
 	for c: Combatant in combatants:
 		if c.faction == Combatant.Faction.HERO and c.is_alive():
@@ -658,5 +658,14 @@ func move_combatant(combatant: Combatant, to_hex: Vector2i) -> bool:
 func is_combatant_frozen(combatant: Combatant) -> bool:
 	for eff: Dictionary in combatant.status_effects:
 		if eff.get("id", "") == "frozen":
+			return true
+	return false
+
+## Run 47: stun parallels frozen but lives on its own status id so the HUD,
+## quips, and (future) cure-effects can address it distinctly. Both effects
+## set `skips_turn: true` in their payload; the AI gate consults both.
+func is_combatant_stunned(combatant: Combatant) -> bool:
+	for eff: Dictionary in combatant.status_effects:
+		if eff.get("id", "") == "stunned":
 			return true
 	return false
