@@ -163,6 +163,30 @@ const DATA: Dictionary = {
 		"icon_key": "fire",
 		"ignore_armor": true,
 	},
+	## Run 48: Arcanist's setup-piece. Modest direct damage so the vulnerable
+	## debuff is the headline — a 2-turn +50% window covers a follow-up
+	## fireball (and any same-turn AoE that lands inside the window). Pairs
+	## naturally with frost_nova (lock down) → arcane_sunder (apply) →
+	## fireball (lands amplified) and gives the Arcanist a reason to spend
+	## a turn on debuff rather than always bursting. 2 charges + 3-turn
+	## cooldown matches eviscerate/concussive_slam tempo so the cross-class
+	## pool reads consistently.
+	"arcane_sunder": {
+		"id": "arcane_sunder",
+		"display_name": "Arcane Sunder",
+		"description": "Crack the target's defenses with focused arcana. Light damage but they take +50% damage for 2 turns.",
+		"type": "attack",
+		"target": "single_enemy",
+		"base_damage": 12,
+		"max_charges": 2,
+		"cooldown_turns": 3,
+		"range": 2,
+		"xp_cost": 50,
+		"icon_key": "frost",
+		"applies_vulnerable": true,
+		"vuln_duration": 2,
+		"vuln_pct": 50,
+	},
 	## Run 46: Rogue's percent-of-max-HP bleed strike. Modest direct damage so
 	## the bleed is the headline — a 3-turn tick at 8% of the target's max HP
 	## scales the payoff against tanky targets (a 200-HP boss bleeds for

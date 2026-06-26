@@ -515,6 +515,11 @@ func _load_effect_textures() -> void:
 		# sticks above the target carries the lingering "this turn was lost"
 		# beat over the following round.
 		"concussive_slam": "res://assets/effects/fx_power_strike.png",
+		# Run 48: Arcane Sunder reuses the frost-nova ring VFX — the violet
+		# burst reads as an arcane crack-the-armor moment, while the new
+		# VLN short-code that sticks above the target carries the "+50%
+		# taken" warning for the follow-up shot.
+		"arcane_sunder": "res://assets/effects/fx_frost.png",
 		"plague_bite":  "res://assets/effects/fx_poison.png",
 		"ember_claw":  "res://assets/effects/fx_lava_heat.png",
 		"ground_slam":  "res://assets/effects/fx_impact.png",
@@ -1928,6 +1933,7 @@ func _do_hero_attack(target: Combatant) -> void:
 		"backstab":  SystemVoice.speak("ability_backstab")
 		"shield_bash":  SystemVoice.speak("shield_bash")
 		"concussive_slam":  SystemVoice.speak("concussive_slam")  # Run 47
+		"arcane_sunder":  SystemVoice.speak("arcane_sunder")  # Run 48
 		"shadow_step":  pass  # quip already played above during teleport
 		_:  SystemVoice.speak("hit")
 	if _battle_rng.randf() < 0.22:
@@ -1974,6 +1980,24 @@ func _do_hero_attack(target: Combatant) -> void:
 		SystemVoice.speak_direct(
 			"Concussion event logged. %s loses %d turn — the System docks them an action." \
 			% [target.display_name, s_dur])
+
+	# Run 48: vulnerable application — Arcane Sunder (and any future
+	# damage-amp ability) routes through the same on-hit window. The amp
+	# is read at _calculate_damage time on the FOLLOWING strike, so this
+	# branch only handles the apply + visible feedback (combat log + System
+	# line). VLN short-code over the target advertises the +N% taken so the
+	# player knows the next big hit is going to hurt more.
+	if target.is_alive() and abl_data.get("applies_vulnerable", false):
+		var v_dur: int = abl_data.get("vuln_duration", 2)
+		var v_pct: int = abl_data.get("vuln_pct", 50)
+		target.apply_status(StatusEffect.vulnerable(v_dur, v_pct))
+		_update_status_label(target)
+		_combat_log_add("%s -> %s VULNERABLE +%d%% x%d" % [
+			_short_name(_hero), _short_name(target), v_pct, v_dur],
+			Color(0.78, 0.52, 1.0))
+		SystemVoice.speak_direct(
+			"Sundered. %s now takes %d%% more damage for %d turn — the System recommends a follow-up." \
+			% [target.display_name, v_pct, v_dur])
 
 	# Consume the charge
 	if abl_obj != null:

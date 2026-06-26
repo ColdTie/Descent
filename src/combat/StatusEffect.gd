@@ -41,6 +41,37 @@ static func bleed(duration: int = 3, target_max_hp: int = 0, pct_per_turn: int =
 		"damage_per_turn": dpt, "armor_mod": 0,
 		"bleed_pct": pct}
 
+## Run 48: vulnerable — debuff that AMPLIFIES incoming damage. Distinct from
+## the existing six debuffs because it doesn't deal damage, doesn't change
+## armor, and doesn't lock a turn — it makes the next strike (or chain of
+## strikes within `duration`) cost the target more. Pairs naturally with the
+## Arcanist's burst pattern: frost_nova (lock down) → arcane_sunder (apply
+## vulnerable) → fireball (lands at +50%) → fireball (still +50% while the
+## status persists).
+##
+## `damage_taken_mod` is a float multiplier on RAW damage, read inside
+## `BattleEngine._calculate_damage` against the target's status list. Floored
+## by `max(1, raw)` at the return so a 0-damage hit can't sneak past — same
+## guarantee the existing vanished multiplier carries.
+##
+## Engine integration is a target-side mirror of the attacker-side vanished
+## scan: one short loop, MAX of any present `damage_taken_mod` (so two
+## stacks don't multiply to 2.25× — restacking refreshes the duration via
+## `stack()` MAX but does not snowball the multiplier).
+##
+## Default amp = +50% (matches the design note in the Run-47 audit's "Up
+## Next" item #3). Default duration = 2 turns so a single sunder leaves
+## room for one big follow-up plus a same-turn AoE without becoming a
+## perma-debuff. The factory clamps negative inputs (a hand-edited save
+## can't park a -50% mod that would heal the target on hit; min cap is 1.0).
+static func vulnerable(duration: int = 2, amp_pct: int = 50) -> Dictionary:
+	var dur: int = max(0, duration)
+	var pct: int = max(0, amp_pct)
+	return {"id": "vulnerable", "name": "Vulnerable", "duration": dur,
+		"damage_per_turn": 0, "armor_mod": 0,
+		"damage_taken_pct": pct,
+		"damage_taken_mod": 1.0 + float(pct) / 100.0}
+
 ## Run 47: stun = skip the next turn. Mirrors `frozen`'s `skips_turn: true`
 ## payload but without the armor debuff — frozen is a ranged-spell control
 ## that locks the target down AND softens them up; stun is a melee impact
@@ -85,6 +116,7 @@ const SHORT_CODES: Dictionary = {
 	"mana_shield": "SHD",
 	"bleed": "BLD",
 	"stunned": "STN",
+	"vulnerable": "VLN",
 }
 
 const DISPLAY_NAMES: Dictionary = {
@@ -96,6 +128,7 @@ const DISPLAY_NAMES: Dictionary = {
 	"mana_shield": "Mana Shield",
 	"bleed": "Bleeding",
 	"stunned": "Stunned",
+	"vulnerable": "Vulnerable",
 }
 
 static func short_code(eff: Dictionary) -> String:
@@ -142,6 +175,15 @@ static func summarize(eff: Dictionary) -> String:
 		# the effect does. The "skip turn" segment makes the cost legible.
 		if bool(eff.get("skips_turn", false)):
 			parts.append("skip turn")
+		# Run 48: vulnerable carries no dpt and no armor mod either; surface
+		# the amp percent so the detail panel reads "Vulnerable · 2t · +50%
+		# taken" instead of the inscrutable "Vulnerable · 2t". The pct is
+		# read from `damage_taken_pct` (the integer field stashed at
+		# apply-time) so the line stays clean whatever rounding the
+		# multiplier would imply.
+		var taken_pct: int = int(eff.get("damage_taken_pct", 0))
+		if taken_pct > 0:
+			parts.append("+%d%% taken" % taken_pct)
 	return " · ".join(parts)
 
 static func stack(effects: Array) -> Array[Dictionary]:
@@ -173,6 +215,18 @@ static func stack(effects: Array) -> Array[Dictionary]:
 			if eff.has("absorb_remaining"):
 				existing["absorb_remaining"] = int(existing.get("absorb_remaining", 0)) \
 					+ int(eff.get("absorb_remaining", 0))
+			# Run 48: vulnerable doesn't sum or snowball — re-applying refreshes
+			# the duration (via the MAX above) and the multiplier picks the
+			# stronger of the two stacks. Two +50% stacks stay at 1.5× rather
+			# than compounding to 2.25×. damage_taken_pct mirrors for the HUD.
+			if eff.has("damage_taken_mod"):
+				existing["damage_taken_mod"] = max(
+					float(existing.get("damage_taken_mod", 1.0)),
+					float(eff.get("damage_taken_mod", 1.0)))
+			if eff.has("damage_taken_pct"):
+				existing["damage_taken_pct"] = max(
+					int(existing.get("damage_taken_pct", 0)),
+					int(eff.get("damage_taken_pct", 0)))
 			out[idx] = existing
 		else:
 			var copy: Dictionary = eff.duplicate(true)

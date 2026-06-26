@@ -374,6 +374,16 @@ const LINES: Dictionary = {
 		"Slam landed. They will need a moment. The dungeon does not grant moments.",
 	],
 
+	# ── Ability: arcane_sunder (Run 48) ───────────────────────────────────────
+	"arcane_sunder": [
+		"Arcane Sunder. The target's defenses have been formally devalued.",
+		"You cracked their wards. The dungeon's actuarial table now penalizes their armor class.",
+		"Sundered. The next hit will be unreasonably affordable for you, hero.",
+		"Their resistance index drops by 50%. The System advises a follow-up.",
+		"The arcana finds the seam. It widens. They notice. Briefly.",
+		"Vulnerability applied. The dungeon files this under 'easy mode, limited window.'",
+	],
+
 	# ── Pushed into lava ──────────────────────────────────────────────────────
 	"pushed_into_lava": [
 		"Launched directly into lava. The dungeon finds this satisfying. The creature does not.",

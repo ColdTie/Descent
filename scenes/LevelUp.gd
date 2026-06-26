@@ -23,9 +23,11 @@ const CLASS_UNLOCKS: Dictionary = {
 	# (mirrors the Run-21 pattern that put `mana_shield` first for arcanist).
 	# Order matters — first available wins.
 	"rogue":  ["eviscerate", "shadow_step", "frost_nova"],
-	# Run 21: arcanist now has a class-unique unlock (mana_shield) ahead of the
-	# generic cross-class options. Order matters — first available wins.
-	"arcanist": ["mana_shield", "backstab", "taunt"],
+	# Run 48: `arcane_sunder` heads the arcanist list as their second
+	# class-unique unlock — vulnerable-debuff setup that pairs with the
+	# Arcanist's existing burst pattern. mana_shield stays as the second
+	# pick (still class-unique), then the cross-class fallbacks.
+	"arcanist": ["arcane_sunder", "mana_shield", "backstab", "taunt"],
 }
 
 const UPGRADES: Array[Dictionary] = [

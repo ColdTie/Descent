@@ -202,6 +202,19 @@ func _calculate_damage(attacker: Combatant, target: Combatant, ability_id: Strin
 	if vanish_mult != 1.0:
 		attacker.status_effects = new_statuses
 	raw = int(float(raw) * vanish_mult)
+	# Run 48: target-side vulnerable amplifier. Mirrors the attacker-side
+	# vanished scan but reads the TARGET's status list, picks the MAX
+	# `damage_taken_mod` (so two stacks stay at +50% rather than compounding
+	# to +125%), and multiplies the raw damage. Unlike vanished, vulnerable
+	# is NOT consumed on hit — it persists for the status's duration so the
+	# Arcanist's burst pattern (sunder → fireball → fireball) lands the amp
+	# across the whole window.
+	var vuln_mod: float = 1.0
+	for eff: Dictionary in target.status_effects:
+		if eff.get("id", "") == "vulnerable":
+			vuln_mod = max(vuln_mod, float(eff.get("damage_taken_mod", 1.0)))
+	if vuln_mod != 1.0:
+		raw = int(float(raw) * vuln_mod)
 	# Guarantee minimum 1 raw damage (armor may still reduce to 0)
 	return max(1, raw)
 
