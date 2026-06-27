@@ -95,7 +95,17 @@ func apply_status(effect: Dictionary) -> void:
 	status_effects.append(effect)
 
 func tick_statuses() -> int:
-	## Applies per-turn effects, returns total damage taken
+	## Applies per-turn effects, returns total damage taken.
+	## Run 49: a `heal_per_turn` field on a status (Regenerating today, any
+	## future HoT tomorrow) heals the carrier via `heal()` after the DoT
+	## drain has resolved. Order matters: DoT first so a carrier on the
+	## brink can still die to burning even if a regen tick would have
+	## papered it over — that keeps the "your HoT didn't save you" beat
+	## consistent with how poison-then-heal plays in every other tactical
+	## roguelike. `heal()` clamps to `max_hp`, so a full-HP carrier wastes
+	## the tick (no overheal pool). Return value stays as total damage
+	## taken (NOT net) so existing callers (BattleScene damage numbers,
+	## boss-phase triggers) don't have to know about heals.
 	var total_dmg: int = 0
 	var remaining: Array[Dictionary] = []
 	for eff in status_effects:
@@ -103,6 +113,10 @@ func tick_statuses() -> int:
 			var dmg: int = eff["damage_per_turn"]
 			hp = max(0, hp - dmg)
 			total_dmg += dmg
+		if eff.has("heal_per_turn") and is_alive():
+			var hpt: int = int(eff["heal_per_turn"])
+			if hpt > 0:
+				heal(hpt)
 		eff["duration"] -= 1
 		if eff["duration"] > 0:
 			remaining.append(eff)

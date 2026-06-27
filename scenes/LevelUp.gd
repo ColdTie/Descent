@@ -14,11 +14,14 @@ var _chosen: String = ""
 
 # Abilities each class can unlock (abilities NOT in their starting kit)
 const CLASS_UNLOCKS: Dictionary = {
-	# Run 47: `concussive_slam` heads the brawler list as their class-unique
-	# unlock (mirrors the Run-46 idiom that put `eviscerate` first for rogue).
-	# shield_bash remains as the secondary fallback. Order matters — first
-	# available wins.
-	"brawler":  ["concussive_slam", "shield_bash"],
+	# Run 49: `iron_resolve` slots in after the Brawler's flagship stun
+	# (concussive_slam from Run 47) and ahead of the older shield_bash
+	# pushback. The Brawler now has TWO class-unique self-flavored picks
+	# — tempo (stun) and sustain (regen) — closing the "only damage cards"
+	# gap their unlock list had through Run 47. Order matters: the picker
+	# walks the list and grabs the first ability the hero doesn't already
+	# own, so a fresh Brawler at level 2 still sees concussive_slam first.
+	"brawler":  ["concussive_slam", "iron_resolve", "shield_bash"],
 	# Run 46: `eviscerate` heads the rogue list as their class-unique unlock
 	# (mirrors the Run-21 pattern that put `mana_shield` first for arcanist).
 	# Order matters — first available wins.

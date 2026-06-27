@@ -134,6 +134,32 @@ const DATA: Dictionary = {
 		"applies_stunned": true,
 		"stun_duration": 1,
 	},
+	## Run 49: Brawler's sustain self-buff. The Brawler's pre-49 kit was all
+	## damage or tempo (basic_attack / power_strike / taunt / shield_bash /
+	## concussive_slam) with no way to recover HP mid-battle — Iron Resolve
+	## fills that gap with a 3-turn regen (8 HP/turn = 24 over the buff).
+	## Pairs naturally with taunt (pull aggro, regen back the chip damage)
+	## or with shield_bash → concussive_slam (open up tempo, then heal in
+	## the breathing room). 2 charges + 4-turn cooldown match mana_shield's
+	## "defensive self-buff" tempo so the cross-class self-buff pool reads
+	## consistently. Distinct from the existing `heal_big` LevelUp upgrade
+	## (instant 50 HP, single use, no per-turn pacing).
+	"iron_resolve": {
+		"id": "iron_resolve",
+		"display_name": "Iron Resolve",
+		"description": "Steel your nerve. Regenerate 8 HP/turn for 3 turns.",
+		"type": "buff",
+		"target": "self",
+		"base_damage": 0,
+		"max_charges": 2,
+		"cooldown_turns": 4,
+		"range": 0,
+		"xp_cost": 50,
+		"icon_key": "shield",
+		"applies_regenerating": true,
+		"regen_duration": 3,
+		"regen_hpt": 8,
+	},
 	"poison_blade": {
 		"id": "poison_blade",
 		"display_name": "Poison Blade",

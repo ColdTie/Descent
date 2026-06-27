@@ -99,6 +99,39 @@ static func mana_shield(absorb: int = 40, duration: int = 10) -> Dictionary:
 		"damage_per_turn": 0, "armor_mod": 0, "absorb_remaining": absorb,
 		"absorb_max": absorb}
 
+## Run 49: regenerating — the 10th status effect, and the first POSITIVE
+## per-turn ticker. Distinct from `mana_shield` (an absorb pool consumed BEFORE
+## armor, not a heal) and from every existing DoT (which subtract HP). Heals
+## the carrier for `hpt` each turn via `Combatant.tick_statuses`, capped by
+## `max_hp` so a wounded carrier patches up but a full-HP carrier wastes the
+## tick (the `heal()` helper already clamps to `max_hp - hp`).
+##
+## Fills the Brawler's missing sustain niche — their existing kit (taunt /
+## shield_bash / concussive_slam / power_strike / basic_attack) is all damage
+## or tempo, with no way to recover HP mid-battle. Iron Resolve (the new
+## ability) wraps regenerating into a 3-turn self-buff so the Brawler can
+## wade into a swarm and patch up without leaving the engagement.
+##
+## Stacks with itself via the existing `stack()` summer (heal_per_turn sums
+## like damage_per_turn does) — re-applying mid-buff doubles the per-tick
+## heal for the longer of the two durations. That mirrors poison-blade's
+## DoT compounding and keeps the player's "stack the buff" expectation
+## consistent across positive and negative tickers.
+##
+## Defensive: negative duration clamps to 0, negative hpt clamps to 0 (a
+## hand-edited save can't park a -8/turn regen that would secretly drain
+## HP — the negative would silently invert the heal). Stored as
+## `heal_per_turn` rather than a negative `damage_per_turn` precisely so
+## the engine integration stays additive (no risk of a future code path
+## reading damage_per_turn and accidentally clipping the heal through
+## armor or status arithmetic).
+static func regenerating(duration: int = 3, hpt: int = 6) -> Dictionary:
+	var dur: int = max(0, duration)
+	var heal_amt: int = max(0, hpt)
+	return {"id": "regenerating", "name": "Regenerating", "duration": dur,
+		"damage_per_turn": 0, "armor_mod": 0,
+		"heal_per_turn": heal_amt}
+
 # ── Run 35: HUD-friendly summary + stacking ──────────────────────────────────
 #
 # Single source of truth for how each effect renders. BattleScene's compact
@@ -117,6 +150,7 @@ const SHORT_CODES: Dictionary = {
 	"bleed": "BLD",
 	"stunned": "STN",
 	"vulnerable": "VLN",
+	"regenerating": "REG",
 }
 
 const DISPLAY_NAMES: Dictionary = {
@@ -129,6 +163,7 @@ const DISPLAY_NAMES: Dictionary = {
 	"bleed": "Bleeding",
 	"stunned": "Stunned",
 	"vulnerable": "Vulnerable",
+	"regenerating": "Regenerating",
 }
 
 static func short_code(eff: Dictionary) -> String:
@@ -184,6 +219,14 @@ static func summarize(eff: Dictionary) -> String:
 		var taken_pct: int = int(eff.get("damage_taken_pct", 0))
 		if taken_pct > 0:
 			parts.append("+%d%% taken" % taken_pct)
+		# Run 49: regenerating — surface the per-turn heal so the detail
+		# panel reads "Regenerating · 3t · +6 HP/turn" instead of the
+		# inscrutable "Regenerating · 3t". Separate "+/turn" suffix from
+		# the DoT line above ("6/turn") so the player can't confuse a
+		# heal with a tick of damage.
+		var hpt: int = int(eff.get("heal_per_turn", 0))
+		if hpt > 0:
+			parts.append("+%d HP/turn" % hpt)
 	return " · ".join(parts)
 
 static func stack(effects: Array) -> Array[Dictionary]:
@@ -227,6 +270,16 @@ static func stack(effects: Array) -> Array[Dictionary]:
 				existing["damage_taken_pct"] = max(
 					int(existing.get("damage_taken_pct", 0)),
 					int(eff.get("damage_taken_pct", 0)))
+			# Run 49: regenerating SUMS heal_per_turn (mirroring the existing
+			# damage_per_turn summer). Re-applying mid-buff doubles the
+			# per-tick heal — consistent with how poison_blade's DoT
+			# compounds, and the player's expectation that "stacking the
+			# buff is good." The duration MAX above means the longer of
+			# the two stacks wins, so a refresh-late doesn't shorten the
+			# window.
+			if eff.has("heal_per_turn"):
+				existing["heal_per_turn"] = int(existing.get("heal_per_turn", 0)) \
+					+ int(eff.get("heal_per_turn", 0))
 			out[idx] = existing
 		else:
 			var copy: Dictionary = eff.duplicate(true)

@@ -520,6 +520,12 @@ func _load_effect_textures() -> void:
 		# VLN short-code that sticks above the target carries the "+50%
 		# taken" warning for the follow-up shot.
 		"arcane_sunder": "res://assets/effects/fx_frost.png",
+		# Run 49: Iron Resolve reuses the taunt fortify glow — both are
+		# defensive self-buffs that need a "warm shield lit on the hero"
+		# beat. The REG short-code above the sprite carries the lasting
+		# "this hero is healing each turn" advertisement for the buff's
+		# 3-turn window.
+		"iron_resolve":  "res://assets/effects/fx_taunt.png",
 		"plague_bite":  "res://assets/effects/fx_poison.png",
 		"ember_claw":  "res://assets/effects/fx_lava_heat.png",
 		"ground_slam":  "res://assets/effects/fx_impact.png",
@@ -2162,6 +2168,23 @@ func _do_hero_self_ability() -> void:
 			# Run 25: surface the absorb bar immediately so the player sees the
 			# buff went up rather than waiting until the next damage tick.
 			_update_mana_shield_indicator(_hero)
+		"iron_resolve":
+			# Run 49: Brawler's sustain self-buff. Heals 8 HP/turn for 3 turns
+			# via the new regenerating status — the heal is paid out at
+			# Combatant.tick_statuses time so it interleaves with any DoT the
+			# hero is also carrying. Reuses the taunt VFX (warm shield glow)
+			# since the visual beat reads the same: a defensive self-buff lit
+			# on the hero. REG short-code above the sprite carries the lasting
+			# advertisement of "this hero is healing each turn."
+			var r_dur: int = int(abl.get("regen_duration", 3))
+			var r_hpt: int = int(abl.get("regen_hpt", 8))
+			_hero.apply_status(StatusEffect.regenerating(r_dur, r_hpt))
+			SystemVoice.speak("iron_resolve")
+			_play_ability_effect(_hero.position, "iron_resolve")
+			_flash_hex_area(_hero.position, 0, Color(0.30, 0.92, 0.42, 0.55))
+			_update_status_label(_hero)
+			_combat_log_add("Carl -> IRON RESOLVE +%d/turn x%d" % [r_hpt, r_dur],
+				Color(0.30, 0.92, 0.42))
 		_:
 			SystemVoice.speak_direct("Nothing happens. The System is confused too.")
 

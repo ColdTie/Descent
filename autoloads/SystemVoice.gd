@@ -384,6 +384,16 @@ const LINES: Dictionary = {
 		"Vulnerability applied. The dungeon files this under 'easy mode, limited window.'",
 	],
 
+	# ── Ability: iron_resolve (Run 49) ────────────────────────────────────────
+	"iron_resolve": [
+		"Iron Resolve. The hero's body has agreed to mend itself, briefly.",
+		"You set your jaw. The wounds take this as a hint. They start to close.",
+		"Regeneration cycle engaged. The dungeon files a complaint about your refusal to expire on schedule.",
+		"Three turns of patching up. The System recommends spending them adjacent to enemies.",
+		"Iron Resolve active. The dungeon adjusts the kill timer upward. It is not pleased.",
+		"You knit. The dungeon notes that this is not, technically, against the rules. Yet.",
+	],
+
 	# ── Pushed into lava ──────────────────────────────────────────────────────
 	"pushed_into_lava": [
 		"Launched directly into lava. The dungeon finds this satisfying. The creature does not.",
