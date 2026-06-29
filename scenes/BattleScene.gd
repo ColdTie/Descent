@@ -227,6 +227,19 @@ var _combat_log_vbox: VBoxContainer = null
 const COMBAT_LOG_MAX: int = 6
 var _quit_to_title_callback: Callable = Callable()
 
+# Run 50: per-unit hover tooltip. Sits on UILayer above the world layers and
+# follows the mouse with viewport clamping. Built once in _ready; rebuilt
+# (text only) each time the player mouses over a different unit. The hero is
+# skipped — they already have the dedicated left-edge detail panel (Run 35).
+var _unit_tooltip_panel: PanelContainer = null
+var _unit_tooltip_name: Label = null
+var _unit_tooltip_hp: Label = null
+var _unit_tooltip_status: Label = null
+var _hovered_unit_id: String = ""
+const UNIT_TOOLTIP_CURSOR_OFFSET: float = 16.0
+const UNIT_TOOLTIP_MIN_WIDTH: float = 168.0
+const UNIT_TOOLTIP_STATUS_WIDTH: float = 200.0
+
 @onready var _hex_layer: Node2D = $HexLayer
 @onready var _entity_layer: Node2D = $EntityLayer
 @onready var _floor_label: Label = $UILayer/FloorLabel
@@ -259,6 +272,7 @@ func _ready() -> void:
 	_build_top_left_hud_backing()
 	_build_combat_log()
 	_build_stats_panel()
+	_build_unit_tooltip()
 	_build_pause_menu()
 	if not GameState.is_connected("inventory_changed", _on_inventory_changed):
 		GameState.inventory_changed.connect(_on_inventory_changed)
@@ -1061,6 +1075,29 @@ func _spawn_entity_node(c: Combatant) -> void:
 	status_lbl.add_theme_color_override("font_color", Color(0.9, 0.9, 0.4))
 	status_lbl.position = Vector2(-19.0, -HEX_SIZE * 0.62)
 	root.add_child(status_lbl)
+
+	# Run 50: per-unit hover tooltip. Mouse-enter/exit on a small Area2D
+	# centered on the sprite surfaces the unit's name, HP, and status-effect
+	# list near the cursor. Hero is skipped — the left-edge loadout panel
+	# (Run 35) already carries the same data for Carl. `input_pickable = true`
+	# but the area has no `input_event` handler, so the hex Area2D below it
+	# still receives clicks (Godot 4 propagates input to all pickable areas
+	# at the cursor) — adding hover here doesn't break the existing
+	# click-to-attack / click-to-move flow.
+	if c.faction != Combatant.Faction.HERO:
+		var hover_area := Area2D.new()
+		hover_area.name = "HoverArea"
+		hover_area.input_pickable = true
+		hover_area.monitoring = false
+		hover_area.monitorable = false
+		var hover_col := CollisionShape2D.new()
+		var hover_shape := CircleShape2D.new()
+		hover_shape.radius = HEX_SIZE * 0.55
+		hover_col.shape = hover_shape
+		hover_area.add_child(hover_col)
+		hover_area.mouse_entered.connect(_on_unit_mouse_entered.bind(c.id))
+		hover_area.mouse_exited.connect(_on_unit_mouse_exited.bind(c.id))
+		root.add_child(hover_area)
 
 	_entity_layer.add_child(root)
 	_entity_nodes[c.id] = root
@@ -3750,6 +3787,144 @@ func _refresh_status_panel() -> void:
 	_status_header.visible = true
 	_status_detail_label.visible = true
 	_status_detail_label.text = "\n".join(lines)
+
+
+## ─── Per-unit hover tooltip (Run 50) ────────────────────────────────────────
+
+func _build_unit_tooltip() -> void:
+	## One panel reused across every hover. Built hidden in `_ready`; mouse-
+	## enter on a unit's HoverArea fills it in and unhides it. Mouse-filter
+	## IGNORE so it never absorbs clicks the player aimed at the hex below.
+	_unit_tooltip_panel = PanelContainer.new()
+	var sb := StyleBoxFlat.new()
+	sb.bg_color = Color(0.04, 0.03, 0.07, 0.92)
+	sb.border_color = Color(0.78, 0.52, 1.0, 0.78)
+	sb.set_border_width_all(1)
+	sb.set_corner_radius_all(4)
+	sb.set_content_margin_all(8.0)
+	_unit_tooltip_panel.add_theme_stylebox_override("panel", sb)
+	_unit_tooltip_panel.custom_minimum_size = Vector2(UNIT_TOOLTIP_MIN_WIDTH, 0.0)
+	_unit_tooltip_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_unit_tooltip_panel.visible = false
+	_unit_tooltip_panel.z_index = 100
+	$UILayer.add_child(_unit_tooltip_panel)
+
+	var box := VBoxContainer.new()
+	box.add_theme_constant_override("separation", 2)
+	_unit_tooltip_panel.add_child(box)
+
+	_unit_tooltip_name = Label.new()
+	_unit_tooltip_name.add_theme_font_size_override("font_size", 12)
+	_unit_tooltip_name.add_theme_color_override("font_color", Color(0.95, 0.78, 0.18))
+	box.add_child(_unit_tooltip_name)
+
+	_unit_tooltip_hp = Label.new()
+	_unit_tooltip_hp.add_theme_font_size_override("font_size", 11)
+	_unit_tooltip_hp.add_theme_color_override("font_color", Color(0.86, 0.90, 0.96))
+	box.add_child(_unit_tooltip_hp)
+
+	_unit_tooltip_status = Label.new()
+	_unit_tooltip_status.add_theme_font_size_override("font_size", 10)
+	_unit_tooltip_status.add_theme_color_override("font_color", Color(0.92, 0.86, 0.66))
+	_unit_tooltip_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_unit_tooltip_status.custom_minimum_size = Vector2(UNIT_TOOLTIP_STATUS_WIDTH, 0.0)
+	box.add_child(_unit_tooltip_status)
+
+
+func _find_combatant_by_id(unit_id: String) -> Combatant:
+	## Linear scan of the small combatants list — cheaper than maintaining a
+	## parallel id->Combatant dict that has to be kept in sync across death,
+	## ally arrival, and boss reinforcements.
+	for c: Combatant in _all_combatants:
+		if c.id == unit_id:
+			return c
+	return null
+
+
+func _on_unit_mouse_entered(unit_id: String) -> void:
+	if _unit_tooltip_panel == null:
+		return
+	var c: Combatant = _find_combatant_by_id(unit_id)
+	if c == null or not c.is_alive():
+		return
+	_hovered_unit_id = unit_id
+	_refresh_unit_tooltip(c)
+	_unit_tooltip_panel.visible = true
+	_position_unit_tooltip()
+
+
+func _on_unit_mouse_exited(unit_id: String) -> void:
+	## Guard against the stray exit fire from a unit other than the currently
+	## hovered one — Godot can fire exits in any order if multiple HoverAreas
+	## overlap on the same frame (e.g., two adjacent units at the panel edge).
+	if _hovered_unit_id != unit_id:
+		return
+	_hovered_unit_id = ""
+	if _unit_tooltip_panel != null:
+		_unit_tooltip_panel.visible = false
+
+
+func _refresh_unit_tooltip(c: Combatant) -> void:
+	## Rebuild the tooltip body for the given combatant. Cheap enough to call
+	## every frame while hovering so DoT ticks / damage taken update live.
+	if _unit_tooltip_panel == null or c == null:
+		return
+	if _unit_tooltip_name != null:
+		_unit_tooltip_name.text = c.display_name
+	if _unit_tooltip_hp != null:
+		_unit_tooltip_hp.text = "HP  %d / %d" % [c.hp, c.max_hp]
+	if _unit_tooltip_status == null:
+		return
+	var lines: Array[String] = StatusEffect.tooltip_lines(c.status_effects)
+	if lines.is_empty():
+		_unit_tooltip_status.text = "(no active effects)"
+		_unit_tooltip_status.add_theme_color_override("font_color",
+			Color(0.55, 0.55, 0.50))
+	else:
+		_unit_tooltip_status.text = "\n".join(lines)
+		_unit_tooltip_status.add_theme_color_override("font_color",
+			Color(0.92, 0.86, 0.66))
+
+
+func _position_unit_tooltip() -> void:
+	## Place the panel offset down-right of the cursor; flip across the cursor
+	## when it would clip the viewport edge. Clamps to a 8px margin so the
+	## panel never hides under the screen edge.
+	if _unit_tooltip_panel == null or not _unit_tooltip_panel.visible:
+		return
+	var vp_size: Vector2 = get_viewport().get_visible_rect().size
+	var mp: Vector2 = get_viewport().get_mouse_position()
+	var sz: Vector2 = _unit_tooltip_panel.size
+	if sz.x < UNIT_TOOLTIP_MIN_WIDTH:
+		sz.x = UNIT_TOOLTIP_MIN_WIDTH
+	var x: float = mp.x + UNIT_TOOLTIP_CURSOR_OFFSET
+	var y: float = mp.y + UNIT_TOOLTIP_CURSOR_OFFSET
+	if x + sz.x > vp_size.x - 8.0:
+		x = mp.x - sz.x - UNIT_TOOLTIP_CURSOR_OFFSET
+	if y + sz.y > vp_size.y - 8.0:
+		y = mp.y - sz.y - UNIT_TOOLTIP_CURSOR_OFFSET
+	x = max(8.0, x)
+	y = max(8.0, y)
+	_unit_tooltip_panel.position = Vector2(x, y)
+
+
+func _process(_delta: float) -> void:
+	## Run 50: while a unit tooltip is up, follow the mouse and keep its
+	## HP / status text in sync with live combat (a DoT tick mid-hover should
+	## update without forcing the player to re-hover). Hide if the hovered
+	## unit died this frame.
+	if _unit_tooltip_panel == null or not _unit_tooltip_panel.visible:
+		return
+	if _hovered_unit_id == "":
+		_unit_tooltip_panel.visible = false
+		return
+	var c: Combatant = _find_combatant_by_id(_hovered_unit_id)
+	if c == null or not c.is_alive():
+		_unit_tooltip_panel.visible = false
+		_hovered_unit_id = ""
+		return
+	_refresh_unit_tooltip(c)
+	_position_unit_tooltip()
 
 
 func _build_combat_log() -> void:

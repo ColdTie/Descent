@@ -35,8 +35,18 @@ DESCENT is a turn-based tactical dungeon crawler in the spirit of **Dungeon Craw
 - **Architecture rule**: `BattleEngine._calculate_damage()` returns RAW damage (no armor). `Combatant.take_damage(amount, ignore_armor=false)` applies armor. Don't double-apply armor in both places.
 - `Combatant.take_damage(amount, ignore_armor)` — the `ignore_armor` parameter bypasses the `armor` field reduction (for backstab, env damage, etc.)
 
-## Current State (Run 49 — Regenerating Status + Brawler's Iron Resolve)
+## Current State (Run 50 — Per-Unit Hover Tooltips)
 ### Implemented ✅
+**Run 50 (Per-unit hover tooltips — roadmap item #1 from the Run-49 audit; pushes the Run-35 hero status detail into every enemy / ally / donut HUD without changing the layout):**
+- **`src/combat/StatusEffect.gd`** — new `tooltip_lines(effects: Array) -> Array[String]` helper returns one human-readable line per stack-collapsed effect. Wraps the existing `stack()` + `summarize()` (single source of truth — no per-effect formatting drift between the hero detail panel, the above-the-sprite `[BRN 3]` short codes, and the new tooltip) and appends the same `(xN)` suffix the above-the-sprite label uses, so a hovered `Burning · 3t · 10/turn (x2)` reads identically to its bracket counterpart. Non-Dictionary entries and empty-id entries are silently dropped by `stack()` so a malformed save-loaded effect list yields a clean array instead of crashing the tooltip. Empty input returns an empty `Array[String]` — the caller renders its own "(no active effects)" placeholder so empty-state styling (dim grey) stays scene-local rather than smearing into this helper.
+- **`scenes/BattleScene.gd`** — new `PanelContainer` tooltip on `UILayer`, hidden by default. Built once in `_ready` via `_build_unit_tooltip()` (parented to `$UILayer` with `z_index = 100` so it always sits above the world layers AND above the existing HUD panels). `mouse_filter = Control.MOUSE_FILTER_IGNORE` so it never absorbs clicks the player aimed at the hex below — critical because the hover panel often sits over the same tile the player is about to click. Three labels stacked vertically: name (12pt, warm gold — matches the Run-32 widget header band), HP (11pt, hero-stats blue-grey — matches the loadout panel), status detail (10pt, autowrap word-smart, fixed 200px width so the panel doesn't grow on multi-stack rosters).
+- **`_spawn_entity_node` HoverArea** — per-unit `Area2D` (named `HoverArea`) with a `CircleShape2D` radius `HEX_SIZE * 0.55` (slightly larger than the sprite, smaller than the hex — picks up cursor on the sprite without overlapping neighbours). `input_pickable = true`, `monitoring = false`, `monitorable = false` (we only need mouse events, not overlap with other areas). The hero is SKIPPED — they already have the dedicated left-edge loadout/status panel from Run 35, and a redundant tooltip would just block their own sprite when the player tries to inspect the field around them. Mouse-enter / mouse-exit signals bind the combatant id so the handler can resolve back to a live `Combatant` via `_find_combatant_by_id`. Critical: NO `input_event` handler on the unit area, so Godot's input-propagation still delivers clicks to the underlying hex `Area2D` (the existing click-to-attack / click-to-move flow is unchanged — verified in the visual smoke).
+- **Tooltip handlers** — `_on_unit_mouse_entered(unit_id)`: resolves the combatant, refuses if dead (hovering a corpse shouldn't surface its stats), sets `_hovered_unit_id`, calls `_refresh_unit_tooltip(c)`, shows the panel, repositions. `_on_unit_mouse_exited(unit_id)`: hides ONLY if `unit_id == _hovered_unit_id` (defensive: if a stray exit fires from a unit other than the currently hovered one — two adjacent HoverAreas at a panel edge can fire out of order — the wrong-id exit is ignored so the active tooltip doesn't blink off). `_refresh_unit_tooltip(c)`: rebuilds name + HP + status-effect lines. Empty status list renders `(no active effects)` in dim grey so the panel still says something when the player hovers an unburdened goblin. `_position_unit_tooltip()`: offset down-right of the cursor by 16px; flips to up-left when it would clip the right or bottom viewport edge; clamps to an 8px margin so the panel never hides under the screen edge.
+- **`_process(_delta)`** — when the tooltip is visible, follow the mouse AND keep the HP / status text in sync with live combat. A DoT tick mid-hover updates the HP digit without forcing the player to re-hover; a status expiring mid-hover drops its line on the next frame. Also catches the dead-while-hovering case (one frame of stale text, ~16ms — imperceptible) and hides the panel, preventing the "tooltip showing for a corpse" weirdness. Idle cost: a single bool check (`_unit_tooltip_panel.visible`) when no unit is hovered, so the per-frame work is bounded.
+- **`tests/test_run50.gd`** (18 test functions, ~50 assertions): factory paths — empty input returns empty `Array[String]`; single burning renders `summarize()` verbatim with no stack suffix; two distinct effects keep order with no suffix; double burning collapses with SUM dpt and `(x2)` suffix; triple poison collapses with MAX duration + SUM dpt + `(x3)`; per-effect-type render coverage exercises EVERY summarize() branch (frozen carries armor + skip turn, fortified surfaces `+3 armor` with leading `+`, mana_shield carries `40 absorb` and NOT `/turn`, vulnerable surfaces `+50% taken` and NOT `/turn`, stunned surfaces `skip turn` but NOT armor — distinct from frozen, regenerating surfaces `+6 HP/turn` distinct from a DoT `6/turn`, bleed shows locked dpt at apply-time NOT the percent); defensive cases — non-Dictionary entries dropped (strings / ints / null mixed in with valid dicts still let the valid dict render), empty-id entries dropped, unknown id still renders (future / forward-compat status types use the `name`-field fallback in `summarize()`), zero-duration still renders (an about-to-expire effect is still legible info this turn); mixed-stack regression (two stacked poisons + lone burn + lone stun all render correctly with suffixes only where stacks > 1); return type lock (each entry is a non-empty String so a typed iteration `for line: String in ...` doesn't break under a future refactor that returns `Array[Variant]`).
+- **Test suite total: 3072 passed, 0 failed** (up from 3022 in Run 49; +50 new).
+- **Visual smoke** — temporary `tools/r50_tooltip_smoke.gd` autoload (NOT shipped) auto-pressed BEGIN → SELECT (Brawler) → DESCEND, then applied burning ×2 + poisoned + vulnerable to the first enemy, knocked it to ~35% HP, fired `_on_unit_mouse_entered` directly with the enemy id, and captured the viewport. The screenshot showed the tooltip with `Goblin Scout` in gold + `HP 20 / 35` + `Burning · 3t · 10/turn (x2)` + `Poisoned · 4t · 3/turn` + `Vulnerable · 2t · +50% taken` — every line of the existing summarize palette rendered correctly in the new surface. A second shot with the tooltip exited confirmed clean hide (no stale text, no ghosted panel). The smoke autoload + project.godot entry were removed after the audit.
+
 **Run 49 (Regenerating status effect + Iron Resolve self-buff — fills the Brawler's missing sustain niche and adds the first POSITIVE per-turn ticker to the status palette):**
 - **`src/combat/StatusEffect.gd`** — new `regenerating(duration: int = 3, hpt: int = 6) -> Dictionary` factory. The 10th status type and the first POSITIVE per-turn ticker — every prior DoT (burning/poisoned/bleed) subtracts HP at tick time; regenerating adds HP. Distinct from `mana_shield` (Run 21), which is an absorb pool consumed BEFORE armor, not a heal applied AT tick. Stored as `heal_per_turn` (a new dict key) rather than a negative `damage_per_turn` precisely so the engine integration stays additive — no risk of a future code path reading `damage_per_turn` and accidentally clipping the heal through armor or status arithmetic. Defensive: negative `duration` clamps to 0, negative `hpt` clamps to 0 (a hand-edited save can't park a `-8/turn` regen that would secretly drain HP — the negative would silently invert the heal).
 - **`SHORT_CODES` + `DISPLAY_NAMES`** — `"regenerating" → "REG"` + `"regenerating" → "Regenerating"` so the above-the-sprite label renders `[REG 3]` and the detail panel shows `Regenerating · 3t · +6 HP/turn`. New `summarize()` branch surfaces `+%d HP/turn` for any status carrying a positive `heal_per_turn` — separate suffix from the DoT line above ("6/turn") so the player can't confuse a heal tick with a damage tick. Gate is `hpt > 0` so a 0-hpt edge case (e.g. a stripped-out save) doesn't render "+0 HP/turn".
@@ -912,23 +922,39 @@ FTL, traditional roguelikes). Status of the "what are we missing" audit:
   picks (tempo + sustain), closing the "only damage cards" gap. HUD code
   `REG` / display name `Regenerating` / detail-panel suffix `+N HP/turn`
   — Run 49
+- **Per-unit hover tooltips** — Run 50 wires a `PanelContainer` on UILayer
+  that follows the cursor and surfaces any non-hero combatant's name + HP
+  + stack-collapsed status list when the player mouses over its sprite.
+  A new `Area2D` named `HoverArea` on each spawn root (skipped for the
+  hero — Run 35's left-edge loadout panel already covers Carl) feeds
+  `_on_unit_mouse_entered` / `_on_unit_mouse_exited`. Text content comes
+  from the new pure-data `StatusEffect.tooltip_lines()` helper that
+  wraps `stack()` + `summarize()` so every effect renders identically to
+  the hero detail panel and the above-the-sprite `[BRN 3 x2]` brackets —
+  single source of truth means a future status-effect addition lights up
+  every surface for free. `mouse_filter = MOUSE_FILTER_IGNORE` so the
+  panel never absorbs clicks the player aimed at the hex below; no
+  `input_event` handler on the unit area so click-to-attack still routes
+  to the underlying hex `Area2D` unchanged. Visual smoke confirmed every
+  per-effect render branch in the new surface — Run 50
 
 ### 🔜 Highest-value, easiest remaining (do next, roughly in order)
-1. **Status-effect hover tooltips** — Run 35 surfaces every active status
-   in a permanent left-edge detail panel and inline durations above the
-   sprite. A hover tooltip on enemy sprites would push the same info into
-   the enemy HUD without changing the layout.
-2. **Pause-menu pref-management UX** — Run 41 made accessibility toggles
+1. **Pause-menu pref-management UX** — Run 41 made accessibility toggles
    persistent, but there's no "reset to shipping defaults" button on the
    pause menu and the live label doesn't surface that the value came
    from the persistent store vs. a same-run flip. A small `RESET ACCESS`
    button on the access row (or a `★` glyph next to non-default toggles)
    would close the discoverability gap without adding new state.
-3. **Crumbling-bridge hazard on Tier 1 floors** — adds a per-tier
+2. **Crumbling-bridge hazard on Tier 1 floors** — adds a per-tier
    environmental hazard distinct from lava. A tile that collapses after
    N steps would force movement planning and reward Rogue's high-speed
    mobility. Requires DungeonMap + BattleScene tile-type support, so
    it's a meaningful but not overwhelming addition.
+3. **Tooltip-content depth pass** — Run 50 surfaces name/HP/statuses on
+   hover. The next layer would add ATK/DEF/armor (so the player can
+   gauge the math before clicking) and a one-line description of any
+   unique enemy variant or boss signature so a new player can read what
+   a "Frenzied Dungeon Lord" actually does without checking the wiki.
 
 ### 🟡 Larger / later (note, not yet scoped)
 4. **More floor variety** — Per-tier hazards: Tier 1 crumbling bridges, Tier 2 freeze pools,

@@ -229,6 +229,24 @@ static func summarize(eff: Dictionary) -> String:
 			parts.append("+%d HP/turn" % hpt)
 	return " · ".join(parts)
 
+## Run 50: one human-readable line per stack-collapsed effect, used by the
+## new per-unit hover tooltip. Wraps `stack()` + `summarize()` and appends
+## the same `(xN)` suffix the above-the-sprite label already shows so a
+## hovered "Burning · 3t · 10/turn (x2)" reads identically to its bracket
+## counterpart. Non-Dictionary entries and empty-id entries are dropped by
+## `stack()` so a malformed effect list yields a clean array instead of
+## crashing the tooltip. Empty input returns an empty Array[String] —
+## the caller can render its own "no statuses" placeholder.
+static func tooltip_lines(effects: Array) -> Array[String]:
+	var out: Array[String] = []
+	for eff: Dictionary in stack(effects):
+		var line: String = summarize(eff)
+		var n: int = int(eff.get("stacks", 1))
+		if n > 1:
+			line += " (x%d)" % n
+		out.append(line)
+	return out
+
 static func stack(effects: Array) -> Array[Dictionary]:
 	## Collapse duplicates by id into one row each. `stacks` is the count;
 	## `duration` is the LONGEST of the group (the player cares when the

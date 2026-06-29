@@ -47,6 +47,7 @@ func _run_all() -> void:
 	_run_suite("Run47 (StunStatus+ConcussiveSlam)", TestRun47.new())
 	_run_suite("Run48 (VulnerableStatus+ArcaneSunder)", TestRun48.new())
 	_run_suite("Run49 (RegeneratingStatus+IronResolve)", TestRun49.new())
+	_run_suite("Run50 (UnitHoverTooltip)", TestRun50.new())
 
 func _run_suite(name: String, suite: Object) -> void:
 	print("\n--- %s ---" % name)
