@@ -1,4 +1,4 @@
-import { useEffect, useReducer } from 'preact/hooks';
+import { useLayoutEffect, useReducer } from 'preact/hooks';
 import type { Command } from '../sim/commands';
 import type { Game } from '../sim/game';
 import type { GalaxyState } from '../sim/state';
@@ -57,6 +57,12 @@ export class GameStore {
 /** Re-renders the component whenever the store notifies. */
 export function useGame(store: GameStore): GalaxyState {
   const [, bump] = useReducer((n: number) => n + 1, 0);
-  useEffect(() => store.subscribe(() => bump(0)), [store]);
+  const seen = store.version;
+  useLayoutEffect(() => {
+    const unsub = store.subscribe(() => bump(0));
+    // A notify between render and subscribe (e.g. a boot notice) would otherwise be lost.
+    if (store.version !== seen) bump(0);
+    return unsub;
+  }, [store]);
   return store.state;
 }

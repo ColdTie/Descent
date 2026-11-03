@@ -31,6 +31,25 @@ describe('star map', () => {
     }
   });
 
+  it('connects every star to home through 5 to 15 ly hops', () => {
+    for (let seed = 1; seed <= 40; seed++) {
+      const stars = generateStars(createRng(seed));
+      const reached = new Set([0]);
+      const queue = [0];
+      while (queue.length) {
+        const a = stars[queue.shift()!]!;
+        for (const b of stars) {
+          const d = distanceLy(a, b);
+          if (!reached.has(b.id) && d >= HOP_MIN_LY && d <= HOP_MAX_LY) {
+            reached.add(b.id);
+            queue.push(b.id);
+          }
+        }
+      }
+      expect(reached.size, `seed ${seed}`).toBe(stars.length);
+    }
+  });
+
   it('picks the nearest hop inside 5 to 15 ly when one exists', () => {
     for (let seed = 1; seed <= 40; seed++) {
       const stars = generateStars(createRng(seed));

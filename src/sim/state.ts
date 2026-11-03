@@ -1,28 +1,38 @@
+import type { EventKind } from '../content/events';
 import { RESOURCE_IDS, STARTING_STOCK, type ResourceId } from '../content/resources';
 import { CRUISE_SPEED_C } from '../content/stars';
-import { SYSTEM_DEFS, SYSTEM_IDS, type SystemId } from '../content/systems';
+import { SYSTEM_IDS, type SystemId } from '../content/systems';
 import { initialRngStates, streamRng, type RngStates } from './rng';
 import { distanceLy, generateStars, pickHopTarget, type Star } from './stars';
 import type { Warp } from './time';
 
-export const SCHEMA_VERSION = 1;
+export const SCHEMA_VERSION = 2;
 
-export type Phase = 'transit' | 'arrival' | 'planetside' | 'replicate' | 'launch';
+export const PHASES = ['transit', 'arrival', 'planetside', 'replicate', 'launch', 'lost'] as const;
+export type Phase = (typeof PHASES)[number];
 
 export interface SystemState {
   /** 0 to 100. */
   integrity: number;
-  /** Which alert thresholds this system has already crossed (so each fires once). */
+  /** Alert thresholds currently crossed. A threshold re-arms once integrity is back above it. */
   alerted: number[];
 }
+
+export const BURNS = ['accel', 'coast', 'decel'] as const;
+export type Burn = (typeof BURNS)[number];
 
 export interface Transit {
   fromStarId: number;
   toStarId: number;
   distanceLy: number;
   traveledLy: number;
-  /** Fraction of c. */
+  /** Current speed, fraction of c. */
   speedC: number;
+  /** Speed the launch burn aims for. */
+  cruiseC: number;
+  burn: Burn;
+  /** True once the deceleration burn has run without fuel or drive (raises its alert once). */
+  dryBurn: boolean;
 }
 
 export type AlertLevel = 'info' | 'warn' | 'critical';
@@ -33,6 +43,16 @@ export interface Alert {
   time: number;
   level: AlertLevel;
   text: string;
+}
+
+/** A transit event waiting for the player's choice. The galaxy does not step while one is open. */
+export interface PendingEvent {
+  id: number;
+  vesselId: number;
+  kind: EventKind;
+  time: number;
+  /** Integrity the event took from its system when it happened. */
+  damage: number;
 }
 
 export interface LogEntry {
@@ -65,8 +85,10 @@ export interface GalaxyState {
   vessels: Record<number, Vessel>;
   focusedVesselId: number;
   alerts: Alert[];
+  events: PendingEvent[];
   nextVesselId: number;
   nextAlertId: number;
+  nextEventId: number;
 }
 
 export const LOG_CAP = 200;
@@ -88,15 +110,17 @@ export function appendLog(vessel: Vessel, time: number, text: string): void {
   if (vessel.log.length > LOG_CAP) vessel.log.splice(0, vessel.log.length - LOG_CAP);
 }
 
-/** A new galaxy: star map from the galaxy stream, Vessel 1 already under way on its first hop. */
+export function newTransit(from: Star, to: Star, cruiseC = CRUISE_SPEED_C): Transit {
+  return { fromStarId: from.id, toStarId: to.id, distanceLy: distanceLy(from, to), traveledLy: 0, speedC: 0, cruiseC, burn: 'accel', dryBurn: false };
+}
+
+/** A new galaxy: star map from the galaxy stream, Vessel 1 starting its launch burn toward the nearest hop. */
 export function createGalaxy(seed: number): GalaxyState {
   const rng = initialRngStates(seed);
   const stars = generateStars(streamRng(rng, 'galaxy'));
   const home = stars[0]!;
   const target = pickHopTarget(stars, home.id);
-  const transit: Transit | null = target
-    ? { fromStarId: home.id, toStarId: target.id, distanceLy: distanceLy(home, target), traveledLy: 0, speedC: CRUISE_SPEED_C }
-    : null;
+  const transit = target ? newTransit(home, target) : null;
   const root: Vessel = {
     id: 1,
     name: 'Vessel 1',
@@ -108,7 +132,7 @@ export function createGalaxy(seed: number): GalaxyState {
     stock: freshStock(),
     log: [],
   };
-  appendLog(root, 0, transit ? `Launched from ${home.name} toward ${target!.name}, ${transit.distanceLy.toFixed(1)} ly.` : `Holding at ${home.name}.`);
+  appendLog(root, 0, transit ? `Launch burn toward ${target!.name}, ${transit.distanceLy.toFixed(1)} ly.` : `Holding at ${home.name}.`);
   return {
     schemaVersion: SCHEMA_VERSION,
     seed,
@@ -120,8 +144,10 @@ export function createGalaxy(seed: number): GalaxyState {
     vessels: { 1: root },
     focusedVesselId: 1,
     alerts: [],
+    events: [],
     nextVesselId: 2,
     nextAlertId: 1,
+    nextEventId: 1,
   };
 }
 
@@ -138,10 +164,6 @@ export function focusedVessel(state: GalaxyState): Vessel {
 }
 
 export function starById(state: GalaxyState, id: number): Star | undefined {
-  return state.stars[id] && state.stars[id]!.id === id ? state.stars[id] : state.stars.find((s) => s.id === id);
-}
-
-/** Baseline wear for a system, exposed for the ledger and the UI tooltips. */
-export function wearPerHour(id: SystemId): number {
-  return SYSTEM_DEFS[id].wearPerHour;
+  const direct = state.stars[id];
+  return direct && direct.id === id ? direct : state.stars.find((s) => s.id === id);
 }

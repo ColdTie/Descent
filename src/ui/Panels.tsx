@@ -1,8 +1,10 @@
 import { RESOURCE_IDS, RESOURCE_NAMES } from '../content/resources';
 import { SYSTEM_DEFS, SYSTEM_IDS } from '../content/systems';
+import { REPAIR_PARTS } from '../content/transit';
+import { repairBlocker, repairGain } from '../sim/commands';
 import { transitSummary } from '../sim/ledger';
 import { alertCountFor, flattenLineage, lineageTree } from '../sim/lineage';
-import { focusedVessel } from '../sim/state';
+import { focusedVessel, starById } from '../sim/state';
 import { formatClock, formatDuration } from '../sim/time';
 import { Card } from './Card';
 import { formatInteger, formatStock, integrityLevel } from './gauges';
@@ -22,6 +24,7 @@ export function SystemsCard({ store }: { store: GameStore }) {
               <span class="gauge-name">{SYSTEM_DEFS[id].name}</span>
               <span class="gauge-bar"><span class="gauge-fill" style={{ width: `${Math.max(0, Math.min(100, integrity))}%` }} /></span>
               <span class="gauge-num">{formatInteger(integrity)}</span>
+              <RepairButton store={store} system={id} />
             </li>
           );
         })}
@@ -30,6 +33,23 @@ export function SystemsCard({ store }: { store: GameStore }) {
         Parts {formatStock(v.stock.parts)} · Fuel {formatStock(v.stock.fuel)}
       </div>
     </Card>
+  );
+}
+
+function RepairButton({ store, system }: { store: GameStore; system: (typeof SYSTEM_IDS)[number] }) {
+  const v = focusedVessel(store.state);
+  const blocker = repairBlocker(v, system);
+  const gain = repairGain(v, system);
+  return (
+    <button
+      class="repair"
+      disabled={blocker !== ''}
+      onClick={() => store.dispatch({ type: 'repair', vesselId: v.id, system })}
+      title={blocker ? `Repair: ${blocker}` : `Repair ${SYSTEM_DEFS[system].name} +${gain.toFixed(1)} for ${REPAIR_PARTS} Parts (scaled by Fabricator integrity)`}
+      aria-label={`Repair ${SYSTEM_DEFS[system].name}`}
+    >
+      +
+    </button>
   );
 }
 
@@ -117,19 +137,25 @@ export function DestinationReadout({ store }: { store: GameStore }) {
   const v = focusedVessel(state);
   const s = transitSummary(state, v);
   if (!s) {
+    const star = v.starId === null ? undefined : starById(state, v.starId);
+    const where = star ? `at ${star.name}` : '';
     return (
-      <div class="readout">
-        <div>{v.name} · {v.phase}</div>
+      <div class={v.phase === 'lost' ? 'readout lost' : 'readout'}>
+        <div class="readout-main">
+          {v.name} · {v.phase === 'lost' ? 'lost' : v.phase} {where}
+        </div>
+        <div class="readout-sub">{v.phase === 'arrival' ? 'Survey and landing arrive in Phase 4.' : v.phase === 'lost' ? 'The hull failed. This Vessel is gone.' : ''}</div>
       </div>
     );
   }
+  const burn = s.burn === 'accel' ? 'launch burn' : s.burn === 'decel' ? 'braking' : 'coasting';
   return (
     <div class="readout" title={`${s.fromName} → ${s.targetName}, ${s.distanceLy.toFixed(1)} ly in all`}>
       <div class="readout-main">
-        {s.targetName} · {s.remainingLy.toFixed(2)} ly · {s.speedC.toFixed(2)}c
+        {s.targetName} · {s.remainingLy.toFixed(2)} ly · {s.speedC.toFixed(3)}c
       </div>
       <div class="readout-sub">
-        ETA {formatDuration(s.etaSeconds)} · {Math.round(s.progress * 100)}% · coasting
+        ETA {formatDuration(s.etaSeconds)} · {Math.round(s.progress * 100)}% · {burn} · fuel {formatStock(v.stock.fuel)}
       </div>
     </div>
   );

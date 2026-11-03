@@ -1,7 +1,7 @@
 import { h, render } from 'preact';
 import './style.css';
 import { installHotkeys } from './input/hotkeys';
-import { Autosaver, clearGalaxy, exportGalaxy, importGalaxy, loadGalaxy, saveGalaxy } from './persist/store';
+import { Autosaver, clearGalaxy, exportGalaxy, importGalaxy, keepUnreadable, loadGalaxy, saveGalaxy, UNREADABLE_KEY } from './persist/store';
 import { SpaceScene } from './render/SpaceScene';
 import { Game } from './sim/game';
 import { createGalaxy } from './sim/state';
@@ -20,9 +20,15 @@ async function boot(): Promise<void> {
 
   const loaded = await loadGalaxy();
   const game = new Game(loaded.state ?? createGalaxy(randomSeed()));
-  // A resumed galaxy starts paused so the player can look before time runs.
-  if (loaded.state) game.state.paused = true;
   const store = new GameStore(game);
+  // A resumed galaxy starts paused so the player can look before time runs.
+  if (loaded.state) {
+    store.dispatch({ type: 'pause', paused: true });
+    store.say(`Resumed galaxy ${loaded.state.seed}, paused. Space to run.`, 5000);
+  } else if (loaded.raw !== undefined) {
+    const kept = await keepUnreadable(loaded.raw);
+    store.say(`Could not load the save (${loaded.reason}). ${kept ? `It is kept under ${UNREADABLE_KEY}; ` : ''}started a new galaxy.`, 8000);
+  }
   const scene = new SpaceScene(canvas);
   const fps = new FpsMeter();
   const autosaver = new Autosaver(
@@ -45,14 +51,15 @@ async function boot(): Promise<void> {
         return;
       }
       game.load(r.state);
+      store.dispatch({ type: 'pause', paused: true });
+      store.say(`Imported galaxy ${r.state.seed}, paused. Space to run.`, 5000);
       await saveGalaxy(game.state);
-      store.say(`Imported galaxy ${r.state.seed}.`);
     },
     async newGalaxy() {
       await clearGalaxy();
       game.load(createGalaxy(randomSeed()));
-      await saveGalaxy(game.state);
       store.say(`New galaxy, seed ${game.state.seed}.`);
+      await saveGalaxy(game.state);
     },
   };
 
@@ -62,8 +69,6 @@ async function boot(): Promise<void> {
   );
   installHotkeys(() => game.state, (cmd) => store.dispatch(cmd));
   autosaver.start();
-  if (loaded.state) store.say(`Resumed galaxy ${loaded.state.seed}, paused. Space to run.`, 5000);
-  else if (loaded.reason !== 'no save') store.say(`Could not load the save (${loaded.reason}); started a new galaxy.`);
 
   let last = performance.now();
   function frame(now: number): void {

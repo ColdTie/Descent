@@ -5,9 +5,13 @@ import type { GalaxyState } from '../sim/state';
 export const SAVE_KEY = 'vessel.galaxy';
 export const AUTOSAVE_MS = 2 * 60 * 1000;
 
+export const UNREADABLE_KEY = 'vessel.galaxy.unreadable';
+
 export interface LoadResult {
   state: GalaxyState | null;
   reason: string;
+  /** The stored text when it could not be loaded, so it can be kept aside. */
+  raw?: string;
 }
 
 export async function saveGalaxy(state: GalaxyState): Promise<boolean> {
@@ -23,9 +27,20 @@ export async function loadGalaxy(): Promise<LoadResult> {
   try {
     const text = await get<string>(SAVE_KEY);
     if (!text) return { state: null, reason: 'no save' };
-    return deserialize(text);
+    const r = deserialize(text);
+    return r.state ? r : { ...r, raw: text };
   } catch (err) {
     return { state: null, reason: String(err) };
+  }
+}
+
+/** Copies a save this build cannot read to a side slot, so the autosave cannot destroy it. */
+export async function keepUnreadable(raw: string): Promise<boolean> {
+  try {
+    await set(UNREADABLE_KEY, raw);
+    return true;
+  } catch {
+    return false;
   }
 }
 

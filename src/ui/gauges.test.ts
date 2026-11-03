@@ -1,4 +1,6 @@
 import { describe, expect, it } from 'vitest';
+import { SYSTEM_ALERT_THRESHOLDS } from '../content/systems';
+import { alertLevelFor } from '../sim/ledger';
 import { formatStock, integrityLevel } from './gauges';
 
 describe('gauges', () => {
@@ -16,5 +18,12 @@ describe('gauges', () => {
     expect(formatStock(999.4)).toBe('999');
     expect(formatStock(1234)).toBe('1.2k');
     expect(formatStock(25000)).toBe('25k');
+  });
+
+  it('colours a gauge the same way its alert is levelled', () => {
+    for (const t of SYSTEM_ALERT_THRESHOLDS) {
+      const gauge = integrityLevel(t - 0.01);
+      expect(alertLevelFor(t)).toBe(gauge === 'critical' ? 'critical' : 'warn');
+    }
   });
 });

@@ -1,31 +1,27 @@
 # Status
 
-_Updated: 2026-11-03, end of Phase 2._
+_Updated: 2026-11-03, end of Phase 3._
 
 ## What works
-- Phase 0 scaffold (Vite 8, TypeScript 6, Three.js 0.187, Preact 11, Vitest 5, ESLint 10, pinned) and the placeholder scene: seeded star field, primitive Vessel, orbit camera, FPS counter.
-- Phase 1 clock and ledger core, all headless in `src/sim/`:
-  - `GameClock`: fixed step accumulator, eight warp levels, step length scaling from 1 s to 1 day, 240-step cap per frame.
-  - `GalaxyState`: seed, time, warp, pause, named RNG cursors, star map (30 to 60 stars in 50 ly), Vessels with five systems and a stockpile, alerts, per-Vessel log.
-  - Vessel 1 starts in transit on a 5 to 15 ly hop at 0.2c; the ledger coasts it and wears its systems per game hour; integrity alerts at 50 / 25 / 10 drop warp to 1x.
-  - Commands: `setWarp`, `pause`, `focusVessel`, `dismissAlert` live; the rest typed and refused until their phase.
-  - Save and load: JSON with `schemaVersion`, `migrate()` chain, idb-keyval slot, autosave every 2 minutes and on tab hide, export and import buttons, resume paused.
-- Phase 2 Vessel view in the Overlay direction (design brief, option B with C's lineage tree):
-  - Top strip: clock, pause and warp pills, focused Vessel pill, save / export / import / new galaxy. Hotkeys: Space, `[` `]`, `1` to `8`.
-  - Left cards, each foldable and remembered per browser: SYSTEMS (five gauges coloured by the 50 / 25 ladder, worst integrity in the header), STOCKPILE, LINEAGE (tree of all Vessels, click to focus, alert dots), LOG (last 40 entries).
-  - Alert banner under the strip with focus and dismiss; fading three-line log bottom left; destination readout bottom right (target, distance left, speed, ETA, progress).
-  - Scene: destination marker tinted by the target star's spectral class, slides closer with progress along a dashed track; the departed star recedes behind the camera.
-  - Star map now grows as a 5 to 15 ly chain so every Vessel always has a hop in range.
-- 56 tests: determinism (same seed and command list gives identical state; `Game.tick` matches `runSteps`), save then load is identity and continues identically, clock bounds at every warp level, star map bounds, ledger wear and alerts, commands, hotkeys.
-- `npm run lint`, `npm test`, `npm run build` green. Headless checks confirmed: the clock advances at all eight warp levels; pause holds it; a reload resumes the save paused; at 10M warp the gauges and ETA visibly drop within seconds; an imported save with hull at 49.5 raises the banner and drops warp to 1x; dismiss clears it; the lineage card focuses; fold state survives a reload.
+- **Phases 0 to 3.** Scaffold and deploy; the headless clock and ledger; the Vessel view in the Overlay direction; and now a full transit you can win or lose.
+- **Transit.** Vessel 1 makes a one-year launch burn to 0.2c, coasts, then brakes over the last 0.1 ly. Both burns cost Fuel. Braking dry costs Hull. Hull at 0 loses the Vessel. Arrival raises an alert and parks the Vessel at the target star.
+- **Events.** Four events: micrometeoroid strike, drive fault, reactor flicker, signal detected. Each has two or three choices with their costs shown, and choices you cannot afford are greyed out. An event drops warp to 1x and opens a modal. The galaxy holds still until you answer, by click or with the keys 1 to 3.
+- **Repairs.** A `+` beside each gauge repairs that system through the Fabricator: 2 Parts for up to +10, scaled by Fabricator health.
+- **Readout.** Shows the burn (launch burn, coasting, braking), fuel, ETA for the whole burn plan, arrival, or loss. The drive plume glows only while burning.
+- **Saves.** Schema 2, with a migration from schema 1. Every load is validated field by field. A save this build cannot read is kept aside under `vessel.galaxy.unreadable` instead of being overwritten. Resumed and imported galaxies start paused.
+- **Tests.** 82, including the Phase 3 exit test: across 12 seeds every transit ends in arrival or loss, and at least 10 of them see two or more events. Plus determinism through `Game.tick` with warp, pause and event answers, burn kinematics and fuel, dry braking, loss, alert re-arming, the 10M-to-1x clock, save validation, and star-map connectivity.
+- **Browser check.** A headless run played a full transit at 10M warp. Four events were answered through the modal and two repairs made. The Vessel arrived at Star 22 in game year 27, about 85 real seconds.
 
 ## Deploy
-- Live: https://coldtie.github.io/Descent/ (case-sensitive). Deploys on every push to `main` via `.github/workflows/pages.yml`.
-- Pages source could not be read from this environment; the Actions deploy works. Please confirm Settings → Pages → Source is "GitHub Actions". Leftover `gh-pages` and `claude/run-*` branches can be deleted.
+- Live: https://coldtie.github.io/Descent/ (case-sensitive). Deploys on every push to `main`.
+- Please confirm Settings → Pages → Source reads "GitHub Actions". The leftover `gh-pages` and `claude/run-*` branches can be deleted.
+
+## Needs Steve
+- **The signal event's detour.** It currently salvages 6 Parts from debris, and what the signal is stays TBD. Change this once LORE.md says what a find is.
 
 ## What is next
-- Phase 3, Transit: accelerate / coast / decelerate with fuel, hull wear and the arrival trigger; four events with two or three choices that drop warp and open a modal; Parts spent on repairs through the Fabricator.
+- **Phase 4, arrival and survey.** A procedural star system of 2 to 6 bodies with resource profiles and hazards. Surveying a body costs game time. Pick a world and land.
 
 ## Known bugs
-- None in the game.
-- `npm audit`: 11 moderate, dev-only, transitive (`minimatch` under eslint); not fixable without moving pinned majors.
+- None known in the game.
+- `npm audit` shows 11 moderate advisories, all dev-only and transitive (`minimatch` under eslint). They cannot be fixed without moving pinned majors.

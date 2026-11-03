@@ -8,13 +8,15 @@ export interface TickReport {
   stepSeconds: number;
   droppedSeconds: number;
   alerts: StepReport['alerts'];
+  events: StepReport['events'];
   /** True when state changed this tick (steps ran or a command applied). */
   changed: boolean;
 }
 
 /**
- * Owns the galaxy, the clock and the command queue. Commands are applied at step boundaries;
- * when the clock is paused they apply at the next tick so the UI still responds.
+ * Owns the galaxy, the clock and the command queue. Commands apply at step boundaries; when the
+ * clock is paused they apply on the next tick so the UI still responds. The frame stops at the
+ * first step that raises an alert or opens an event, so the player sees the galaxy as it was then.
  */
 export class Game {
   state: GalaxyState;
@@ -61,19 +63,24 @@ export class Game {
 
   tick(realDtSeconds: number): TickReport {
     let changed = this.flush();
-    const { steps, stepSeconds, droppedSeconds } = this.clock.advance(realDtSeconds, this.state.warp, this.state.paused);
+    const holding = this.state.paused || this.state.events.length > 0;
+    const { steps: planned, stepSeconds, droppedSeconds } = this.clock.advance(realDtSeconds, this.state.warp, holding);
     const alerts: StepReport['alerts'] = [];
-    for (let i = 0; i < steps; i++) {
-      if (i > 0 && this.flush()) changed = true;
+    const events: StepReport['events'] = [];
+    let steps = 0;
+    for (let i = 0; i < planned; i++) {
       const report = stepLedger(this.state, stepSeconds);
+      if (!report.ran) break;
+      steps++;
       alerts.push(...report.alerts);
-      if (report.alerts.length > 0 && this.state.warp !== 1) {
-        // Any alert drops warp to 1x (DESIGN.md, Time). The remaining steps this frame still run at the old step size.
-        this.state.warp = 1;
+      events.push(...report.events);
+      if (report.alerts.length > 0 || report.events.length > 0) {
+        this.clock.reset();
+        break;
       }
     }
     if (steps > 0) changed = true;
-    return { steps, stepSeconds, droppedSeconds, alerts, changed };
+    return { steps, stepSeconds, droppedSeconds, alerts, events, changed };
   }
 }
 

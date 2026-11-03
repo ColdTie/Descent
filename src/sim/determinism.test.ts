@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { Command } from './commands';
 import { Game, runSteps } from './game';
 import { serialize } from './migrations';
+import { choicesFor } from './events';
 import { createGalaxy } from './state';
 
 const script: ReadonlyArray<{ step: number; cmd: Command }> = [
@@ -51,14 +52,47 @@ describe('Game', () => {
     expect(game.state.time).toBe(0);
   });
 
-  it('drops warp to 1x when the ledger raises an alert', () => {
+  it('stops the frame at the first alert or event and drops warp to 1x', () => {
     const game = Game.fresh(1);
     game.dispatch({ type: 'setWarp', warp: 10_000_000 });
-    let alerts = 0;
-    // One real second at 10M warp is 115 game days; a system crosses 50 integrity after about 30 game years.
-    for (let i = 0; i < 400 && alerts === 0; i++) alerts += game.tick(1).alerts.length;
-    expect(alerts).toBeGreaterThan(0);
+    let hit = null;
+    for (let i = 0; i < 400 && !hit; i++) {
+      const r = game.tick(1);
+      if (r.alerts.length || r.events.length) hit = r;
+    }
+    expect(hit).not.toBeNull();
     expect(game.state.warp).toBe(1);
+    const stamp = hit!.alerts[0]?.time ?? hit!.events[0]!.time;
+    expect(game.state.time - stamp).toBe(hit!.stepSeconds);
+  });
+
+  it('does not burst at 1x after leaving 10M with a remainder in the clock', () => {
+    const game = Game.fresh(1);
+    game.dispatch({ type: 'setWarp', warp: 10_000_000 });
+    for (let i = 0; i < 7; i++) game.tick(1 / 60);
+    game.dispatch({ type: 'setWarp', warp: 1 });
+    const r = game.tick(1 / 60);
+    expect(r.steps).toBeLessThanOrEqual(1);
+    expect(r.droppedSeconds).toBe(0);
+  });
+
+  it('matches across two Game instances fed the same frames, warp and pause included', () => {
+    const drive = (seed: number): Game => {
+      const g = Game.fresh(seed);
+      g.dispatch({ type: 'setWarp', warp: 1_000_000 });
+      for (let i = 0; i < 600; i++) {
+        if (i === 100) g.dispatch({ type: 'pause', paused: true });
+        if (i === 150) g.dispatch({ type: 'pause', paused: false });
+        const open = g.state.events[0];
+        if (open) g.dispatch({ type: 'resolveEvent', eventId: open.id, choice: choicesFor(open).length - 1 });
+        g.tick(1 / 30);
+      }
+      return g;
+    };
+    const a = drive(31);
+    const b = drive(31);
+    expect(serialize(a.state)).toBe(serialize(b.state));
+    expect(a.state.time).toBeGreaterThan(0);
   });
 
   it('collects refusals for bad commands', () => {

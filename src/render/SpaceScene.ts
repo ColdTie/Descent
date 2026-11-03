@@ -14,6 +14,7 @@ export class SpaceScene {
   private readonly camera: THREE.PerspectiveCamera;
   private readonly controls: OrbitControls;
   private readonly vessel: THREE.Group;
+  private readonly plume: THREE.Object3D | undefined;
   private readonly target: THREE.Mesh;
   private readonly origin: THREE.Mesh;
   private readonly track: THREE.Line;
@@ -28,11 +29,11 @@ export class SpaceScene {
     this.camera.position.set(10, 5, -11);
 
     this.controls = new OrbitControls(this.camera, canvas);
-    this.controls.target.set(0, 0, 7);
+    this.controls.target.set(0, 0, 3);
     this.controls.enableDamping = true;
     this.controls.dampingFactor = 0.08;
     this.controls.enablePan = false;
-    this.controls.minDistance = 4;
+    this.controls.minDistance = 11;
     this.controls.maxDistance = 80;
 
     const sun = new THREE.DirectionalLight(palette.sun, 3);
@@ -41,6 +42,7 @@ export class SpaceScene {
     this.scene.add(new THREE.HemisphereLight(palette.sky, palette.ground, 0.8));
 
     this.vessel = makeVessel();
+    this.plume = this.vessel.getObjectByName('driveGlow');
     this.scene.add(this.vessel);
     this.scene.add(makeStarField());
 
@@ -77,8 +79,17 @@ export class SpaceScene {
     const v = focusedVessel(state);
     const s = transitSummary(state, v);
     const inTransit = s !== null && v.transit !== null;
-    this.target.visible = this.origin.visible = this.track.visible = inTransit;
-    if (!inTransit) return;
+    // The drive glows only while it is burning.
+    if (this.plume) this.plume.visible = inTransit && s.burn !== 'coast';
+    this.vessel.visible = v.phase !== 'lost';
+    this.target.visible = inTransit || v.phase === 'arrival';
+    this.origin.visible = this.track.visible = inTransit;
+    if (!inTransit) {
+      const here = v.starId === null ? undefined : starById(state, v.starId);
+      this.target.position.set(0, 0, 10);
+      (this.target.material as THREE.MeshBasicMaterial).color.set(spectralColor(here?.spectral ?? 'G'));
+      return;
+    }
     const far = 60;
     const near = 10;
     this.target.position.set(0, 0, near + (far - near) * (1 - s.progress));
@@ -109,6 +120,13 @@ export class SpaceScene {
   dispose(): void {
     window.removeEventListener('resize', this.onResize);
     this.controls.dispose();
+    this.scene.traverse((o) => {
+      const m = o as THREE.Mesh;
+      m.geometry?.dispose();
+      const mat = m.material as THREE.Material | THREE.Material[] | undefined;
+      if (Array.isArray(mat)) mat.forEach((x) => x.dispose());
+      else mat?.dispose();
+    });
     this.renderer.dispose();
   }
 }

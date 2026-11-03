@@ -16,20 +16,26 @@ export default defineConfig([
   },
   {
     // CLAUDE.md rule 1: src/sim is headless and deterministic. Lint is the CI gate, so enforce it here.
-    files: ['src/sim/**/*.ts'],
+    files: ['src/sim/**/*.ts', 'src/content/**/*.ts'],
     rules: {
       'no-restricted-imports': [
         'error',
         {
           patterns: [
             {
-              group: ['three', 'three/*', 'preact', 'preact/*', '**/render/*', '**/ui/*', '**/input/*'],
+              group: ['three', 'three/*', 'preact', 'preact/*', 'idb-keyval', '**/render/*', '**/ui/*', '**/input/*', '**/persist/*'],
               message: 'src/sim imports nothing from Three.js, Preact, the DOM or the view layers (CLAUDE.md rule 1).',
             },
           ],
         },
       ],
-      'no-restricted-globals': ['error', 'window', 'document', 'navigator', 'requestAnimationFrame', 'localStorage', 'indexedDB'],
+      'no-restricted-globals': ['error', 'window', 'document', 'navigator', 'requestAnimationFrame', 'localStorage', 'indexedDB', 'performance', 'setTimeout', 'setInterval', 'globalThis', 'self', 'location', 'crypto'],
+      'no-restricted-properties': [
+        'error',
+        { object: 'Math', property: 'random', message: 'Use the seeded RNG in src/sim/rng.ts.' },
+        { object: 'Date', property: 'now', message: 'Game time lives in GalaxyState.time.' },
+      ],
+      'no-restricted-syntax': ['error', { selector: 'NewExpression[callee.name="Date"]', message: 'Game time lives in GalaxyState.time.' }],
     },
   },
 ]);

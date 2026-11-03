@@ -1,10 +1,29 @@
 import { SYSTEM_ALERT_THRESHOLDS, SYSTEM_DEFS, SYSTEM_IDS } from '../content/systems';
-import { appendLog, starById, type Alert, type GalaxyState, type Vessel } from './state';
+import {
+  ACCEL_C_PER_YEAR,
+  BURN_FUEL_PER_YEAR,
+  DRY_DECEL_HULL_PER_YEAR,
+  MIN_SPEED_C,
+  POWER_OUT_WEAR_MULT,
+  WEAK_DRIVE_BELOW,
+  WEAK_DRIVE_FUEL_MULT,
+} from '../content/transit';
+import { rollEvent } from './events';
+import { appendLog, starById, type Alert, type Burn, type GalaxyState, type PendingEvent, type Vessel } from './state';
 import { SECONDS_PER_HOUR, SECONDS_PER_YEAR } from './time';
 
 export interface StepReport {
   /** Alerts raised during this step, already appended to state.alerts. */
   alerts: Alert[];
+  /** Events opened during this step, already appended to state.events. */
+  events: PendingEvent[];
+  /** False when the step did not run because an event is waiting for a choice. */
+  ran: boolean;
+}
+
+export interface StepOptions {
+  /** Roll transit events. Tests switch this off to isolate kinematics and wear. */
+  events?: boolean;
 }
 
 function raiseAlert(state: GalaxyState, vessel: Vessel, level: Alert['level'], text: string, report: StepReport): void {
@@ -14,45 +33,151 @@ function raiseAlert(state: GalaxyState, vessel: Vessel, level: Alert['level'], t
   report.alerts.push(alert);
 }
 
-function stepTransit(vessel: Vessel, dtSeconds: number, state: GalaxyState, report: StepReport): void {
-  const t = vessel.transit;
-  if (!t) return;
-  // Rates are per game hour and integrate linearly inside a step (CLAUDE.md rule 4).
-  const hours = dtSeconds / SECONDS_PER_HOUR;
+/** Alert level for a crossed threshold; matches the gauge colours (amber below 50, red below 25). */
+export function alertLevelFor(threshold: number): Alert['level'] {
+  return threshold <= 25 ? 'critical' : 'warn';
+}
+
+/** Raises each threshold once per crossing; a threshold re-arms when integrity climbs back to it. */
+function checkThresholds(state: GalaxyState, vessel: Vessel, report: StepReport): void {
   for (const id of SYSTEM_IDS) {
     const sys = vessel.systems[id];
-    sys.integrity = Math.max(0, sys.integrity - SYSTEM_DEFS[id].wearPerHour * hours);
+    sys.alerted = sys.alerted.filter((t) => sys.integrity < t);
     for (const threshold of SYSTEM_ALERT_THRESHOLDS) {
       if (sys.integrity < threshold && !sys.alerted.includes(threshold)) {
         sys.alerted.push(threshold);
-        // Same ladder as the gauge colours: amber below 50, red below 25.
-        const level = threshold <= 25 ? 'critical' : 'warn';
-        raiseAlert(state, vessel, level, `${SYSTEM_DEFS[id].name} integrity below ${threshold}.`, report);
+        raiseAlert(state, vessel, alertLevelFor(threshold), `${SYSTEM_DEFS[id].name} integrity below ${threshold}.`, report);
       }
     }
   }
-  // Coasting: speed is a fraction of c, and c is one light year per game year.
-  t.traveledLy = Math.min(t.distanceLy, t.traveledLy + (t.speedC * dtSeconds) / SECONDS_PER_YEAR);
+}
+
+function wear(vessel: Vessel, hours: number): void {
+  const powerOut = vessel.systems.power.integrity <= 0;
+  for (const id of SYSTEM_IDS) {
+    const sys = vessel.systems[id];
+    const mult = powerOut && id !== 'power' ? POWER_OUT_WEAR_MULT : 1;
+    sys.integrity = Math.max(0, sys.integrity - SYSTEM_DEFS[id].wearPerHour * hours * mult);
+  }
+}
+
+function setBurn(state: GalaxyState, vessel: Vessel, burn: Burn, text: string): void {
+  vessel.transit!.burn = burn;
+  appendLog(vessel, state.time, text);
+}
+
+/** Accelerate, coast, decelerate. Fuel pays for both burns; braking without fuel or drive costs hull. */
+function move(state: GalaxyState, vessel: Vessel, years: number, report: StepReport): void {
+  const t = vessel.transit!;
+  const a = ACCEL_C_PER_YEAR;
+  const driveOk = vessel.systems.drive.integrity > 0;
+  const burnRate = BURN_FUEL_PER_YEAR * (vessel.systems.drive.integrity < WEAK_DRIVE_BELOW ? WEAK_DRIVE_FUEL_MULT : 1);
+  const want = burnRate * years;
+  const v0 = t.speedC;
+
+  if (t.burn === 'accel') {
+    if (!driveOk || vessel.stock.fuel <= 0) {
+      setBurn(state, vessel, 'coast', `Launch burn cut short at ${t.speedC.toFixed(3)}c.`);
+    } else {
+      const used = Math.min(vessel.stock.fuel, want);
+      vessel.stock.fuel = Math.max(0, vessel.stock.fuel - used);
+      t.speedC = Math.min(t.cruiseC, v0 + a * years * (want > 0 ? used / want : 1));
+      t.traveledLy += ((v0 + t.speedC) / 2) * years;
+      if (t.speedC >= t.cruiseC) setBurn(state, vessel, 'coast', `Cruise reached, ${t.cruiseC.toFixed(2)}c. Coasting.`);
+    }
+  } else if (t.burn === 'coast') {
+    t.traveledLy += t.speedC * years;
+    const stopping = (t.speedC * t.speedC) / (2 * a);
+    if (t.distanceLy - t.traveledLy <= stopping) setBurn(state, vessel, 'decel', 'Deceleration burn started.');
+  } else {
+    const used = driveOk ? Math.min(vessel.stock.fuel, want) : 0;
+    vessel.stock.fuel = Math.max(0, vessel.stock.fuel - used);
+    const dryFrac = want > 0 ? 1 - used / want : 0;
+    if (dryFrac > 0) {
+      const hull = vessel.systems.hull;
+      hull.integrity = Math.max(0, hull.integrity - DRY_DECEL_HULL_PER_YEAR * years * dryFrac);
+      if (!t.dryBurn) {
+        t.dryBurn = true;
+        raiseAlert(state, vessel, 'critical', driveOk ? 'Out of fuel mid-braking. The hull takes the rest.' : 'Drive offline mid-braking. The hull takes the rest.', report);
+      }
+    }
+    t.speedC = Math.max(MIN_SPEED_C, v0 - a * years);
+    t.traveledLy += ((v0 + t.speedC) / 2) * years;
+  }
+}
+
+function arrive(state: GalaxyState, vessel: Vessel, report: StepReport): void {
+  const t = vessel.transit!;
+  const star = starById(state, t.toStarId);
+  vessel.phase = 'arrival';
+  vessel.starId = t.toStarId;
+  vessel.transit = null;
+  raiseAlert(state, vessel, 'info', `Arrived at ${star?.name ?? `Star ${t.toStarId}`}.`, report);
+}
+
+function stepTransit(state: GalaxyState, vessel: Vessel, dtSeconds: number, report: StepReport, opts: StepOptions): void {
+  if (!vessel.transit) return;
+  // Rates are per game hour and integrate linearly inside a step (CLAUDE.md rule 4).
+  wear(vessel, dtSeconds / SECONDS_PER_HOUR);
+  move(state, vessel, dtSeconds / SECONDS_PER_YEAR, report);
+  if (vessel.systems.hull.integrity <= 0) {
+    vessel.phase = 'lost';
+    raiseAlert(state, vessel, 'critical', `${vessel.name} lost: the hull failed.`, report);
+    return;
+  }
+  if (vessel.transit.traveledLy >= vessel.transit.distanceLy) {
+    vessel.transit.traveledLy = vessel.transit.distanceLy;
+    checkThresholds(state, vessel, report);
+    arrive(state, vessel, report);
+    return;
+  }
+  if (opts.events !== false && !state.events.some((e) => e.vesselId === vessel.id)) {
+    const event = rollEvent(state, vessel, dtSeconds);
+    if (event) report.events.push(event);
+  }
+  checkThresholds(state, vessel, report);
 }
 
 /**
  * Advances every Vessel and world by one fixed step. The ledger is the truth: this runs for
- * unfocused Vessels too. Arrival, planetside economy and events land in later phases.
+ * unfocused Vessels too. While any event waits for a choice, the galaxy holds still.
+ * Any alert or event drops warp to 1x (DESIGN.md, Time).
  */
-export function stepLedger(state: GalaxyState, dtSeconds: number): StepReport {
-  const report: StepReport = { alerts: [] };
+export function stepLedger(state: GalaxyState, dtSeconds: number, opts: StepOptions = {}): StepReport {
+  const report: StepReport = { alerts: [], events: [], ran: false };
+  if (state.events.length > 0) return report;
+  report.ran = true;
   for (const vessel of Object.values(state.vessels)) {
-    if (vessel.phase === 'transit') stepTransit(vessel, dtSeconds, state, report);
+    if (vessel.phase === 'transit') stepTransit(state, vessel, dtSeconds, report, opts);
   }
   state.time += dtSeconds;
+  if (report.alerts.length > 0 || report.events.length > 0) state.warp = 1;
   return report;
 }
 
-/** Seconds left on a transit at its current speed. Infinity when not moving. */
+/** Game seconds left on a transit, assuming the burn plan completes. Infinity when not moving and not burning. */
 export function transitEtaSeconds(vessel: Vessel): number {
   const t = vessel.transit;
-  if (!t || t.speedC <= 0) return Infinity;
-  return ((t.distanceLy - t.traveledLy) / t.speedC) * SECONDS_PER_YEAR;
+  if (!t) return Infinity;
+  const a = ACCEL_C_PER_YEAR;
+  let v = t.speedC;
+  let remaining = Math.max(0, t.distanceLy - t.traveledLy);
+  let years = 0;
+  if (t.burn === 'accel') {
+    const ta = Math.max(0, (t.cruiseC - v) / a);
+    years += ta;
+    remaining -= ((v + t.cruiseC) / 2) * ta;
+    v = t.cruiseC;
+  }
+  if (v <= 0) return Infinity;
+  if (t.burn !== 'decel') {
+    const stopping = (v * v) / (2 * a);
+    years += Math.max(0, remaining - stopping) / v;
+    remaining = Math.min(Math.max(0, remaining), stopping);
+  }
+  // Braking from v covers the rest at about half speed on average.
+  years += remaining > 0 ? (2 * remaining) / v : 0;
+  return years * SECONDS_PER_YEAR;
 }
 
 export interface TransitSummary {
@@ -63,6 +188,7 @@ export interface TransitSummary {
   /** 0 to 1. */
   progress: number;
   speedC: number;
+  burn: Burn;
   etaSeconds: number;
 }
 
@@ -77,6 +203,7 @@ export function transitSummary(state: GalaxyState, vessel: Vessel): TransitSumma
     remainingLy: Math.max(0, t.distanceLy - t.traveledLy),
     progress: t.distanceLy > 0 ? Math.min(1, t.traveledLy / t.distanceLy) : 1,
     speedC: t.speedC,
+    burn: t.burn,
     etaSeconds: transitEtaSeconds(vessel),
   };
 }

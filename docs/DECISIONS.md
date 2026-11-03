@@ -49,3 +49,22 @@ One line of reasoning each. Newest at the bottom. Design questions that `docs/DE
 - **Destination marker sits 60 scene units ahead at departure and 10 on arrival; the departed star sits behind the camera.** The scene reads `transitSummary()` from the ledger each frame and writes nothing back.
 - **The camera orbits a point 7 units ahead of the Vessel.** Keeps the drive plume and the destination in one default framing.
 - **Systems card shows the worst integrity in its header badge; the log card shows the last 40 entries; the fading log the last 3.** Enough to read the ship at 10M warp without opening anything.
+
+## Phase 3
+- **Transit is three burns: a one-year launch burn to 0.2c (0.1 ly), a coast, and a braking burn over the last 0.1 ly.** Constant 0.2c per year in both burns; braking starts when the remaining distance equals the stopping distance.
+- **Both burns cost Fuel, 30 per year of burn; a Vessel starts with 100.** DESIGN.md only names the braking burn; charging the launch too makes Fuel a resource across the whole hop and leaves a 40 margin for events.
+- **Braking without Fuel or Drive still slows the Vessel but costs Hull, 60 per dry year.** "Arrive short and take hull damage" without a stranded Vessel; a long dry brake on a weak hull loses it.
+- **A Vessel is lost when Hull reaches 0; it becomes phase `lost` and the ledger stops moving it.** Slice rule from DESIGN.md.
+- **System couplings: Drive below 25 doubles burn Fuel; Power at 0 doubles wear on the others; Sensors below 25 make debris strikes 1.5× worse; Fabricator integrity scales repairs.** Each system matters without new mechanics.
+- **Events roll at 0.15 per game year per Vessel in transit, at most one open per Vessel.** A 25 to 75 year hop sees about 4 to 11; the exit criterion needs two.
+- **An open event holds the whole galaxy: no steps run until it is answered.** Simplest reading of "events pull you back"; it also keeps unfocused Vessels from racing ahead while the player decides.
+- **The frame stops at the first step that raises an alert or opens an event, and the warp drop happens inside the sim step.** Fixes the Phase 1 review finding that 28+ day-steps ran past an alert at 10M, and keeps `Game.tick` and `runSteps` identical.
+- **The clock keeps its leftover in real seconds, and resets when an event stops the frame.** A 10M remainder no longer becomes a 240-step burst after dropping to 1x.
+- **Integrity thresholds re-arm once a system is repaired back above them.** Repairs exist now, so a second crossing must alert again.
+- **The signal event's detour salvages 6 Parts from nearby debris; what the signal is stays TBD.** A mechanical reward that claims nothing about lore. Steve may want to change this once LORE.md says what a find is.
+- **Repairs are a `repair` command: 2 Parts for up to +10 integrity, scaled by Fabricator integrity, instant.** Added to the command list alongside `dismissAlert`; DESIGN.md says "Parts repair through the Fabricator" and nothing about time.
+- **Schema 2.** Transits gain `cruiseC`, `burn` and `dryBurn`; the galaxy gains `events` and `nextEventId`; phase `lost` is new. The 1→2 migration puts a v1 Vessel in the coast at its old speed.
+- **Every load is validated field by field; a save that fails is refused with the field named and kept aside under `vessel.galaxy.unreadable` before the autosave can overwrite it.** From the Phase 1 and 2 reviews: a malformed import could brick the page.
+- **Resumed and imported galaxies start paused through the `pause` command**, not by writing state from `main.ts` (CLAUDE.md rule 3).
+- **Space and Enter on a keyboard-focused button activate the button; a mouse click drops focus so the next Space pauses.** Fixes keyboard access to cards without breaking click-then-Space.
+- **ESLint now guards `src/content` too, and also bans `Math.random`, `Date.now`, `new Date`, timers, `performance` and `idb-keyval`/`persist` imports in the sim.** From the Phase 1 review.

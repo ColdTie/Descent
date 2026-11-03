@@ -1,6 +1,7 @@
 import { useRef } from 'preact/hooks';
 import { focusedVessel } from '../sim/state';
 import { formatClock, formatWarp, WARP_LEVELS } from '../sim/time';
+import { EventModal } from './EventModal';
 import { AlertBanner, DestinationReadout, FadingLog, LineageCard, LogCard, StockpileCard, SystemsCard } from './Panels';
 import { type GameStore, useGame } from './store';
 
@@ -124,6 +125,7 @@ export function Dashboard({ store, actions }: DashboardProps) {
       </div>
       <FadingLog store={store} />
       <DestinationReadout store={store} />
+      <EventModal store={store} />
     </div>
   );
 }
