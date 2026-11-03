@@ -1,6 +1,6 @@
 // Optional: builds the site, serves dist/ locally and saves shots/latest.png.
 // Skips cleanly when Playwright is not installed in the environment.
-import { mkdirSync } from 'node:fs';
+import { existsSync, mkdirSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { build, preview } from 'vite';
 
@@ -8,8 +8,13 @@ const require = createRequire(import.meta.url);
 let chromium;
 try {
   ({ chromium } = require('playwright'));
-} catch {
+} catch (err) {
+  if (err?.code !== 'MODULE_NOT_FOUND') throw err;
   console.log('[screenshot] playwright is not available here; skipping (this script is optional).');
+  process.exit(0);
+}
+if (!existsSync(chromium.executablePath())) {
+  console.log(`[screenshot] no Chromium at ${chromium.executablePath()}; skipping (this script is optional).`);
   process.exit(0);
 }
 

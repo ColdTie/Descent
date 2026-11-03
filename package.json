@@ -5,7 +5,7 @@
   "type": "module",
   "description": "Vessel (working title): a 3D management game about an interstellar probe that replicates itself.",
   "engines": {
-    "node": ">=22.12.0"
+    "node": "^22.13.0 || ^24.0.0 || >=26.0.0"
   },
   "scripts": {
     "dev": "vite",
