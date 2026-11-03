@@ -35,12 +35,13 @@ export function makeVessel(): THREE.Group {
   drive.name = 'drive';
   group.add(drive);
 
+  // Exhaust plume: base flush with the bell mouth (z = -4.6), apex pointing aft.
   const glow = new THREE.Mesh(
-    new THREE.ConeGeometry(0.55, 1.1, 10),
+    new THREE.ConeGeometry(0.7, 1.4, 10),
     new THREE.MeshBasicMaterial({ color: palette.driveGlow, transparent: true, opacity: 0.85 }),
   );
-  glow.rotation.x = Math.PI / 2;
-  glow.position.z = -4.1;
+  glow.rotation.x = -Math.PI / 2;
+  glow.position.z = -4.6 - 0.7;
   glow.name = 'driveGlow';
   group.add(glow);
 

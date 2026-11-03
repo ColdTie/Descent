@@ -13,13 +13,13 @@ export class SpaceScene {
   private readonly vessel: THREE.Group;
   private readonly onResize = (): void => this.resize();
 
-  constructor(private readonly canvas: HTMLCanvasElement) {
+  constructor(canvas: HTMLCanvasElement) {
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     this.scene.background = new THREE.Color(palette.space);
 
     this.camera = new THREE.PerspectiveCamera(50, 1, 0.1, 5000);
-    this.camera.position.set(9, 4, 12);
+    // Three-quarter view from aft, so the drive plume is in frame.
+    this.camera.position.set(9, 4, -12);
 
     this.controls = new OrbitControls(this.camera, canvas);
     this.controls.enableDamping = true;
@@ -44,6 +44,8 @@ export class SpaceScene {
   resize(): void {
     const width = window.innerWidth;
     const height = window.innerHeight;
+    // Browser zoom and moving between displays change the DPR along with the size.
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     this.renderer.setSize(width, height, false);
     this.camera.aspect = width / height;
     this.camera.updateProjectionMatrix();
@@ -62,6 +64,5 @@ export class SpaceScene {
     window.removeEventListener('resize', this.onResize);
     this.controls.dispose();
     this.renderer.dispose();
-    void this.canvas;
   }
 }
