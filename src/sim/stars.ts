@@ -40,7 +40,9 @@ const MIN_SEPARATION_LY = 2;
 export function generateStars(rng: Rng): Star[] {
   const count = STAR_COUNT_MIN + rng.int(STAR_COUNT_MAX - STAR_COUNT_MIN + 1);
   const stars: Star[] = [{ id: 0, name: 'Home', x: 0, y: 0, z: 0, spectral: 'G' }];
-  while (stars.length < count) {
+  // Placement can fail near the sphere's edge; bound the total work so a hostile seed cannot spin forever.
+  let budget = count * 200;
+  while (stars.length < count && budget-- > 0) {
     const anchor = stars[rng.int(stars.length)]!;
     let placed: Star | null = null;
     for (let attempt = 0; attempt < 24 && !placed; attempt++) {
