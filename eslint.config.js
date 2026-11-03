@@ -38,4 +38,13 @@ export default defineConfig([
       'no-restricted-syntax': ['error', { selector: 'NewExpression[callee.name="Date"]', message: 'Game time lives in GalaxyState.time.' }],
     },
   },
+  {
+    // Tests may time themselves and read the wall clock; they are not the sim. The import bans above still apply.
+    files: ['src/**/*.test.ts'],
+    rules: {
+      'no-restricted-globals': 'off',
+      'no-restricted-properties': 'off',
+      'no-restricted-syntax': 'off',
+    },
+  },
 ]);
