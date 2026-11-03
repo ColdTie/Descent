@@ -7,10 +7,14 @@ import {
   POWER_OUT_WEAR_MULT,
   WEAK_DRIVE_BELOW,
   WEAK_DRIVE_FUEL_MULT,
+  WEAK_SENSORS_BELOW,
 } from '../content/transit';
+import { BODY_DEFS, WEAK_SENSORS_SURVEY_MULT } from '../content/bodies';
 import { rollEvent } from './events';
+import { streamRng } from './rng';
+import { generateSystem, type StarSystem } from './system';
 import { appendLog, starById, type Alert, type Burn, type GalaxyState, type PendingEvent, type Vessel } from './state';
-import { SECONDS_PER_HOUR, SECONDS_PER_YEAR } from './time';
+import { SECONDS_PER_DAY, SECONDS_PER_HOUR, SECONDS_PER_YEAR } from './time';
 
 export interface StepReport {
   /** Alerts raised during this step, already appended to state.alerts. */
@@ -127,13 +131,47 @@ function move(state: GalaxyState, vessel: Vessel, years: number, report: StepRep
   }
 }
 
+/** The system around a star, generating it from the worlds stream the first time anyone needs it. */
+export function ensureSystem(state: GalaxyState, starId: number): StarSystem | null {
+  const existing = state.starSystems[starId];
+  if (existing) return existing;
+  const star = starById(state, starId);
+  if (!star) return null;
+  const system = generateSystem(streamRng(state.rng, 'worlds'), star);
+  state.starSystems[starId] = system;
+  return system;
+}
+
 function arrive(state: GalaxyState, vessel: Vessel, report: StepReport): void {
   const t = vessel.transit!;
   const star = starById(state, t.toStarId);
   vessel.phase = 'arrival';
   vessel.starId = t.toStarId;
   vessel.transit = null;
-  raiseAlert(state, vessel, 'info', `Arrived at ${star?.name ?? `Star ${t.toStarId}`}.`, report);
+  const system = ensureSystem(state, t.toStarId);
+  const n = system?.bodies.length ?? 0;
+  raiseAlert(state, vessel, 'info', `Arrived at ${star?.name ?? `Star ${t.toStarId}`}. ${n} bodies in the system; survey one to land.`, report);
+}
+
+/** Survey time scales with sensors: weak sensors take twice as long. */
+export function surveySeconds(vessel: Vessel, baseDays: number): number {
+  return baseDays * SECONDS_PER_DAY * (vessel.systems.sensors.integrity < WEAK_SENSORS_BELOW ? WEAK_SENSORS_SURVEY_MULT : 1);
+}
+
+function stepOrbit(state: GalaxyState, vessel: Vessel, dtSeconds: number, report: StepReport): void {
+  if (vessel.starId === null) return;
+  // Saves from before Phase 4 can hold a Vessel already in orbit with no system yet.
+  ensureSystem(state, vessel.starId);
+  const s = vessel.survey;
+  if (!s) return;
+  s.remainingSeconds = Math.max(0, s.remainingSeconds - dtSeconds);
+  if (s.remainingSeconds > 0) return;
+  vessel.survey = null;
+  const body = state.starSystems[vessel.starId]?.bodies[s.bodyId];
+  if (!body) return;
+  body.surveyed = true;
+  const def = BODY_DEFS[body.kind];
+  raiseAlert(state, vessel, 'info', `Survey of ${body.name} complete: ${def.name.toLowerCase()}${def.landable ? '' : ', no landing'}.`, report);
 }
 
 function stepTransit(state: GalaxyState, vessel: Vessel, dtSeconds: number, report: StepReport, opts: StepOptions): void {
@@ -170,6 +208,7 @@ export function stepLedger(state: GalaxyState, dtSeconds: number, opts: StepOpti
   report.ran = true;
   for (const vessel of Object.values(state.vessels)) {
     if (vessel.phase === 'transit') stepTransit(state, vessel, dtSeconds, report, opts);
+    else if (vessel.phase === 'arrival') stepOrbit(state, vessel, dtSeconds, report);
   }
   state.time += dtSeconds;
   if (report.alerts.length > 0 || report.events.length > 0) state.warp = 1;

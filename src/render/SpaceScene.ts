@@ -5,7 +5,7 @@ import { makeVessel } from './primitives';
 import { makeStarField } from './StarField';
 import { transitSummary } from '../sim/ledger';
 import { focusedVessel, starById, type GalaxyState } from '../sim/state';
-import { spectralColor } from './palette';
+import { BODY_COLORS, spectralColor } from './palette';
 
 /** Phase 0 placeholder: a Vessel in a star field with an orbit camera. Reads no sim state yet. */
 export class SpaceScene {
@@ -18,6 +18,8 @@ export class SpaceScene {
   private readonly target: THREE.Mesh;
   private readonly origin: THREE.Mesh;
   private readonly track: THREE.Line;
+  private systemGroup: THREE.Group | null = null;
+  private systemKey = '';
   private readonly onResize = (): void => this.resize();
 
   constructor(canvas: HTMLCanvasElement) {
@@ -84,10 +86,9 @@ export class SpaceScene {
     this.vessel.visible = v.phase !== 'lost';
     this.target.visible = inTransit || v.phase === 'arrival';
     this.origin.visible = this.track.visible = inTransit;
+    this.syncSystem(state, v.phase === 'arrival' || v.phase === 'planetside' ? v.starId : null, v.worldId === null ? null : (state.worlds[v.worldId]?.bodyId ?? null));
     if (!inTransit) {
-      const here = v.starId === null ? undefined : starById(state, v.starId);
-      this.target.position.set(0, 0, 10);
-      (this.target.material as THREE.MeshBasicMaterial).color.set(spectralColor(here?.spectral ?? 'G'));
+      this.target.visible = false;
       return;
     }
     const far = 60;
@@ -105,6 +106,49 @@ export class SpaceScene {
     this.track.computeLineDistances();
     const pulse = 1 + 0.08 * Math.sin(performance.now() / 400);
     this.target.scale.setScalar(pulse);
+  }
+
+  /** Star and bodies ahead of the Vessel while it is in a system; rebuilt only when what they show changes. */
+  private syncSystem(state: GalaxyState, starId: number | null, landedBodyId: number | null): void {
+    const system = starId === null ? undefined : state.starSystems[starId];
+    const key = system ? `${starId}:${system.bodies.map((b) => (b.surveyed ? 1 : 0)).join('')}:${landedBodyId ?? '-'}` : '';
+    if (key === this.systemKey) return;
+    this.systemKey = key;
+    if (this.systemGroup) {
+      this.scene.remove(this.systemGroup);
+      this.systemGroup.traverse((o) => {
+        const m = o as THREE.Mesh;
+        m.geometry?.dispose();
+        (m.material as THREE.Material | undefined)?.dispose();
+      });
+      this.systemGroup = null;
+    }
+    if (!system || starId === null) return;
+    const group = new THREE.Group();
+    group.name = 'system';
+    const star = starById(state, starId);
+    const sun = new THREE.Mesh(new THREE.IcosahedronGeometry(3, 1), new THREE.MeshBasicMaterial({ color: spectralColor(star?.spectral ?? 'G') }));
+    sun.position.set(-34, 12, 80);
+    group.add(sun);
+    const n = system.bodies.length;
+    system.bodies.forEach((b, i) => {
+      const size = b.kind === 'gasGiant' ? 1.6 : b.kind === 'icy' ? 0.8 : 0.7;
+      const color = b.surveyed ? BODY_COLORS[b.kind] : 0x3a4157;
+      const mesh = new THREE.Mesh(new THREE.IcosahedronGeometry(size, 1), new THREE.MeshStandardMaterial({ color, flatShading: true, roughness: 0.9 }));
+      const along = n > 1 ? i / (n - 1) : 0.5;
+      // Spread across the open sky left of the Vessel, nearest orbit closest to the star.
+      mesh.position.set(-22 + along * 18, 5 - along * 6 + Math.sin(i * 1.7), 40 - along * 16);
+      mesh.name = `body-${b.id}`;
+      group.add(mesh);
+      if (b.id === landedBodyId) {
+        const ring = new THREE.Mesh(new THREE.TorusGeometry(size + 0.6, 0.06, 6, 32), new THREE.MeshBasicMaterial({ color: palette.driveGlow }));
+        ring.position.copy(mesh.position);
+        ring.lookAt(this.camera.position);
+        group.add(ring);
+      }
+    });
+    this.scene.add(group);
+    this.systemGroup = group;
   }
 
   update(dt: number): void {

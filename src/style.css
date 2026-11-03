@@ -168,3 +168,29 @@ body {
 .choice-cost { color: #8e97ad; font-size: 11px; }
 .modal.fallback { position: absolute; top: 80px; left: 50%; transform: translateX(-50%); pointer-events: auto; border-color: #ff6b5a; }
 .modal.fallback .modal-kicker { color: #ff6b5a; }
+
+/* ---- system card ---- */
+.bodies { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.body { padding: 5px 6px; border: 1px solid #1d2235; border-radius: 3px; }
+.body.here { border-color: #4fd1ff; }
+.body-head { display: flex; align-items: center; gap: 6px; }
+.body-dot { width: 8px; height: 8px; border-radius: 50%; background: #3a4157; flex: none; }
+.body.surveyed.molten .body-dot { background: #e0683a; }
+.body.surveyed.rocky .body-dot { background: #a8957a; }
+.body.surveyed.icy .body-dot { background: #a9d8ea; }
+.body.surveyed.gasGiant .body-dot { background: #d2b48a; }
+.body-name { flex: 1; }
+.body-orbit, .body-info { color: #8e97ad; font-size: 11px; }
+.body-info { margin-top: 2px; }
+.here-note { color: #4fd1ff; }
+.body-progress { margin-top: 4px; height: 4px; background: #1d2235; border-radius: 2px; overflow: hidden; }
+.body-progress span { display: block; height: 100%; background: #4fd1ff; }
+.body-actions { display: flex; gap: 6px; margin-top: 5px; }
+.body-actions button {
+  appearance: none; border: 1px solid #2a3047; background: transparent; color: #4fd1ff; font: inherit; font-size: 11px;
+  padding: 2px 8px; border-radius: 9px; cursor: pointer;
+}
+.body-actions button:hover:not(:disabled) { background: #1a2740; }
+.body-actions button:disabled { color: #5c647a; cursor: default; }
+.body-actions button.land { border-color: #4fd1ff; }
+.body-actions button:focus-visible { outline: 2px solid #4fd1ff; outline-offset: 1px; }

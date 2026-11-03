@@ -28,3 +28,11 @@ export const SPECTRAL_COLORS: Record<string, number> = {
 export function spectralColor(spectral: string): number {
   return SPECTRAL_COLORS[spectral] ?? palette.star;
 }
+
+/** Body colours by kind once surveyed. */
+export const BODY_COLORS: Record<string, number> = {
+  molten: 0xe0683a,
+  rocky: 0xa8957a,
+  icy: 0xa9d8ea,
+  gasGiant: 0xd2b48a,
+};

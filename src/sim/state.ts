@@ -4,9 +4,10 @@ import { CRUISE_SPEED_C } from '../content/stars';
 import { SYSTEM_IDS, type SystemId } from '../content/systems';
 import { initialRngStates, streamRng, type RngStates } from './rng';
 import { distanceLy, generateStars, pickHopTarget, type Star } from './stars';
+import type { StarSystem } from './system';
 import type { Warp } from './time';
 
-export const SCHEMA_VERSION = 2;
+export const SCHEMA_VERSION = 3;
 
 export const PHASES = ['transit', 'arrival', 'planetside', 'replicate', 'launch', 'lost'] as const;
 export type Phase = (typeof PHASES)[number];
@@ -55,6 +56,22 @@ export interface PendingEvent {
   damage: number;
 }
 
+/** A survey in progress. Game time spent in orbit counts it down. */
+export interface Survey {
+  bodyId: number;
+  remainingSeconds: number;
+  totalSeconds: number;
+}
+
+/** A body a Vessel has landed on. Planetside state (nodes, buildings, robots) arrives in Phase 5. */
+export interface World {
+  id: number;
+  starId: number;
+  bodyId: number;
+  vesselId: number;
+  landedAt: number;
+}
+
 export interface LogEntry {
   time: number;
   text: string;
@@ -68,6 +85,10 @@ export interface Vessel {
   /** Star the Vessel is at, when not in transit. */
   starId: number | null;
   transit: Transit | null;
+  /** Survey under way while in orbit (phase arrival). */
+  survey: Survey | null;
+  /** World the Vessel has landed on. */
+  worldId: number | null;
   systems: Record<SystemId, SystemState>;
   stock: Record<ResourceId, number>;
   log: LogEntry[];
@@ -86,6 +107,10 @@ export interface GalaxyState {
   focusedVesselId: number;
   alerts: Alert[];
   events: PendingEvent[];
+  /** Star systems, generated lazily the first time a Vessel arrives. Keyed by star id. */
+  starSystems: Record<number, StarSystem>;
+  worlds: Record<number, World>;
+  nextWorldId: number;
   nextVesselId: number;
   nextAlertId: number;
   nextEventId: number;
@@ -128,6 +153,8 @@ export function createGalaxy(seed: number): GalaxyState {
     phase: transit ? 'transit' : 'arrival',
     starId: transit ? null : home.id,
     transit,
+    survey: null,
+    worldId: null,
     systems: freshSystems(),
     stock: freshStock(),
     log: [],
@@ -145,6 +172,9 @@ export function createGalaxy(seed: number): GalaxyState {
     focusedVesselId: 1,
     alerts: [],
     events: [],
+    starSystems: {},
+    worlds: {},
+    nextWorldId: 1,
     nextVesselId: 2,
     nextAlertId: 1,
     nextEventId: 1,

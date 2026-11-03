@@ -72,3 +72,16 @@ One line of reasoning each. Newest at the bottom. Design questions that `docs/DE
 - **Autosave stays off when the stored save could not be read or set aside**, until the player saves, imports or starts a new galaxy by hand. A storage hiccup must never cost the only copy.
 - **An error boundary keeps export and new galaxy on screen if the dashboard ever fails to draw.** Validation is the first line; this is the last.
 - **While an event is open, the dashboard behind it is `inert` and focus moves into the dialog and stays there.** Keys and clicks can only answer the event.
+
+## Phase 4
+- **A star's system is generated the first time a Vessel arrives, from the worlds stream, and kept in `state.starSystems`.** DESIGN.md: planets generate lazily on arrival. A second Vessel arriving later finds the same system.
+- **2 to 6 bodies on log-spaced orbits from 0.2 to 30 AU; four kinds: molten, rocky, ice world, gas giant.** Inner orbits run molten and rocky, outer ones icy and gas giants. At least one body is always landable, so a hop is never wasted.
+- **A profile is ore 0 to 1, ice 0 to 1, gravity in g, and one hazard (heat, quakes, radiation, storms, deep cold) at severity 1 to 3.** Enough to choose between worlds; hazards and gravity take effect in Phase 5.
+- **Surveying a body takes 30 game days, 60 with sensors below 25, one at a time.** Starting another abandons the current one; dead sensors refuse. DESIGN.md: "survey bodies (takes game time)".
+- **Profiles exist from generation and are hidden until surveyed.** Determinism stays simple; the UI only shows what was surveyed.
+- **No wear and no events while in orbit.** Orbit is the quiet decision beat; transit is where the danger is.
+- **Landing is a `land` command: 10 Fuel, and each unit short costs 3 Hull.** Mirrors dry braking; a landing that empties the hull loses the Vessel.
+- **A landing creates a World (`state.worlds`) and puts the Vessel in phase `planetside`.** Phase 5 hangs terrain, nodes, buildings and robots off it.
+- **Body names are placeholders: the star's name plus b, c, d.** LORE.md leaves names TBD.
+- **Schema 3** adds `starSystems`, `worlds`, `nextWorldId`, and per Vessel `survey` and `worldId`. The 2→3 migration leaves systems empty; a Vessel already in orbit gets its system on the next step.
+- **New commands `surveyBody` and `land`**, alongside the earlier `repair` and `dismissAlert`.

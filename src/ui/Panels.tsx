@@ -138,13 +138,28 @@ export function DestinationReadout({ store }: { store: GameStore }) {
   const s = transitSummary(state, v);
   if (!s) {
     const star = v.starId === null ? undefined : starById(state, v.starId);
-    const where = star ? `at ${star.name}` : '';
+    const sys = v.starId === null ? undefined : state.starSystems[v.starId];
+    let main = `${v.name} · ${v.phase}`;
+    let sub = '';
+    if (v.phase === 'lost') {
+      main = `${v.name} · lost`;
+      sub = 'The hull failed. This Vessel is gone.';
+    } else if (v.phase === 'arrival') {
+      main = `In orbit at ${star?.name ?? 'a star'}`;
+      const body = v.survey ? sys?.bodies[v.survey.bodyId] : undefined;
+      sub = body && v.survey
+        ? `Surveying ${body.name} · ${Math.round((1 - v.survey.remainingSeconds / v.survey.totalSeconds) * 100)}% · ${formatDuration(v.survey.remainingSeconds)} left`
+        : 'Survey a body in the SYSTEM card, then land.';
+    } else if (v.phase === 'planetside') {
+      const world = v.worldId === null ? undefined : state.worlds[v.worldId];
+      const body = world ? state.starSystems[world.starId]?.bodies[world.bodyId] : undefined;
+      main = `Landed on ${body?.name ?? 'a world'}`;
+      sub = 'Planetside: robots and industry arrive in Phase 5.';
+    }
     return (
       <div class={v.phase === 'lost' ? 'readout lost' : 'readout'}>
-        <div class="readout-main">
-          {v.name} · {v.phase === 'lost' ? 'lost' : v.phase} {where}
-        </div>
-        <div class="readout-sub">{v.phase === 'arrival' ? 'Survey and landing arrive in Phase 4.' : v.phase === 'lost' ? 'The hull failed. This Vessel is gone.' : ''}</div>
+        <div class="readout-main">{main}</div>
+        <div class="readout-sub">{sub}</div>
       </div>
     );
   }

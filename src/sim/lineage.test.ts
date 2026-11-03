@@ -3,7 +3,7 @@ import { alertCountFor, flattenLineage, lineageTree } from './lineage';
 import { createGalaxy, freshStock, freshSystems, type Vessel } from './state';
 
 function copy(id: number, parentId: number | null): Vessel {
-  return { id, name: `Vessel ${id}`, parentId, phase: 'planetside', starId: 0, transit: null, systems: freshSystems(), stock: freshStock(), log: [] };
+  return { id, name: `Vessel ${id}`, parentId, phase: 'planetside', starId: 0, transit: null, survey: null, worldId: null, systems: freshSystems(), stock: freshStock(), log: [] };
 }
 
 describe('lineage', () => {
