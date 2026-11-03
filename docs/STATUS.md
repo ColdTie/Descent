@@ -10,7 +10,7 @@ _Updated: 2026-11-03, end of Phase 0._
 - Lint enforces CLAUDE.md rule 1 for `src/sim/**`: no Three.js, Preact, DOM globals or view-layer imports.
 
 ## Deploy
-- Live: https://coldtie.github.io/Descent/ (case-sensitive, `/descent/` is a 404). Verified after workflow run 41575834511: the page serves `<title>Vessel</title>`, the bundle under `/Descent/assets/` loads, and a headless browser renders the Vessel with the HUD at 60 fps.
+- Live: https://coldtie.github.io/Descent/ (case-sensitive, `/descent/` is a 404). Verified after workflow runs 41575834511 and 41577453826: the page serves `<title>Vessel</title>`, the bundle under `/Descent/assets/` matches the local build, and a headless browser renders the Vessel and drive plume with the HUD at 60 fps.
 - Workflow `.github/workflows/pages.yml` runs on every push to `main` and on manual dispatch: `npm ci`, lint, test, build with `VITE_BASE=/<repo name>/`, upload `dist/`, deploy with `actions/deploy-pages`.
 - Pages source: this session could not read or change the repository's Pages settings (that API path is blocked through the session's proxy). The deploy from `main` succeeded and the live site serves the new build, so the Actions route works. Steve, please confirm Settings → Pages → Build and deployment → Source reads "GitHub Actions"; if it still says "Deploy from a branch", switch it.
 - Leftovers from the Godot project that can be deleted: the `gh-pages` branch and the 18 `claude/run-*` branches on origin.

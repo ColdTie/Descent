@@ -20,7 +20,7 @@ One line of reasoning each. Newest at the bottom. Design questions that `docs/DE
 - **`src/main.ts` owns the requestAnimationFrame loop and clamps `dt` to 0.25 s.** A hidden tab does not catch up on return; Phase 1's `GameClock` is fed this clamped value.
 - **Vessel axis convention: nose +Z, Y up, about 8 units long.** Placeholder roll of 0.15 rad/s is cosmetic.
 - **Preact JSX is wired through tsconfig (`jsx: react-jsx`, `jsxImportSource: preact`), no `@preact/preset-vite`.** Vite 8's transform honours it; prefresh HMR can be added if hot reload of UI ever matters.
-- **Tests are colocated as `src/**/*.test.ts` and run in Vitest's `node` environment.** Pure classes get unit tests; Preact components do not, which keeps tests DOM-free.
+- **Tests are colocated as `src/**/*.test.{ts,tsx}` and run in Vitest's `node` environment.** Pure classes get unit tests; Preact components do not, which keeps tests DOM-free.
 - **ESLint enforces CLAUDE.md rule 1.** `src/sim/**` cannot import Three.js, Preact or the view layers, nor touch `window`, `document` and friends; lint already gates the deploy.
 - **Flat shaded `MeshStandardMaterial` under a directional sun plus a hemisphere fill.** Reads as low poly with no extra work; unlit materials lose the facet look.
 - **Pages concurrency does not cancel in-flight deploys** (`cancel-in-progress: false`), matching GitHub's starter workflow; queued runs still collapse to the latest. Permissions are per job: the build job gets read-only scopes, only the deploy job can mint the OIDC token and create a Pages deployment.
