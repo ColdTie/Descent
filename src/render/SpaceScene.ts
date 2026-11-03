@@ -78,7 +78,7 @@ export class SpaceScene {
   sync(state: GalaxyState): void {
     const v = focusedVessel(state);
     const s = transitSummary(state, v);
-    const inTransit = s !== null && v.transit !== null;
+    const inTransit = v.phase === 'transit' && s !== null && v.transit !== null;
     // The drive glows only while it is burning.
     if (this.plume) this.plume.visible = inTransit && s.burn !== 'coast';
     this.vessel.visible = v.phase !== 'lost';

@@ -64,6 +64,7 @@ export function validateGalaxy(d: Raw): string {
     if (!isRecord(v.stock)) return `vessel ${key} stock`;
     for (const id of RESOURCE_IDS) if (!finite(v.stock[id])) return `vessel ${key} ${id}`;
     if (!Array.isArray(v.log)) return `vessel ${key} log`;
+    for (const e of v.log) if (!isRecord(e) || !finite(e.time) || typeof e.text !== 'string') return `vessel ${key} log`;
     if (v.starId !== null && (!int(v.starId) || !starIds.has(v.starId))) return `vessel ${key} star`;
     const t = v.transit;
     if (t !== null) {
@@ -79,7 +80,8 @@ export function validateGalaxy(d: Raw): string {
   if (!Array.isArray(d.alerts)) return 'alerts';
   let maxAlert = 0;
   for (const a of d.alerts) {
-    if (!isRecord(a) || !int(a.id) || !int(a.vesselId) || typeof a.text !== 'string') return 'alerts';
+    if (!isRecord(a) || !int(a.id) || !int(a.vesselId) || typeof a.text !== 'string' || !finite(a.time)) return 'alerts';
+    if (a.level !== 'info' && a.level !== 'warn' && a.level !== 'critical') return 'alerts';
     maxAlert = Math.max(maxAlert, a.id);
   }
   if (!int(d.nextAlertId) || d.nextAlertId <= maxAlert) return 'nextAlertId';

@@ -97,7 +97,7 @@ describe('ledger: burns', () => {
     v.systems.hull.integrity = 10;
     until(g, () => v.phase !== 'transit');
     expect(v.phase).toBe('lost');
-    expect(g.alerts.some((a) => a.text.includes('lost'))).toBe(true);
+    expect(g.alerts.some((a) => a.text.startsWith('Lost'))).toBe(true);
     const t = g.time;
     stepLedger(g, SECONDS_PER_DAY, quiet);
     expect(g.time).toBe(t + SECONDS_PER_DAY);
@@ -173,5 +173,31 @@ describe('ledger: alerts', () => {
     const r = stepLedger(g, SECONDS_PER_DAY);
     expect(r.ran).toBe(false);
     expect(g.time).toBe(0);
+  });
+
+  it('ends a dry brake the same way at 10 minute steps and at day steps', () => {
+    const run = (step: number) => {
+      const g = createGalaxy(1);
+      const v = focusedVessel(g);
+      until(g, () => v.transit!.burn === 'coast');
+      v.transit!.traveledLy = v.transit!.distanceLy - 0.3;
+      v.stock.fuel = 0;
+      v.systems.hull.integrity = 63;
+      for (let i = 0; i < 10_000_000 && v.phase === 'transit'; i += step) stepLedger(g, step, quiet);
+      return { phase: v.phase, hull: v.systems.hull.integrity };
+    };
+    const fine = run(600);
+    const coarse = run(SECONDS_PER_DAY);
+    expect(coarse.phase).toBe(fine.phase);
+    expect(Math.abs(coarse.hull - fine.hull)).toBeLessThan(0.5);
+  });
+
+  it('reports no transit summary once the Vessel is lost', () => {
+    const g = createGalaxy(3);
+    const v = focusedVessel(g);
+    v.systems.hull.integrity = 0;
+    stepLedger(g, 60, quiet);
+    expect(v.phase).toBe('lost');
+    expect(transitSummary(g, v)).toBeNull();
   });
 });

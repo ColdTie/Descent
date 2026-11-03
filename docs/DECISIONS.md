@@ -68,3 +68,7 @@ One line of reasoning each. Newest at the bottom. Design questions that `docs/DE
 - **Resumed and imported galaxies start paused through the `pause` command**, not by writing state from `main.ts` (CLAUDE.md rule 3).
 - **Space and Enter on a keyboard-focused button activate the button; a mouse click drops focus so the next Space pauses.** Fixes keyboard access to cards without breaking click-then-Space.
 - **ESLint now guards `src/content` too, and also bans `Math.random`, `Date.now`, `new Date`, timers, `performance` and `idb-keyval`/`persist` imports in the sim.** From the Phase 1 review.
+- **A coasting step that reaches the stopping point is split there.** Braking starts at the same place at any warp; before, a day step at 10M could start it late and save a borderline Vessel that dies at 1x (Phase 3 review).
+- **Autosave stays off when the stored save could not be read or set aside**, until the player saves, imports or starts a new galaxy by hand. A storage hiccup must never cost the only copy.
+- **An error boundary keeps export and new galaxy on screen if the dashboard ever fails to draw.** Validation is the first line; this is the last.
+- **While an event is open, the dashboard behind it is `inert` and focus moves into the dialog and stays there.** Keys and clicks can only answer the event.

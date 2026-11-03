@@ -66,17 +66,44 @@ function setBurn(state: GalaxyState, vessel: Vessel, burn: Burn, text: string): 
   appendLog(vessel, state.time, text);
 }
 
-/** Accelerate, coast, decelerate. Fuel pays for both burns; braking without fuel or drive costs hull. */
+/** Braking for `years`: slows the Vessel, pays Fuel, and charges Hull for any part of the burn run dry. */
+function brake(state: GalaxyState, vessel: Vessel, years: number, report: StepReport): void {
+  const t = vessel.transit!;
+  const driveOk = vessel.systems.drive.integrity > 0;
+  const want = burnRate(vessel) * years;
+  const used = driveOk ? Math.min(vessel.stock.fuel, want) : 0;
+  vessel.stock.fuel = Math.max(0, vessel.stock.fuel - used);
+  const dryFrac = want > 0 ? 1 - used / want : 0;
+  if (dryFrac > 0) {
+    const hull = vessel.systems.hull;
+    hull.integrity = Math.max(0, hull.integrity - DRY_DECEL_HULL_PER_YEAR * years * dryFrac);
+    if (!t.dryBurn) {
+      t.dryBurn = true;
+      raiseAlert(state, vessel, 'critical', driveOk ? 'Out of fuel mid-braking. The hull takes the rest.' : 'Drive offline mid-braking. The hull takes the rest.', report);
+    }
+  }
+  const v0 = t.speedC;
+  t.speedC = Math.max(MIN_SPEED_C, v0 - ACCEL_C_PER_YEAR * years);
+  t.traveledLy += ((v0 + t.speedC) / 2) * years;
+}
+
+function burnRate(vessel: Vessel): number {
+  return BURN_FUEL_PER_YEAR * (vessel.systems.drive.integrity < WEAK_DRIVE_BELOW ? WEAK_DRIVE_FUEL_MULT : 1);
+}
+
+/**
+ * Accelerate, coast, decelerate. Fuel pays for both burns; braking without fuel or drive costs hull.
+ * A coasting step that reaches the stopping point is split there, so braking starts at the same
+ * place whatever the step length (CLAUDE.md rule 4).
+ */
 function move(state: GalaxyState, vessel: Vessel, years: number, report: StepReport): void {
   const t = vessel.transit!;
   const a = ACCEL_C_PER_YEAR;
-  const driveOk = vessel.systems.drive.integrity > 0;
-  const burnRate = BURN_FUEL_PER_YEAR * (vessel.systems.drive.integrity < WEAK_DRIVE_BELOW ? WEAK_DRIVE_FUEL_MULT : 1);
-  const want = burnRate * years;
   const v0 = t.speedC;
 
   if (t.burn === 'accel') {
-    if (!driveOk || vessel.stock.fuel <= 0) {
+    const want = burnRate(vessel) * years;
+    if (vessel.systems.drive.integrity <= 0 || vessel.stock.fuel <= 0) {
       setBurn(state, vessel, 'coast', `Launch burn cut short at ${t.speedC.toFixed(3)}c.`);
     } else {
       const used = Math.min(vessel.stock.fuel, want);
@@ -86,23 +113,17 @@ function move(state: GalaxyState, vessel: Vessel, years: number, report: StepRep
       if (t.speedC >= t.cruiseC) setBurn(state, vessel, 'coast', `Cruise reached, ${t.cruiseC.toFixed(2)}c. Coasting.`);
     }
   } else if (t.burn === 'coast') {
-    t.traveledLy += t.speedC * years;
-    const stopping = (t.speedC * t.speedC) / (2 * a);
-    if (t.distanceLy - t.traveledLy <= stopping) setBurn(state, vessel, 'decel', 'Deceleration burn started.');
-  } else {
-    const used = driveOk ? Math.min(vessel.stock.fuel, want) : 0;
-    vessel.stock.fuel = Math.max(0, vessel.stock.fuel - used);
-    const dryFrac = want > 0 ? 1 - used / want : 0;
-    if (dryFrac > 0) {
-      const hull = vessel.systems.hull;
-      hull.integrity = Math.max(0, hull.integrity - DRY_DECEL_HULL_PER_YEAR * years * dryFrac);
-      if (!t.dryBurn) {
-        t.dryBurn = true;
-        raiseAlert(state, vessel, 'critical', driveOk ? 'Out of fuel mid-braking. The hull takes the rest.' : 'Drive offline mid-braking. The hull takes the rest.', report);
-      }
+    const stopping = (v0 * v0) / (2 * a);
+    const toBrake = v0 > 0 ? Math.max(0, (t.distanceLy - t.traveledLy - stopping) / v0) : Infinity;
+    if (toBrake >= years) {
+      t.traveledLy += v0 * years;
+    } else {
+      t.traveledLy += v0 * toBrake;
+      setBurn(state, vessel, 'decel', 'Deceleration burn started.');
+      brake(state, vessel, years - toBrake, report);
     }
-    t.speedC = Math.max(MIN_SPEED_C, v0 - a * years);
-    t.traveledLy += ((v0 + t.speedC) / 2) * years;
+  } else {
+    brake(state, vessel, years, report);
   }
 }
 
@@ -122,7 +143,7 @@ function stepTransit(state: GalaxyState, vessel: Vessel, dtSeconds: number, repo
   move(state, vessel, dtSeconds / SECONDS_PER_YEAR, report);
   if (vessel.systems.hull.integrity <= 0) {
     vessel.phase = 'lost';
-    raiseAlert(state, vessel, 'critical', `${vessel.name} lost: the hull failed.`, report);
+    raiseAlert(state, vessel, 'critical', 'Lost: the hull failed.', report);
     return;
   }
   if (vessel.transit.traveledLy >= vessel.transit.distanceLy) {
@@ -192,10 +213,10 @@ export interface TransitSummary {
   etaSeconds: number;
 }
 
-/** What the destination readout shows. Null when the Vessel is not in transit. */
+/** What the destination readout shows. Null when the Vessel is not in transit (arrived, lost, landed). */
 export function transitSummary(state: GalaxyState, vessel: Vessel): TransitSummary | null {
   const t = vessel.transit;
-  if (!t) return null;
+  if (!t || vessel.phase !== 'transit') return null;
   return {
     fromName: starById(state, t.fromStarId)?.name ?? `Star ${t.fromStarId}`,
     targetName: starById(state, t.toStarId)?.name ?? `Star ${t.toStarId}`,

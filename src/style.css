@@ -51,7 +51,7 @@ body {
 }
 
 /* ---- dashboard (Overlay direction): pills over the scene, cards you can fold ---- */
-#ui > div, .dash, .strip, .left-col, .fading-log { pointer-events: none; }
+#ui > div, .dash, .dash-body, .strip, .left-col, .fading-log { pointer-events: none; }
 .pill, .card, .notice, .readout, .alert, .modal-scrim { pointer-events: auto; }
 .dash { font: 12px/1.4 ui-monospace, 'Cascadia Mono', 'JetBrains Mono', Menlo, Consolas, monospace; }
 .strip { position: absolute; left: 10px; right: 10px; display: flex; gap: 8px; align-items: center; }
@@ -166,3 +166,5 @@ body {
 .choice-key { color: #4fd1ff; font-weight: 600; }
 .choice:disabled .choice-key { color: #5c647a; }
 .choice-cost { color: #8e97ad; font-size: 11px; }
+.modal.fallback { position: absolute; top: 80px; left: 50%; transform: translateX(-50%); pointer-events: auto; border-color: #ff6b5a; }
+.modal.fallback .modal-kicker { color: #ff6b5a; }

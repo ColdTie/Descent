@@ -67,6 +67,8 @@ function SaveMenu({ store, actions }: DashboardProps) {
           const file = (e.currentTarget as HTMLInputElement).files?.[0];
           if (file) void actions.importFile(file);
           (e.currentTarget as HTMLInputElement).value = '';
+          // Hand focus back to the page, or hotkeys would treat the hidden input as typing.
+          (e.currentTarget as HTMLInputElement).blur();
         }}
       />
       <button
@@ -106,8 +108,12 @@ function Notice({ store }: { store: GameStore }) {
 }
 
 export function Dashboard({ store, actions }: DashboardProps) {
+  const state = useGame(store);
+  // While an event is open, everything but the dialog is inert: no focus, no clicks.
+  const open = state.events.length > 0;
   return (
     <div class="dash">
+      <div class="dash-body" inert={open}>
       <div class="strip top">
         <ClockPill store={store} />
         <WarpPills store={store} />
@@ -125,6 +131,7 @@ export function Dashboard({ store, actions }: DashboardProps) {
       </div>
       <FadingLog store={store} />
       <DestinationReadout store={store} />
+      </div>
       <EventModal store={store} />
     </div>
   );

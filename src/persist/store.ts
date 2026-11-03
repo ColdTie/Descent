@@ -12,6 +12,8 @@ export interface LoadResult {
   reason: string;
   /** The stored text when it could not be loaded, so it can be kept aside. */
   raw?: string;
+  /** True when storage itself failed to answer; the save may be intact. */
+  readFailed?: boolean;
 }
 
 export async function saveGalaxy(state: GalaxyState): Promise<boolean> {
@@ -30,7 +32,7 @@ export async function loadGalaxy(): Promise<LoadResult> {
     const r = deserialize(text);
     return r.state ? r : { ...r, raw: text };
   } catch (err) {
-    return { state: null, reason: String(err) };
+    return { state: null, reason: String(err), readFailed: true };
   }
 }
 

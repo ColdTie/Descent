@@ -45,6 +45,9 @@ describe('save and load', () => {
       ['nextAlertId', (d) => (d.alerts = [{ id: 4, vesselId: 1, time: 0, level: 'info', text: 'x' }])],
       ['events', (d) => (d.events = [{ id: 1, vesselId: 1, kind: 'nope', time: 0, damage: 0 }])],
       ['vessel 1 hull', (d) => (d.vessels['1'].systems.hull.integrity = null)],
+      ['vessel 1 log', (d) => d.vessels['1'].log.push(null)],
+      ['vessel 1 log', (d) => d.vessels['1'].log.push({ time: 'x', text: 1 })],
+      ['alerts', (d) => { d.alerts = [{ id: 1, vesselId: 1, time: 0, level: 'loud', text: 'x' }]; d.nextAlertId = 2; }],
     ];
     for (const [field, breakIt] of broken) {
       const d = structuredClone(good);
