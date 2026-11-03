@@ -74,14 +74,14 @@ One line of reasoning each. Newest at the bottom. Design questions that `docs/DE
 - **While an event is open, the dashboard behind it is `inert` and focus moves into the dialog and stays there.** Keys and clicks can only answer the event.
 
 ## Phase 4
-- **A star's system is generated the first time a Vessel arrives, from the worlds stream, and kept in `state.starSystems`.** DESIGN.md: planets generate lazily on arrival. A second Vessel arriving later finds the same system.
+- **A star's system is generated the first time a Vessel arrives, from a seed of its own (galaxy seed × star id), and kept in `state.starSystems`.** DESIGN.md: planets generate lazily on arrival. Seeding per star makes a star's planets the same whatever order stars are visited in; the worlds stream stays free for Phase 5 terrain.
 - **2 to 6 bodies on log-spaced orbits from 0.2 to 30 AU; four kinds: molten, rocky, ice world, gas giant.** Inner orbits run molten and rocky, outer ones icy and gas giants. At least one body is always landable, so a hop is never wasted.
 - **A profile is ore 0 to 1, ice 0 to 1, gravity in g, and one hazard (heat, quakes, radiation, storms, deep cold) at severity 1 to 3.** Enough to choose between worlds; hazards and gravity take effect in Phase 5.
 - **Surveying a body takes 30 game days, 60 with sensors below 25, one at a time.** Starting another abandons the current one; dead sensors refuse. DESIGN.md: "survey bodies (takes game time)".
 - **Profiles exist from generation and are hidden until surveyed.** Determinism stays simple; the UI only shows what was surveyed.
 - **No wear and no events while in orbit.** Orbit is the quiet decision beat; transit is where the danger is.
-- **Landing is a `land` command: 10 Fuel, and each unit short costs 3 Hull.** Mirrors dry braking; a landing that empties the hull loses the Vessel.
+- **Landing is a `land` command: 10 Fuel, and each unit short costs 3 Hull; a dead drive burns no Fuel and puts all of it on the Hull.** Mirrors dry braking. A fatal landing loses the Vessel, raises a critical alert, drops warp, and leaves no World. The land button shows the Hull cost and marks a fatal landing in red.
 - **A landing creates a World (`state.worlds`) and puts the Vessel in phase `planetside`.** Phase 5 hangs terrain, nodes, buildings and robots off it.
 - **Body names are placeholders: the star's name plus b, c, d.** LORE.md leaves names TBD.
-- **Schema 3** adds `starSystems`, `worlds`, `nextWorldId`, and per Vessel `survey` and `worldId`. The 2→3 migration leaves systems empty; a Vessel already in orbit gets its system on the next step.
+- **Schema 3** adds `starSystems`, `worlds`, `nextWorldId`, and per Vessel `survey` and `worldId`. The 2→3 migration leaves systems empty; loading builds the system for any Vessel already in orbit, so a paused resume can survey at once.
 - **New commands `surveyBody` and `land`**, alongside the earlier `repair` and `dismissAlert`.

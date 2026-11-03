@@ -62,6 +62,13 @@ export function surveyBlocker(state: GalaxyState, vessel: Vessel, bodyId: number
   return '';
 }
 
+/** What a landing would cost right now. A dead drive burns no Fuel and the Hull takes it all, as in dry braking. */
+export function landingCost(vessel: Vessel): { fuel: number; hull: number; fatal: boolean } {
+  const fuel = vessel.systems.drive.integrity > 0 ? Math.min(vessel.stock.fuel, LANDING_FUEL) : 0;
+  const hull = (LANDING_FUEL - fuel) * LANDING_HULL_PER_FUEL_SHORT;
+  return { fuel, hull, fatal: hull >= vessel.systems.hull.integrity };
+}
+
 /** Why a landing cannot happen, or '' when it can. */
 export function landBlocker(state: GalaxyState, vessel: Vessel, bodyId: number): string {
   if (vessel.phase !== 'arrival') return 'only from orbit';
@@ -135,20 +142,23 @@ export function applyCommand(state: GalaxyState, cmd: Command): CommandResult {
       const blocker = landBlocker(state, vessel, cmd.bodyId);
       if (blocker) return refuse(`land: ${blocker}`);
       const body = bodyAt(state, vessel, cmd.bodyId)!;
-      const short = Math.max(0, LANDING_FUEL - vessel.stock.fuel);
-      vessel.stock.fuel = Math.max(0, vessel.stock.fuel - LANDING_FUEL);
-      if (short > 0) vessel.systems.hull.integrity = Math.max(0, vessel.systems.hull.integrity - short * LANDING_HULL_PER_FUEL_SHORT);
-      const world = { id: state.nextWorldId++, starId: vessel.starId!, bodyId: body.id, vesselId: vessel.id, landedAt: state.time };
-      state.worlds[world.id] = world;
-      vessel.worldId = world.id;
+      const cost = landingCost(vessel);
+      vessel.stock.fuel = Math.max(0, vessel.stock.fuel - cost.fuel);
+      vessel.systems.hull.integrity = Math.max(0, vessel.systems.hull.integrity - cost.hull);
       vessel.survey = null;
       if (vessel.systems.hull.integrity <= 0) {
         vessel.phase = 'lost';
-        appendLog(vessel, state.time, `Landing on ${body.name} failed: the hull gave out.`);
+        const text = `Lost landing on ${body.name}: the hull failed.`;
+        state.alerts.push({ id: state.nextAlertId++, vesselId: vessel.id, time: state.time, level: 'critical', text });
+        appendLog(vessel, state.time, text);
+        state.warp = 1;
         return ok;
       }
+      const world = { id: state.nextWorldId++, starId: vessel.starId!, bodyId: body.id, vesselId: vessel.id, landedAt: state.time };
+      state.worlds[world.id] = world;
+      vessel.worldId = world.id;
       vessel.phase = 'planetside';
-      appendLog(vessel, state.time, `Landed on ${body.name}${short > 0 ? `, short ${short.toFixed(1)} Fuel: hull −${(short * LANDING_HULL_PER_FUEL_SHORT).toFixed(0)}` : ''}.`);
+      appendLog(vessel, state.time, `Landed on ${body.name}${cost.hull > 0 ? `; the landing cost Hull −${cost.hull.toFixed(0)}` : ''}.`);
       return ok;
     }
     // Planetside and launch arrive in Phases 5 to 7. Typed now so callers can be written against them.

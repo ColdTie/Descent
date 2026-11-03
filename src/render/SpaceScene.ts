@@ -132,7 +132,8 @@ export class SpaceScene {
     group.add(sun);
     const n = system.bodies.length;
     system.bodies.forEach((b, i) => {
-      const size = b.kind === 'gasGiant' ? 1.6 : b.kind === 'icy' ? 0.8 : 0.7;
+      // Unsurveyed bodies share one size so the scene does not give their kind away.
+      const size = !b.surveyed ? 0.9 : b.kind === 'gasGiant' ? 1.6 : b.kind === 'icy' ? 0.8 : 0.7;
       const color = b.surveyed ? BODY_COLORS[b.kind] : 0x3a4157;
       const mesh = new THREE.Mesh(new THREE.IcosahedronGeometry(size, 1), new THREE.MeshStandardMaterial({ color, flatShading: true, roughness: 0.9 }));
       const along = n > 1 ? i / (n - 1) : 0.5;

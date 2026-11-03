@@ -194,3 +194,4 @@ body {
 .body-actions button:disabled { color: #5c647a; cursor: default; }
 .body-actions button.land { border-color: #4fd1ff; }
 .body-actions button:focus-visible { outline: 2px solid #4fd1ff; outline-offset: 1px; }
+.body-actions button.land.fatal { border-color: #ff6b5a; color: #ff6b5a; }

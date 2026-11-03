@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { BODY_COUNT_MAX, BODY_COUNT_MIN, BODY_DEFS, LANDING_FUEL, SURVEY_DAYS } from '../content/bodies';
-import { applyCommand, landBlocker, surveyBlocker } from './commands';
-import { stepLedger } from './ledger';
+import { applyCommand, landBlocker, landingCost, surveyBlocker } from './commands';
+import { ensureSystem, stepLedger } from './ledger';
 import { deserialize, migrate, serialize } from './migrations';
 import { createRng } from './rng';
 import { generateStars } from './stars';
@@ -41,7 +41,18 @@ describe('star systems', () => {
     }
   });
 
-  it('is generated on arrival from the worlds stream, deterministically', () => {
+  it('is the same for a star whatever order stars are first visited in', () => {
+    const a = createGalaxy(3);
+    const b = createGalaxy(3);
+    ensureSystem(a, 1);
+    ensureSystem(a, 2);
+    ensureSystem(b, 2);
+    ensureSystem(b, 1);
+    expect(a.starSystems[1]).toEqual(b.starSystems[1]);
+    expect(a.starSystems[2]).toEqual(b.starSystems[2]);
+  });
+
+  it('is generated on arrival, deterministically', () => {
     const a = arrived(3);
     const b = arrived(3);
     const starId = focusedVessel(a).starId!;
@@ -117,6 +128,37 @@ describe('landing', () => {
     expect(deserialize(serialize(g)).reason).toBe('');
   });
 
+  it('burns no Fuel with a dead drive and puts the whole landing on the Hull', () => {
+    const g = arrived(3);
+    const v = focusedVessel(g);
+    const target = g.starSystems[v.starId!]!.bodies.find((b) => BODY_DEFS[b.kind].landable)!;
+    target.surveyed = true;
+    v.systems.drive.integrity = 0;
+    v.stock.fuel = 50;
+    v.systems.hull.integrity = 80;
+    applyCommand(g, { type: 'land', vesselId: 1, bodyId: target.id });
+    expect(v.stock.fuel).toBe(50);
+    expect(v.systems.hull.integrity).toBe(50);
+  });
+
+  it('a fatal landing raises an alert, drops warp and leaves no World behind', () => {
+    const g = arrived(3);
+    const v = focusedVessel(g);
+    const target = g.starSystems[v.starId!]!.bodies.find((b) => BODY_DEFS[b.kind].landable)!;
+    target.surveyed = true;
+    v.stock.fuel = 0;
+    v.systems.hull.integrity = 20;
+    g.warp = 100_000;
+    expect(landingCost(v).fatal).toBe(true);
+    applyCommand(g, { type: 'land', vesselId: 1, bodyId: target.id });
+    expect(v.phase).toBe('lost');
+    expect(v.worldId).toBeNull();
+    expect(g.worlds).toEqual({});
+    expect(g.warp).toBe(1);
+    expect(g.alerts.at(-1)!.text).toContain('Lost landing');
+    expect(deserialize(serialize(g)).reason).toBe('');
+  });
+
   it('costs Hull when the landing burn is short of Fuel', () => {
     const g = arrived(3);
     const v = focusedVessel(g);
@@ -145,9 +187,9 @@ describe('schema 3', () => {
     const r = migrate(v2);
     expect(r.reason).toBe('');
     const state = r.state!;
-    expect(state.starSystems).toEqual({});
-    stepLedger(state, 60);
-    expect(state.starSystems[focusedVessel(state).starId!]).toBeDefined();
+    // Built at load, before any step, so a paused resume can survey straight away.
+    expect(state.starSystems[focusedVessel(state).starId!]).toEqual(g.starSystems[focusedVessel(g).starId!]);
+    expect(applyCommand(state, { type: 'surveyBody', vesselId: 1, bodyId: 0 }).ok).toBe(true);
   });
 
   it('refuses broken systems, worlds and surveys', () => {

@@ -6,6 +6,7 @@ import { SYSTEM_IDS } from '../content/systems';
 import { STREAM_NAMES } from './rng';
 import { BURNS, PHASES, SCHEMA_VERSION, type GalaxyState } from './state';
 import { isWarp } from './time';
+import { ensureSystem } from './ledger';
 
 type Raw = Record<string, unknown>;
 type Migration = (raw: Raw) => Raw;
@@ -147,7 +148,10 @@ export function migrate(raw: unknown): { state: GalaxyState | null; reason: stri
   }
   const problem = validateGalaxy(data);
   if (problem) return { state: null, reason: `save has a bad ${problem}` };
-  return { state: data as unknown as GalaxyState, reason: '' };
+  const state = data as unknown as GalaxyState;
+  // A Vessel in orbit from an older save gets its system now, so a paused resume can survey at once.
+  for (const v of Object.values(state.vessels)) if (v.phase === 'arrival' && v.starId !== null) ensureSystem(state, v.starId);
+  return { state, reason: '' };
 }
 
 export function serialize(state: GalaxyState): string {

@@ -1,5 +1,5 @@
 import { BODY_DEFS, HAZARD_NAMES, LANDING_FUEL, SURVEY_DAYS } from '../content/bodies';
-import { landBlocker, surveyBlocker } from '../sim/commands';
+import { landBlocker, landingCost, surveyBlocker } from '../sim/commands';
 import { surveySeconds } from '../sim/ledger';
 import { focusedVessel } from '../sim/state';
 import type { Body } from '../sim/system';
@@ -26,6 +26,13 @@ export function SystemCard({ store }: { store: GameStore }) {
   const world = v.worldId === null ? undefined : state.worlds[v.worldId];
   const surveyed = system.bodies.filter((b) => b.surveyed).length;
   const days = Math.round(surveySeconds(v, SURVEY_DAYS) / SECONDS_PER_DAY);
+  const cost = landingCost(v);
+  const landLabel = cost.hull > 0 ? `land · ${cost.fuel.toFixed(0)} fuel · hull −${cost.hull.toFixed(0)}` : `land · ${LANDING_FUEL} fuel`;
+  const landTitle = cost.fatal
+    ? `This landing would destroy the Vessel: it needs ${LANDING_FUEL} Fuel and a working drive, and the Hull cannot take −${cost.hull.toFixed(0)}.`
+    : cost.hull > 0
+      ? `Short of Fuel or drive: the Hull takes −${cost.hull.toFixed(0)}.`
+      : `Landing burn costs ${LANDING_FUEL} Fuel.`;
   return (
     <Card id="system" title="SYSTEM" badge={`${surveyed}/${system.bodies.length} surveyed`}>
       <ul class="bodies">
@@ -56,8 +63,8 @@ export function SystemCard({ store }: { store: GameStore }) {
                     </button>
                   ) : null}
                   {b.surveyed && BODY_DEFS[b.kind].landable ? (
-                    <button class="land" disabled={lBlock !== ''} title={lBlock || `landing burn costs ${LANDING_FUEL} Fuel`} onClick={() => store.dispatch({ type: 'land', vesselId: v.id, bodyId: b.id })}>
-                      land · {LANDING_FUEL} fuel
+                    <button class={cost.fatal ? 'land fatal' : 'land'} disabled={lBlock !== ''} title={lBlock || landTitle} onClick={() => store.dispatch({ type: 'land', vesselId: v.id, bodyId: b.id })}>
+                      {cost.fatal ? `land · fatal (hull −${cost.hull.toFixed(0)})` : landLabel}
                     </button>
                   ) : null}
                 </div>

@@ -11,7 +11,7 @@ import {
 } from '../content/transit';
 import { BODY_DEFS, WEAK_SENSORS_SURVEY_MULT } from '../content/bodies';
 import { rollEvent } from './events';
-import { streamRng } from './rng';
+import { createRng, hashString } from './rng';
 import { generateSystem, type StarSystem } from './system';
 import { appendLog, starById, type Alert, type Burn, type GalaxyState, type PendingEvent, type Vessel } from './state';
 import { SECONDS_PER_DAY, SECONDS_PER_HOUR, SECONDS_PER_YEAR } from './time';
@@ -137,7 +137,8 @@ export function ensureSystem(state: GalaxyState, starId: number): StarSystem | n
   if (existing) return existing;
   const star = starById(state, starId);
   if (!star) return null;
-  const system = generateSystem(streamRng(state.rng, 'worlds'), star);
+  // Each star gets its own seed, so its planets are the same whatever order stars are visited in.
+  const system = generateSystem(createRng((state.seed ^ hashString(`system:${starId}`)) >>> 0), star);
   state.starSystems[starId] = system;
   return system;
 }
