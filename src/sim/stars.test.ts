@@ -19,6 +19,18 @@ describe('star map', () => {
     expect(generateStars(createRng(5))).toEqual(generateStars(createRng(5)));
   });
 
+  it('gives every star a neighbour 5 to 15 ly away, so hops always exist', () => {
+    for (let seed = 1; seed <= 40; seed++) {
+      const stars = generateStars(createRng(seed));
+      for (const a of stars) {
+        const ds = stars.filter((b) => b.id !== a.id).map((b) => distanceLy(a, b));
+        expect(Math.min(...ds)).toBeGreaterThanOrEqual(2);
+        expect(ds.some((d) => d >= HOP_MIN_LY && d <= HOP_MAX_LY)).toBe(true);
+      }
+      expect(distanceLy(stars[0]!, pickHopTarget(stars, 0)!)).toBeLessThanOrEqual(HOP_MAX_LY);
+    }
+  });
+
   it('picks the nearest hop inside 5 to 15 ly when one exists', () => {
     for (let seed = 1; seed <= 40; seed++) {
       const stars = generateStars(createRng(seed));

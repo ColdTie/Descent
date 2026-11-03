@@ -1,5 +1,7 @@
 import { useRef } from 'preact/hooks';
+import { focusedVessel } from '../sim/state';
 import { formatClock, formatWarp, WARP_LEVELS } from '../sim/time';
+import { AlertBanner, DestinationReadout, FadingLog, LineageCard, LogCard, StockpileCard, SystemsCard } from './Panels';
 import { type GameStore, useGame } from './store';
 
 export interface AppActions {
@@ -86,6 +88,16 @@ function SaveMenu({ store, actions }: DashboardProps) {
   );
 }
 
+function FocusPill({ store }: { store: GameStore }) {
+  const state = useGame(store);
+  const v = focusedVessel(state);
+  return (
+    <div class="pill focus" title="Focused Vessel. The lineage card lists all of them.">
+      {v.name} · {v.phase}
+    </div>
+  );
+}
+
 function Notice({ store }: { store: GameStore }) {
   useGame(store);
   if (!store.notice) return null;
@@ -98,10 +110,20 @@ export function Dashboard({ store, actions }: DashboardProps) {
       <div class="strip top">
         <ClockPill store={store} />
         <WarpPills store={store} />
+        <FocusPill store={store} />
         <span class="spacer" />
         <SaveMenu store={store} actions={actions} />
       </div>
+      <AlertBanner store={store} />
       <Notice store={store} />
+      <div class="left-col">
+        <SystemsCard store={store} />
+        <StockpileCard store={store} />
+        <LineageCard store={store} />
+        <LogCard store={store} />
+      </div>
+      <FadingLog store={store} />
+      <DestinationReadout store={store} />
     </div>
   );
 }

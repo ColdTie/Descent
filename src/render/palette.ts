@@ -13,3 +13,18 @@ export const palette = {
 } as const;
 
 export type PaletteKey = keyof typeof palette;
+
+/** Star colors by spectral class, for destination markers and the star map. */
+export const SPECTRAL_COLORS: Record<string, number> = {
+  O: 0x9bb0ff,
+  B: 0xaabfff,
+  A: 0xcad7ff,
+  F: 0xf8f7ff,
+  G: 0xfff4ea,
+  K: 0xffd2a1,
+  M: 0xffbd6f,
+};
+
+export function spectralColor(spectral: string): number {
+  return SPECTRAL_COLORS[spectral] ?? palette.star;
+}

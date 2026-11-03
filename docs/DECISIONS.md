@@ -40,3 +40,12 @@ One line of reasoning each. Newest at the bottom. Design questions that `docs/DE
 - **A resumed galaxy starts paused.** The player sees where things stand before decades run; Space resumes.
 - **New galaxy needs a second click within three seconds.** No `confirm()` dialogs; the notice line explains.
 - **Later-phase commands exist as types and are refused at runtime.** Callers can be written against the full command list now; the refusal reason reaches the notice line.
+
+## Phase 2
+- **UI direction is B (Overlay) with C's lineage tree as a drawer** (chosen by Steve from the design brief). Full-bleed scene, pill strip on top, foldable cards on the left, fading log bottom left, destination readout bottom right.
+- **The star map grows as a chain: each new star is placed 5 to 15 ly from one already placed, never closer than 2 ly to another.** A uniform 30 to 60 stars in 50 ly often had no star within hop range of home; the chain guarantees a hop from every star and a connected map.
+- **Card fold state is remembered in `localStorage`, not in the save.** It is a per-browser convenience, so it stays out of `GalaxyState` and out of determinism.
+- **The alert banner shows the newest alert and a count of the rest; integrity alerts are `warn` below 50 and `critical` below 25 and 10**, the same ladder the gauge colours use.
+- **Destination marker sits 60 scene units ahead at departure and 10 on arrival; the departed star sits behind the camera.** The scene reads `transitSummary()` from the ledger each frame and writes nothing back.
+- **The camera orbits a point 7 units ahead of the Vessel.** Keeps the drive plume and the destination in one default framing.
+- **Systems card shows the worst integrity in its header badge; the log card shows the last 40 entries; the fading log the last 3.** Enough to read the ship at 10M warp without opening anything.

@@ -1,0 +1,156 @@
+import { RESOURCE_IDS, RESOURCE_NAMES } from '../content/resources';
+import { SYSTEM_DEFS, SYSTEM_IDS } from '../content/systems';
+import { transitSummary } from '../sim/ledger';
+import { alertCountFor, flattenLineage, lineageTree } from '../sim/lineage';
+import { focusedVessel } from '../sim/state';
+import { formatClock, formatDuration } from '../sim/time';
+import { Card } from './Card';
+import { formatInteger, formatStock, integrityLevel } from './gauges';
+import { type GameStore, useGame } from './store';
+
+export function SystemsCard({ store }: { store: GameStore }) {
+  const state = useGame(store);
+  const v = focusedVessel(state);
+  const worst = Math.min(...SYSTEM_IDS.map((id) => v.systems[id].integrity));
+  return (
+    <Card id="systems" title="SYSTEMS" badge={`${formatInteger(worst)} min`}>
+      <ul class="gauges">
+        {SYSTEM_IDS.map((id) => {
+          const integrity = v.systems[id].integrity;
+          return (
+            <li key={id} class={`gauge ${integrityLevel(integrity)}`} title={`${SYSTEM_DEFS[id].name}: wears ${SYSTEM_DEFS[id].wearPerHour} per game hour in transit`}>
+              <span class="gauge-name">{SYSTEM_DEFS[id].name}</span>
+              <span class="gauge-bar"><span class="gauge-fill" style={{ width: `${Math.max(0, Math.min(100, integrity))}%` }} /></span>
+              <span class="gauge-num">{formatInteger(integrity)}</span>
+            </li>
+          );
+        })}
+      </ul>
+      <div class="card-foot">
+        Parts {formatStock(v.stock.parts)} · Fuel {formatStock(v.stock.fuel)}
+      </div>
+    </Card>
+  );
+}
+
+export function StockpileCard({ store }: { store: GameStore }) {
+  const state = useGame(store);
+  const v = focusedVessel(state);
+  return (
+    <Card id="stockpile" title="STOCKPILE" defaultOpen={false}>
+      <ul class="rows">
+        {RESOURCE_IDS.map((id) => (
+          <li key={id}>
+            <span>{RESOURCE_NAMES[id]}</span>
+            <span class="num">{formatStock(v.stock[id])}</span>
+          </li>
+        ))}
+      </ul>
+    </Card>
+  );
+}
+
+export function LineageCard({ store }: { store: GameStore }) {
+  const state = useGame(store);
+  const nodes = flattenLineage(lineageTree(state));
+  const alerts = state.alerts.length;
+  return (
+    <Card id="lineage" title="LINEAGE" badge={alerts ? `● ${alerts}` : `${nodes.length}`} defaultOpen={false}>
+      <ul class="tree">
+        {nodes.map((n) => {
+          const v = n.vessel;
+          const focused = v.id === state.focusedVesselId;
+          const count = alertCountFor(state, v.id);
+          return (
+            <li key={v.id} style={{ paddingLeft: `${n.depth * 12}px` }}>
+              <button class={focused ? 'tree-node focused' : 'tree-node'} onClick={() => store.dispatch({ type: 'focusVessel', vesselId: v.id })} title={focused ? 'focused' : 'focus this Vessel'}>
+                <span class="tree-dot" />
+                <span class="tree-name">{v.name}</span>
+                <span class="tree-phase">{v.phase}</span>
+                {count ? <span class="tree-alert">● {count}</span> : null}
+              </button>
+            </li>
+          );
+        })}
+      </ul>
+      <div class="card-foot">click a Vessel to focus it</div>
+    </Card>
+  );
+}
+
+export function LogCard({ store }: { store: GameStore }) {
+  const state = useGame(store);
+  const v = focusedVessel(state);
+  const entries = v.log.slice(-40).reverse();
+  return (
+    <Card id="log" title="LOG" badge={`${v.log.length}`} defaultOpen={false}>
+      <ul class="log">
+        {entries.map((e, i) => (
+          <li key={`${e.time}-${i}`}>
+            <span class="log-time">{formatClock(e.time)}</span>
+            <span>{e.text}</span>
+          </li>
+        ))}
+      </ul>
+    </Card>
+  );
+}
+
+/** The last three log lines, newest brightest, bottom left. */
+export function FadingLog({ store }: { store: GameStore }) {
+  const state = useGame(store);
+  const v = focusedVessel(state);
+  const last = v.log.slice(-3).reverse();
+  return (
+    <div class="fading-log" aria-live="polite">
+      {last.map((e, i) => (
+        <div key={`${e.time}-${i}`} style={{ opacity: 1 - i * 0.32 }}>
+          <span class="log-time">{formatClock(e.time)}</span> {e.text}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+export function DestinationReadout({ store }: { store: GameStore }) {
+  const state = useGame(store);
+  const v = focusedVessel(state);
+  const s = transitSummary(state, v);
+  if (!s) {
+    return (
+      <div class="readout">
+        <div>{v.name} · {v.phase}</div>
+      </div>
+    );
+  }
+  return (
+    <div class="readout" title={`${s.fromName} → ${s.targetName}, ${s.distanceLy.toFixed(1)} ly in all`}>
+      <div class="readout-main">
+        {s.targetName} · {s.remainingLy.toFixed(2)} ly · {s.speedC.toFixed(2)}c
+      </div>
+      <div class="readout-sub">
+        ETA {formatDuration(s.etaSeconds)} · {Math.round(s.progress * 100)}% · coasting
+      </div>
+    </div>
+  );
+}
+
+export function AlertBanner({ store }: { store: GameStore }) {
+  const state = useGame(store);
+  const alert = state.alerts[state.alerts.length - 1];
+  if (!alert) return null;
+  const v = state.vessels[alert.vesselId];
+  const more = state.alerts.length - 1;
+  return (
+    <div class={`alert ${alert.level}`} role="status">
+      <span class="alert-text">
+        ▲ {v?.name ?? `Vessel ${alert.vesselId}`} · {alert.text}
+        {more > 0 ? ` (+${more} more)` : ''}
+      </span>
+      {v && v.id !== state.focusedVesselId ? (
+        <button onClick={() => store.dispatch({ type: 'focusVessel', vesselId: v.id })}>focus</button>
+      ) : null}
+      <button onClick={() => store.dispatch({ type: 'dismissAlert', alertId: alert.id })}>dismiss</button>
+    </div>
+  );
+}

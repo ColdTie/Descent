@@ -1,5 +1,5 @@
 import { SYSTEM_ALERT_THRESHOLDS, SYSTEM_DEFS, SYSTEM_IDS } from '../content/systems';
-import { appendLog, type Alert, type GalaxyState, type Vessel } from './state';
+import { appendLog, starById, type Alert, type GalaxyState, type Vessel } from './state';
 import { SECONDS_PER_HOUR, SECONDS_PER_YEAR } from './time';
 
 export interface StepReport {
@@ -25,7 +25,8 @@ function stepTransit(vessel: Vessel, dtSeconds: number, state: GalaxyState, repo
     for (const threshold of SYSTEM_ALERT_THRESHOLDS) {
       if (sys.integrity < threshold && !sys.alerted.includes(threshold)) {
         sys.alerted.push(threshold);
-        const level = threshold <= 10 ? 'critical' : threshold <= 25 ? 'warn' : 'info';
+        // Same ladder as the gauge colours: amber below 50, red below 25.
+        const level = threshold <= 25 ? 'critical' : 'warn';
         raiseAlert(state, vessel, level, `${SYSTEM_DEFS[id].name} integrity below ${threshold}.`, report);
       }
     }
@@ -52,4 +53,30 @@ export function transitEtaSeconds(vessel: Vessel): number {
   const t = vessel.transit;
   if (!t || t.speedC <= 0) return Infinity;
   return ((t.distanceLy - t.traveledLy) / t.speedC) * SECONDS_PER_YEAR;
+}
+
+export interface TransitSummary {
+  fromName: string;
+  targetName: string;
+  distanceLy: number;
+  remainingLy: number;
+  /** 0 to 1. */
+  progress: number;
+  speedC: number;
+  etaSeconds: number;
+}
+
+/** What the destination readout shows. Null when the Vessel is not in transit. */
+export function transitSummary(state: GalaxyState, vessel: Vessel): TransitSummary | null {
+  const t = vessel.transit;
+  if (!t) return null;
+  return {
+    fromName: starById(state, t.fromStarId)?.name ?? `Star ${t.fromStarId}`,
+    targetName: starById(state, t.toStarId)?.name ?? `Star ${t.toStarId}`,
+    distanceLy: t.distanceLy,
+    remainingLy: Math.max(0, t.distanceLy - t.traveledLy),
+    progress: t.distanceLy > 0 ? Math.min(1, t.traveledLy / t.distanceLy) : 1,
+    speedC: t.speedC,
+    etaSeconds: transitEtaSeconds(vessel),
+  };
 }

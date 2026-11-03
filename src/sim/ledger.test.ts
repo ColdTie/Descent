@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { SYSTEM_DEFS, SYSTEM_IDS } from '../content/systems';
-import { stepLedger, transitEtaSeconds } from './ledger';
+import { stepLedger, transitEtaSeconds, transitSummary } from './ledger';
 import { createGalaxy, focusedVessel } from './state';
 import { SECONDS_PER_HOUR, SECONDS_PER_YEAR } from './time';
 
@@ -55,5 +55,22 @@ describe('ledger', () => {
     v.phase = 'planetside';
     stepLedger(g, SECONDS_PER_YEAR);
     expect(v.systems.hull.integrity).toBe(100);
+  });
+
+  it('summarises the transit for the readout', () => {
+    const g = createGalaxy(3);
+    const v = focusedVessel(g);
+    const s0 = transitSummary(g, v)!;
+    expect(s0.fromName).toBe('Home');
+    expect(s0.targetName).toMatch(/^Star \d+$/);
+    expect(s0.progress).toBe(0);
+    expect(s0.remainingLy).toBeCloseTo(s0.distanceLy, 9);
+    stepLedger(g, SECONDS_PER_YEAR * 5);
+    const s1 = transitSummary(g, v)!;
+    expect(s1.remainingLy).toBeCloseTo(s0.distanceLy - 1, 9);
+    expect(s1.progress).toBeCloseTo(1 / s0.distanceLy, 9);
+    v.phase = 'planetside';
+    v.transit = null;
+    expect(transitSummary(g, v)).toBeNull();
   });
 });

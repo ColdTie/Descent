@@ -73,6 +73,7 @@ async function boot(): Promise<void> {
     for (const reason of game.takeRefusals()) store.say(`Refused: ${reason}.`);
     if (report.changed) store.notify();
     store.age(dt);
+    scene.sync(game.state);
     scene.update(dt);
     scene.render();
     fps.sample(dt);
