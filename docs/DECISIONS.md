@@ -25,3 +25,18 @@ One line of reasoning each. Newest at the bottom. Design questions that `docs/DE
 - **Flat shaded `MeshStandardMaterial` under a directional sun plus a hemisphere fill.** Reads as low poly with no extra work; unlit materials lose the facet look.
 - **Pages concurrency does not cancel in-flight deploys** (`cancel-in-progress: false`), matching GitHub's starter workflow; queued runs still collapse to the latest. Permissions are per job: the build job gets read-only scopes, only the deploy job can mint the OIDC token and create a Pages deployment.
 - **`shots/` is gitignored, `scripts/*.mjs` is plain JS outside `tsc`, and `README.md` exists for GitHub's landing view.** None of these are in CLAUDE.md's layout; all are small.
+
+## Phase 1
+- **Game time is integer seconds since the galaxy epoch; the clock shows Y · D · HH:MM.** DESIGN.md says Year / Day / Hour; minutes make 1x and 10x visibly move.
+- **Step length is `clamp(warp / 100, 1 s, 1 day)`.** One second at 1x, one day at 10M, never more than ~116 steps per real second, so per-frame cost is bounded at every level.
+- **At most 240 steps per frame; the rest of the accumulated time is dropped, not caught up.** A stalled tab resumes smoothly instead of spiralling; the dropped amount is reported by the clock.
+- **Warp and pause live in `GalaxyState`; `GameClock` holds only the accumulator.** The ledger is the truth, so the clock has nothing to save.
+- **Commands apply at step boundaries; while paused they apply on the next frame.** Keeps determinism (same seed + same commands by step = same state) without making a paused UI unresponsive.
+- **Integrity alerts at 50 / 25 / 10 are the Phase 2 stand-in for events.** They drop warp to 1x like events will; `dismissAlert` is added to the command list to clear them.
+- **RNG streams keep their cursor in `state.rng`.** `streamRng` writes back on every draw, so a save resumes the exact sequence; the galaxy stream is only used at creation, worlds and events are reserved.
+- **Placeholder names: Vessel 1, Home, Star N.** LORE.md says names are TBD and placeholders are fine.
+- **Persistence lives in `src/persist/`, outside `src/sim`.** idb-keyval touches IndexedDB, which is DOM; sim stays headless and only knows JSON.
+- **Autosave every two minutes and on tab hide; export is a JSON download; import replaces the galaxy and saves at once.** Straight from DESIGN.md; one save slot until Phase 8 adds slots.
+- **A resumed galaxy starts paused.** The player sees where things stand before decades run; Space resumes.
+- **New galaxy needs a second click within three seconds.** No `confirm()` dialogs; the notice line explains.
+- **Later-phase commands exist as types and are refused at runtime.** Callers can be written against the full command list now; the refusal reason reaches the notice line.

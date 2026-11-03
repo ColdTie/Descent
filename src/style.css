@@ -49,3 +49,34 @@ body {
   opacity: 0.5;
   font-size: 11px;
 }
+
+/* ---- dashboard (Overlay direction): pills over the scene, cards you can fold ---- */
+#ui > div { pointer-events: none; }
+.dash * { pointer-events: auto; }
+.dash { font: 12px/1.4 ui-monospace, 'Cascadia Mono', 'JetBrains Mono', Menlo, Consolas, monospace; }
+.strip { position: absolute; left: 10px; right: 10px; display: flex; gap: 8px; align-items: center; }
+.strip.top { top: 10px; }
+.spacer { flex: 1; pointer-events: none; }
+.pill {
+  display: inline-flex; align-items: center; gap: 2px; height: 24px; padding: 0 10px;
+  border-radius: 12px; background: rgba(16, 19, 31, 0.92); border: 1px solid #2a3047; color: #dfe6ff;
+  font-variant-numeric: tabular-nums; white-space: nowrap;
+}
+.pill.clock { min-width: 150px; justify-content: center; }
+.pills { padding: 0 4px; }
+.pills button {
+  appearance: none; border: 0; background: transparent; color: #8e97ad; font: inherit; cursor: pointer;
+  height: 18px; padding: 0 6px; border-radius: 9px;
+}
+.pills button:hover { color: #dfe6ff; }
+.pills button.active { background: #4fd1ff; color: #070912; font-weight: 600; }
+.pills button.pause { color: #dfe6ff; }
+.pills button.pause.active { background: #ffb84d; }
+.pills button.danger:hover { color: #ff8c7a; }
+.pills button:focus-visible { outline: 2px solid #4fd1ff; outline-offset: 1px; }
+.notice {
+  position: absolute; top: 44px; left: 50%; transform: translateX(-50%);
+  padding: 4px 12px; border-radius: 4px; background: rgba(16, 19, 31, 0.92); border: 1px solid #2a3047; color: #dfe6ff;
+}
+.hud { top: auto; bottom: 10px; left: 12px; font-size: 11px; opacity: 0.6; }
+.hud-title, .hud-hint { display: none; }
