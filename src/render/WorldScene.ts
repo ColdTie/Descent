@@ -202,6 +202,14 @@ export class WorldScene implements ViewScene {
       (m.material as THREE.Material).dispose();
       this.buildingMeshes.delete(id);
     }
+    const liveRobots = new Set(c.robots.map((r) => r.id));
+    for (const [id, m] of this.robotMeshes) {
+      if (liveRobots.has(id)) continue;
+      this.scene.remove(m);
+      m.geometry.dispose();
+      (m.material as THREE.Material).dispose();
+      this.robotMeshes.delete(id);
+    }
     for (const r of c.robots) {
       let m = this.robotMeshes.get(r.id);
       if (!m) {

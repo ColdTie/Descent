@@ -62,6 +62,8 @@ function validateColony(c: unknown, where: string): string {
     if (!isRecord(b) || !int(b.id) || !(BUILDING_TYPES as readonly unknown[]).includes(b.type) || !(b.cell === -1 || cellOk(b.cell))) return `${where} buildings`;
     if (!finite(b.progress) || !finite(b.input) || !finite(b.output) || typeof b.paid !== 'boolean' || typeof b.auto !== 'boolean' || typeof b.working !== 'boolean') return `${where} buildings`;
     if (b.nodeId !== null && !int(b.nodeId)) return `${where} buildings`;
+    // Only an unbuilt building may still be waiting for a site.
+    if (b.cell === -1 && ((b.progress as number) >= 1 || b.paid)) return `${where} buildings`;
     ids.add(b.id);
   }
   if (!Array.isArray(c.robots)) return `${where} robots`;
@@ -69,7 +71,17 @@ function validateColony(c: unknown, where: string): string {
     if (!isRecord(r) || !int(r.id) || !(ROBOT_TYPES as readonly unknown[]).includes(r.type) || !cellOk(r.cell) || !finite(r.edge) || !finite(r.carrying)) return `${where} robots`;
     if (!Array.isArray(r.path) || r.path.some((p) => !cellOk(p))) return `${where} robots`;
     const j = r.job;
-    if (j !== null && (!isRecord(j) || (j.kind !== 'survey' && j.kind !== 'build' && j.kind !== 'haul'))) return `${where} robots`;
+    if (j !== null) {
+      if (!isRecord(j)) return `${where} robots`;
+      if (j.kind === 'survey') {
+        if (!cellOk(j.target)) return `${where} robots`;
+      } else if (j.kind === 'build') {
+        if (!int(j.buildingId)) return `${where} robots`;
+      } else if (j.kind === 'haul') {
+        if (!(RESOURCE_IDS as readonly unknown[]).includes(j.resource) || j.resource === 'power') return `${where} robots`;
+        if ((j.category !== 'mine' && j.category !== 'haul') || !int(j.from) || !int(j.to) || !finite(j.amount) || j.amount < 0 || typeof j.loaded !== 'boolean') return `${where} robots`;
+      } else return `${where} robots`;
+    }
     ids.add(r.id);
   }
   if (!Array.isArray(c.queue) || c.queue.some((q) => !int(q))) return `${where} queue`;

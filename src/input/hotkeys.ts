@@ -43,7 +43,10 @@ export function commandForKey(key: string, state: GalaxyState): Command | null {
 }
 
 function isTyping(target: EventTarget | null): boolean {
-  return target instanceof HTMLElement && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable);
+  if (!(target instanceof HTMLElement)) return false;
+  // A slider or checkbox keeps focus after a mouse drag but takes no text; hotkeys still apply.
+  if (target instanceof HTMLInputElement && ['range', 'checkbox', 'radio', 'button'].includes(target.type)) return false;
+  return target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable;
 }
 
 function isButton(target: EventTarget | null): boolean {

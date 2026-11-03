@@ -220,3 +220,47 @@ describe('colony saves', () => {
     expect(LANDER_ID).toBe(0);
   });
 });
+
+describe('Phase 5 review regressions', () => {
+  it('Expand never spends the Parts the first Fabricator chain needs, even if the player waits', () => {
+    const { g, c } = landed(3);
+    hours(g, 24 * 10);
+    for (const building of ['refinery', 'fabricator'] as const) applyCommand(g, { type: 'queueBuild', vesselId: 1, building });
+    for (let day = 0; day < 200 && !c.fabricatorOnline; day++) hours(g, 24);
+    expect(c.fabricatorOnline).toBe(true);
+  });
+
+  it('keeps Metal for a building queued after the Fabricator runs instead of feeding it all in', () => {
+    const { g, c } = landed(3);
+    for (const building of ['solar', 'oreMiner', 'refinery', 'fabricator'] as const) applyCommand(g, { type: 'queueBuild', vesselId: 1, building });
+    for (let day = 0; day < 200 && !c.fabricatorOnline; day++) hours(g, 24);
+    hours(g, 24 * 10);
+    applyCommand(g, { type: 'queueBuild', vesselId: 1, building: 'depot' });
+    const depot = c.buildings.at(-1)!;
+    for (let day = 0; day < 60 && depot.progress < 1; day++) hours(g, 24);
+    expect(depot.progress).toBe(1);
+  });
+
+  it('feeds the Cracker: Volatiles get hauled even with full Ore miners closer to home', () => {
+    const { g, c } = landed(3);
+    for (const building of ['solar', 'oreMiner', 'refinery', 'fabricator', 'cracker'] as const) applyCommand(g, { type: 'queueBuild', vesselId: 1, building });
+    for (let day = 0; day < 120 && !((c.made.fuel ?? 0) > 5); day++) hours(g, 24);
+    expect(c.made.fuel ?? 0).toBeGreaterThan(5);
+  });
+
+  it('a big colony steps a game day in a few milliseconds', () => {
+    const { g, c } = landed(3);
+    const v = focusedVessel(g);
+    v.stock.parts = 5000;
+    v.stock.metal = 5000;
+    for (const t of ['solar', 'refinery', 'fabricator', 'cracker', 'depot', 'solar', 'refinery'] as const) applyCommand(g, { type: 'queueBuild', vesselId: 1, building: t });
+    for (const quota of ['surveyor', 'builder', 'hauler'] as const) applyCommand(g, { type: 'setQuota', vesselId: 1, quota, value: 20 });
+    for (let d = 0; d < 120; d++) hours(g, 24, SECONDS_PER_DAY);
+    expect(c.robots.length).toBeGreaterThan(30);
+    const t0 = performance.now();
+    for (let d = 0; d < 30; d++) stepLedger(g, SECONDS_PER_DAY, quiet);
+    const ms = (performance.now() - t0) / 30;
+    // About 6 ms on a dev box; the bound catches an O(n²) regression without flaking on slow CI runners.
+    expect(ms).toBeLessThan(25);
+  });
+});

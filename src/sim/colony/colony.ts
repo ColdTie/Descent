@@ -204,24 +204,47 @@ export function cancelBuilding(c: Colony, stock: Vessel['stock'], buildingId: nu
   return true;
 }
 
-function serviceQueue(c: Colony, stock: Vessel['stock']): void {
-  // What the player's own unpaid buildings will need; Expand may only spend beyond it.
+/** The chain that makes Parts. Until a Fabricator runs, Expand and converter feeding keep its cost in hand. */
+const FIRST_CHAIN: BuildingType[] = ['oreMiner', 'refinery', 'fabricator'];
+
+/**
+ * Stock that must not be spent on Expand's buildings or fed into converters: the costs of the
+ * player's unpaid buildings, plus, until a Fabricator runs, any missing link of the Parts chain.
+ */
+export function reservations(c: Colony): Partial<Record<StockResource, number>> {
   const reserved: Partial<Record<StockResource, number>> = {};
-  for (const b of c.buildings) {
-    if (b.paid || b.auto || b.progress >= 1) continue;
-    for (const [r, n] of Object.entries(BUILDING_DEFS[b.type].cost)) reserved[r as StockResource] = (reserved[r as StockResource] ?? 0) + (n ?? 0);
+  const add = (type: BuildingType): void => {
+    for (const [r, n] of Object.entries(BUILDING_DEFS[type].cost)) reserved[r as StockResource] = (reserved[r as StockResource] ?? 0) + (n ?? 0);
+  };
+  for (const b of c.buildings) if (!b.paid && !b.auto && b.progress < 1) add(b.type);
+  if (!c.fabricatorOnline) {
+    for (const type of FIRST_CHAIN) {
+      if (!c.buildings.some((b) => b.type === type && (b.paid || !b.auto))) add(type);
+    }
   }
+  return reserved;
+}
+
+// Placement is retried only when something it depends on changed (map knowledge or buildings).
+const placementKey = new WeakMap<Colony, string>();
+
+function serviceQueue(c: Colony, stock: Vessel['stock']): void {
+  const reserved = reservations(c);
   const spare = (type: BuildingType): boolean =>
     Object.entries(BUILDING_DEFS[type].cost).every(([r, n]) => stock[r as StockResource] - (reserved[r as StockResource] ?? 0) >= (n ?? 0));
+  const key = `${c.revealed.reduce((a, b) => a + b, 0)}:${c.buildings.length}:${c.buildings.filter((b) => b.cell >= 0).length}`;
+  const tryPlace = placementKey.get(c) !== key;
   for (const id of c.queue) {
     const b = c.buildings.find((x) => x.id === id);
     if (!b || b.progress >= 1) continue;
-    if (b.cell < 0) {
+    if (b.cell < 0 && tryPlace) {
       const site = findSite(c, b.type);
-      if (!site) continue;
-      b.cell = site.cell;
-      b.nodeId = site.nodeId;
+      if (site) {
+        b.cell = site.cell;
+        b.nodeId = site.nodeId;
+      }
     }
+    if (b.cell < 0) continue;
     if (!b.paid && canAfford(stock, b.type) && (!b.auto || spare(b.type))) {
       pay(stock, b.type);
       b.paid = true;
@@ -230,6 +253,7 @@ function serviceQueue(c: Colony, stock: Vessel['stock']): void {
       }
     }
   }
+  placementKey.set(c, `${c.revealed.reduce((a, b) => a + b, 0)}:${c.buildings.length}:${c.buildings.filter((b) => b.cell >= 0).length}`);
   c.queue = c.queue.filter((id) => c.buildings.some((b) => b.id === id && b.progress < 1));
 }
 
@@ -246,8 +270,11 @@ function expand(c: Colony): void {
   const used = new Set(c.buildings.map((b) => b.nodeId));
   const pendingMiners = c.buildings.filter((b) => BUILDING_DEFS[b.type].node && b.cell < 0).length;
   if (pendingMiners > 0) return;
+  const wantsIce = c.buildings.some((b) => b.type === 'cracker');
   for (const n of c.nodes) {
     if (!n.revealed || used.has(n.id)) continue;
+    // Volatiles only matter once something cracks them.
+    if (n.kind === 'ice' && !wantsIce) continue;
     const b = addToQueue(c, n.kind === 'ore' ? 'oreMiner' : 'iceMiner', true);
     b.cell = n.cell;
     b.nodeId = n.id;
@@ -333,9 +360,6 @@ function cellOf(c: Colony, id: number): number {
   return c.buildings.find((b) => b.id === id)?.cell ?? -1;
 }
 
-function nearestDepot(c: Colony, from: number): { id: number; cell: number } {
-  return depots(c).sort((a, b) => dist(c.size, a.cell, from) - dist(c.size, b.cell, from) || a.id - b.id)[0]!;
-}
 
 function dropJob(r: Robot): void {
   r.job = null;
@@ -349,68 +373,113 @@ interface Option {
   target: number;
 }
 
-function pickJob(c: Colony, r: Robot, stock: Vessel['stock']): Option | null {
+/** What every robot's job choice reads, built once per slice and updated as robots take jobs. */
+interface SliceCtx {
+  built: Building[];
+  byId: Map<number, Building>;
+  nearestDepot: Map<number, { id: number; cell: number }>;
+  claimedOut: Map<number, number>;
+  claimedIn: Map<number, number>;
+  /** Stock already promised to loaded-at-depot hauls, per resource. */
+  claimedStock: Partial<Record<StockResource, number>>;
+  surveyTargets: Set<number>;
+  reserved: Partial<Record<StockResource, number>>;
+  /** Resources a built converter is waiting for. */
+  demand: Set<StockResource>;
+}
+
+function claim(ctx: SliceCtx, job: Job): void {
+  if (job.kind === 'survey') ctx.surveyTargets.add(job.target);
+  if (job.kind !== 'haul') return;
+  if (!job.loaded) {
+    ctx.claimedOut.set(job.from, (ctx.claimedOut.get(job.from) ?? 0) + job.amount);
+    if (job.from === LANDER_ID || ctx.byId.get(job.from)?.type === 'depot') ctx.claimedStock[job.resource] = (ctx.claimedStock[job.resource] ?? 0) + job.amount;
+  }
+  ctx.claimedIn.set(job.to, (ctx.claimedIn.get(job.to) ?? 0) + job.amount);
+}
+
+function sliceCtx(c: Colony): SliceCtx {
+  const done = built(c);
+  const deps = depots(c);
+  const ctx: SliceCtx = {
+    built: done,
+    byId: new Map(c.buildings.map((b) => [b.id, b])),
+    nearestDepot: new Map(),
+    claimedOut: new Map(),
+    claimedIn: new Map(),
+    claimedStock: {},
+    surveyTargets: new Set(),
+    reserved: reservations(c),
+    demand: new Set(),
+  };
+  for (const b of done) {
+    let best = deps[0]!;
+    for (const d of deps) if (dist(c.size, d.cell, b.cell) < dist(c.size, best.cell, b.cell)) best = d;
+    ctx.nearestDepot.set(b.id, best);
+    const def = BUILDING_DEFS[b.type];
+    if (def.input && BUFFER_CAP - b.input >= 5) ctx.demand.add(def.input);
+  }
+  for (const r of c.robots) if (r.job) claim(ctx, r.job);
+  return ctx;
+}
+
+function pickJob(c: Colony, r: Robot, stock: Vessel['stock'], ctx: SliceCtx): Option | null {
   const p = c.priorities;
-  const options: Option[] = [];
+  let best: Option | null = null;
+  const offer = (o: Option): void => {
+    if (!best || o.score > best.score || (o.score === best.score && o.target < best.target)) best = o;
+  };
   const d = (cell: number): number => dist(c.size, r.cell, cell);
+  const spareStock = (res: StockResource): number => stock[res] - (ctx.reserved[res] ?? 0) - (ctx.claimedStock[res] ?? 0);
   if (r.type === 'surveyor' && p.survey > 0) {
     const mask = reachMask(c);
-    const claimed = new Set(c.robots.filter((o) => o !== r && o.job?.kind === 'survey').map((o) => (o.job as { target: number }).target));
-    let best = -1;
+    let cell = -1;
     let bestD = Infinity;
     for (let i = 0; i < c.size * c.size; i++) {
-      if (c.revealed[i] || !mask[i] || claimed.has(i)) continue;
+      if (c.revealed[i] || !mask[i] || ctx.surveyTargets.has(i)) continue;
       const di = d(i);
       if (di < bestD) {
         bestD = di;
-        best = i;
+        cell = i;
       }
     }
-    if (best >= 0) options.push({ score: p.survey * 1000 - bestD, job: { kind: 'survey', target: best }, target: best });
+    if (cell >= 0) offer({ score: p.survey * 1000 - bestD, job: { kind: 'survey', target: cell }, target: cell });
   }
   if (r.type === 'builder' && p.build > 0) {
-    for (const b of c.buildings) {
-      if (!b.paid || b.progress >= 1 || b.cell < 0) continue;
-      options.push({ score: p.build * 1000 - d(b.cell) - c.queue.indexOf(b.id) * 2, job: { kind: 'build', buildingId: b.id }, target: b.cell });
-    }
+    c.queue.forEach((id, qi) => {
+      const b = ctx.byId.get(id);
+      if (!b || !b.paid || b.progress >= 1 || b.cell < 0) return;
+      offer({ score: p.build * 1000 - d(b.cell) - qi * 2, job: { kind: 'build', buildingId: b.id }, target: b.cell });
+    });
   }
   if (r.type === 'hauler') {
-    const claimedOut = new Map<number, number>();
-    const claimedIn = new Map<number, number>();
-    for (const o of c.robots) {
-      if (o === r || o.job?.kind !== 'haul') continue;
-      if (!o.job.loaded) claimedOut.set(o.job.from, (claimedOut.get(o.job.from) ?? 0) + o.job.amount);
-      claimedIn.set(o.job.to, (claimedIn.get(o.job.to) ?? 0) + o.job.amount);
-    }
-    for (const b of built(c)) {
+    for (const b of ctx.built) {
       const def = BUILDING_DEFS[b.type];
-      // Pick up output.
+      const depot = ctx.nearestDepot.get(b.id)!;
       if (def.output) {
         const category = def.mineRate ? 'mine' : 'haul';
-        const avail = b.output - (claimedOut.get(b.id) ?? 0);
-        if (p[category] > 0 && avail >= Math.min(5, BUFFER_CAP) - 1e-9) {
-          const depot = nearestDepot(c, b.cell);
-          // Urgency: a fuller buffer matters more, and converter output twice as much as raw ore.
-          const urgency = b.output * (def.mineRate ? 5 : 10);
-          options.push({ score: p[category] * 1000 + urgency - d(b.cell), job: { kind: 'haul', category, resource: def.output, from: b.id, to: depot.id, amount: Math.min(HAULER_CAPACITY, avail), loaded: false }, target: b.cell });
+        const avail = b.output - (ctx.claimedOut.get(b.id) ?? 0);
+        if (p[category] > 0 && avail >= 5 - 1e-9) {
+          // Urgency: fuller buffers first; a resource a converter is waiting for and the stock lacks goes ahead of
+          // raw material already piled up at home.
+          let urgency = b.output * (def.mineRate ? 5 : 10);
+          if (ctx.demand.has(def.output) && spareStock(def.output) < 10) urgency += 300;
+          else if (def.mineRate && spareStock(def.output) > 100) urgency -= 400;
+          offer({ score: p[category] * 1000 + urgency - d(b.cell), job: { kind: 'haul', category, resource: def.output, from: b.id, to: depot.id, amount: Math.min(HAULER_CAPACITY, avail), loaded: false }, target: b.cell });
         }
       }
-      // Deliver input.
       if (def.input && p.haul > 0) {
-        const room = BUFFER_CAP - b.input - (claimedIn.get(b.id) ?? 0);
-        const have = stock[def.input] - (claimedOut.get(LANDER_ID) ?? 0);
+        const room = BUFFER_CAP - b.input - (ctx.claimedIn.get(b.id) ?? 0);
+        // Only stock nobody else needs: the player's unpaid buildings keep their share.
+        const have = spareStock(def.input);
         if (room >= 5 && have >= 1) {
-          const depot = nearestDepot(c, b.cell);
-          // A starved converter outranks clearing a full miner at the same priority.
           const urgency = (BUFFER_CAP - b.input) * 10;
-          options.push({ score: p.haul * 1000 + urgency - d(depot.cell), job: { kind: 'haul', category: 'haul', resource: def.input, from: depot.id, to: b.id, amount: Math.min(HAULER_CAPACITY, room, have), loaded: false }, target: depot.cell });
+          offer({ score: p.haul * 1000 + urgency - d(depot.cell), job: { kind: 'haul', category: 'haul', resource: def.input, from: depot.id, to: b.id, amount: Math.min(HAULER_CAPACITY, room, have), loaded: false }, target: depot.cell });
         }
       }
     }
   }
-  if (options.length === 0) return null;
-  options.sort((a, b) => b.score - a.score || a.target - b.target);
-  return options[0]!;
+  return best;
 }
 
 function speedOf(r: Robot, profile: BodyProfile | undefined): number {
@@ -452,12 +521,12 @@ function logColony(state: GalaxyState, vessel: Vessel, text: string): void {
   if (vessel.log.length > 200) vessel.log.splice(0, vessel.log.length - 200);
 }
 
-function runRobot(state: GalaxyState, vessel: Vessel, c: Colony, r: Robot, hours: number, profile: BodyProfile | undefined, alerts: Alert[]): void {
+function runRobot(state: GalaxyState, vessel: Vessel, c: Colony, r: Robot, hours: number, profile: BodyProfile | undefined, alerts: Alert[], ctx: SliceCtx): void {
   const speed = speedOf(r, profile);
   let h = hours;
   for (let guard = 0; guard < 24 && h > 1e-9; guard++) {
     if (!r.job) {
-      const opt = pickJob(c, r, vessel.stock);
+      const opt = pickJob(c, r, vessel.stock, ctx);
       if (!opt) return;
       if (!routeTo(c, r, opt.target)) {
         // Unreachable target: survey marks it known so it is not chosen again; other jobs wait.
@@ -465,6 +534,7 @@ function runRobot(state: GalaxyState, vessel: Vessel, c: Colony, r: Robot, hours
         return;
       }
       r.job = opt.job;
+      claim(ctx, opt.job);
     }
     if (r.path.length) {
       h = walk(c, r, h, speed);
@@ -555,7 +625,8 @@ export function stepColony(state: GalaxyState, vessel: Vessel, c: Colony, dtSeco
     const m = sliceColony(state, vessel, c, total / slices, alerts);
     for (const [k, v] of Object.entries(m)) made[k as StockResource] = (made[k as StockResource] ?? 0) + v;
   }
-  for (const [k, v] of Object.entries(made)) c.made[k as StockResource] = round2((c.made[k as StockResource] ?? 0) + v);
+  // Lifetime totals stay unrounded so they do not depend on step size; views round for display.
+  for (const [k, v] of Object.entries(made)) c.made[k as StockResource] = (c.made[k as StockResource] ?? 0) + v;
   c.rates = {};
   for (const [k, v] of Object.entries(made)) c.rates[k as StockResource] = round2(v / Math.max(total, 1e-9));
   vessel.stock.power = round2(c.power.supply - c.power.demand);
@@ -567,7 +638,8 @@ function sliceColony(state: GalaxyState, vessel: Vessel, c: Colony, hours: numbe
   expand(c);
   serviceQueue(c, vessel.stock);
   const made = produce(state, vessel, c, profile, hours);
-  for (const r of c.robots) runRobot(state, vessel, c, r, hours, profile, alerts);
+  const ctx = sliceCtx(c);
+  for (const r of c.robots) runRobot(state, vessel, c, r, hours, profile, alerts, ctx);
   return made;
 }
 

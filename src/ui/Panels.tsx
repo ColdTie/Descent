@@ -60,7 +60,8 @@ export function StockpileCard({ store }: { store: GameStore }) {
   const v = focusedVessel(state);
   const c = colonyOf(state, v);
   return (
-    <Card id="stockpile" title="STOCKPILE" defaultOpen={c !== null}>
+    // Keyed on landed state so it opens by default on landing, unless this browser remembers a choice.
+    <Card key={c ? 'landed' : 'space'} id={c ? 'stockpile-landed' : 'stockpile'} title="STOCKPILE" defaultOpen={c !== null}>
       <ul class="rows">
         {RESOURCE_IDS.map((id) => (
           <li key={id}>

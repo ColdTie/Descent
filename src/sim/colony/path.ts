@@ -20,13 +20,42 @@ export function edgeCost(t: Terrain, a: number, b: number, base: number): number
 }
 
 /** A* over the grid. Returns the cells after `from` up to and including `to`, or null when unreachable. */
+// Scratch buffers reused across searches; a generation stamp marks which entries belong to this search.
+let scratchSize = 0;
+let gen = 0;
+let stamp = new Uint32Array(0);
+let gBuf = new Float64Array(0);
+let fBuf = new Float64Array(0);
+let cameBuf = new Int32Array(0);
+let closedStamp = new Uint32Array(0);
+
 export function findPath(t: Terrain, from: number, to: number): number[] | null {
+  const n = t.size * t.size;
+  if (!Number.isInteger(from) || !Number.isInteger(to) || from < 0 || to < 0 || from >= n || to >= n) return null;
   if (from === to) return [];
   if (t.blocked[to]) return null;
-  const n = t.size * t.size;
-  const g = new Float64Array(n).fill(Infinity);
-  const came = new Int32Array(n).fill(-1);
-  const closed = new Uint8Array(n);
+  if (scratchSize !== n) {
+    scratchSize = n;
+    stamp = new Uint32Array(n);
+    gBuf = new Float64Array(n);
+    fBuf = new Float64Array(n);
+    cameBuf = new Int32Array(n);
+    closedStamp = new Uint32Array(n);
+    gen = 0;
+  }
+  gen = (gen + 1) >>> 0;
+  if (gen === 0) {
+    stamp.fill(0);
+    closedStamp.fill(0);
+    gen = 1;
+  }
+  const g = { get: (i: number): number => (stamp[i] === gen ? gBuf[i]! : Infinity) };
+  const setG = (i: number, v: number, fv: number, from_: number): void => {
+    stamp[i] = gen;
+    gBuf[i] = v;
+    fBuf[i] = fv;
+    cameBuf[i] = from_;
+  };
   const tx = cellX(t.size, to);
   const ty = cellY(t.size, to);
   const h = (i: number): number => {
@@ -36,7 +65,7 @@ export function findPath(t: Terrain, from: number, to: number): number[] | null 
   };
   // Small binary heap keyed on f = g + h; ties broken by cell index for determinism.
   const heap: number[] = [];
-  const f = new Float64Array(n).fill(Infinity);
+  const f = fBuf;
   const less = (a: number, b: number): boolean => f[a]! < f[b]! || (f[a] === f[b] && a < b);
   const push = (i: number): void => {
     heap.push(i);
@@ -67,14 +96,13 @@ export function findPath(t: Terrain, from: number, to: number): number[] | null 
     }
     return top;
   };
-  g[from] = 0;
-  f[from] = h(from);
+  setG(from, 0, h(from), -1);
   push(from);
   while (heap.length) {
     const cur = pop();
-    if (closed[cur]) continue;
+    if (closedStamp[cur] === gen) continue;
     if (cur === to) break;
-    closed[cur] = 1;
+    closedStamp[cur] = gen;
     const cx = cellX(t.size, cur);
     const cy = cellY(t.size, cur);
     for (const [dx, dy, base] of NEIGHBOURS) {
@@ -82,21 +110,19 @@ export function findPath(t: Terrain, from: number, to: number): number[] | null 
       const ny = cy + dy;
       if (nx < 0 || ny < 0 || nx >= t.size || ny >= t.size) continue;
       const nb = cellIndex(t.size, nx, ny);
-      if (closed[nb]) continue;
+      if (closedStamp[nb] === gen) continue;
       const cost = edgeCost(t, cur, nb, base);
       if (cost === Infinity) continue;
-      const ng = g[cur]! + cost;
-      if (ng < g[nb]!) {
-        g[nb] = ng;
-        f[nb] = ng + h(nb);
-        came[nb] = cur;
+      const ng = g.get(cur) + cost;
+      if (ng < g.get(nb)) {
+        setG(nb, ng, ng + h(nb), cur);
         push(nb);
       }
     }
   }
-  if (came[to] === -1) return null;
+  if (stamp[to] !== gen) return null;
   const path: number[] = [];
-  for (let c = to; c !== from; c = came[c]!) path.push(c);
+  for (let c = to; c !== from; c = cameBuf[c]!) path.push(c);
   return path.reverse();
 }
 
