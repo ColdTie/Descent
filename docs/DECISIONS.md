@@ -85,3 +85,26 @@ One line of reasoning each. Newest at the bottom. Design questions that `docs/DE
 - **Body names are placeholders: the star's name plus b, c, d.** LORE.md leaves names TBD.
 - **Schema 3** adds `starSystems`, `worlds`, `nextWorldId`, and per Vessel `survey` and `worldId`. The 2→3 migration leaves systems empty; loading builds the system for any Vessel already in orbit, so a paused resume can survey at once.
 - **New commands `surveyBody` and `land`**, alongside the earlier `repair` and `dismissAlert`.
+
+## Phase 5
+- **A world is a 40 × 40 grid with a value-noise heightmap, generated from a seed of its own (galaxy seed × star × body) and never saved.** Views and the pathfinder rebuild it on demand; cells above 0.8 height are ridges, and steps steeper than 0.12 are cliffs. The landing pad at the centre is flattened.
+- **The landed Vessel is the colony's depot and stockpile: its `stock` is the world's.** No separate inventory, so transit, landing and planetside all read one number per resource.
+- **The Vessel lands with 1 surveyor, 2 builders and 2 haulers.** DESIGN.md says robots are built at the Fabricator, which needs a colony first; a starting crew breaks the loop.
+- **Ore and ice nodes: 2 + 4 × ore and 1 + 4 × ice per world, 4 to 18 cells from the pad, all reachable.** The area within 5 cells of the pad is known on landing; a surveyor reveals 4 cells around each spot it visits.
+- **Two miner buildings, Ore miner and Ice miner, instead of one Miner with a node choice.** One building per command keeps `queueBuild { building }` as written in CLAUDE.md.
+- **Buildings are placed for the player: miners on the nearest free surveyed node of their kind, everything else on the nearest open surveyed ground near the pad.** Click-to-place can come with the drone view or later; v0 needs none.
+- **Costs are paid when construction can start, in queue order. Expand's buildings only spend what the player's queued buildings do not need.** Without the reserve, Expand spent every Part on solar and miners and the Fabricator could never be paid for.
+- **Building costs are tuned so Solar, Ore miner, Refinery and Fabricator need 11 Parts and 30 Metal; a Vessel lands with up to 20 Parts.** The first Fabricator is always reachable from a normal landing.
+- **Power is a rate, not a stock: supply is the Vessel's reactor (4, scaled by its Power integrity) plus 5 per solar array; when demand exceeds supply every powered building runs at supply / demand.** The Power row of the stockpile shows supply / demand.
+- **Robots are typed: surveyors survey, builders build, haulers haul. Each picks the job with the highest priority first, then the nearest; priority 0 switches a category off.** DESIGN.md: "robots pick jobs by priority, then distance". Mine is the priority for hauling miner output; Haul covers deliveries and converter output; Expand switches automatic miners and solar on or off.
+- **Hauls are scored by urgency at equal priority: a starved converter's delivery outranks clearing a full miner.** Otherwise haulers fed the stockpile thousands of Ore while the Refinery sat empty.
+- **Quotas are robot counts; the Fabricator builds robots up to them, one at a time, 5 Parts and 24 hours each.** "Grow the workforce" in DESIGN.md.
+- **Colonies integrate in slices of at most two game hours, even inside a day-long warp step.** A chain of handoffs (mine, haul, refine, haul, fabricate) otherwise ran 50% slower at 10M than at 1x (CLAUDE.md rule 4). Costs 12 slices per day step, about 0.5 ms.
+- **Robot positions are tracked for every colony, not only the focused one.** Cheap at slice scale, and it keeps unfocused worlds exact; CLAUDE.md rule 6's "placed at job sites" shortcut is not needed yet.
+- **Hazards and gravity now act: gravity scales robot speed by 1/√g (clamped); heat and cold slow robots 10% per severity, storms cut solar 20%, quakes slow building 15%, radiation slows the Fabricator 15%.** Simple, visible, and each hazard hurts a different part of the chain.
+- **A `cancelBuild` command removes a queued building; it refunds in full only if no work was done.** The executive needs a way to undo a queue entry.
+- **The first Fabricator raises an alert; other completions are log lines.** Alerts drop warp, and a colony at 10M would otherwise stop every few seconds.
+- **One WebGL renderer lives in a `SceneHost`, which swaps a WorldScene in while the focused Vessel is planetside and SpaceScene otherwise.** CLAUDE.md rule 6: only the focused Vessel gets a world scene, built from the ledger and torn down on unfocus.
+- **RTS camera: left drag orbits, right drag pans across the ground, wheel zooms; the target is clamped to the map.** OrbitControls configured, no extra library.
+- **Ground uses a Lambert material.** It fills the screen; PBR per-pixel shading halved the frame rate in software rendering for no visible gain on matte rock.
+- **Schema 4** adds `world.colony`, and an `auto` flag on buildings. The 3→4 migration sets colonies to null; loading builds a colony for any Vessel already landed.

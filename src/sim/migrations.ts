@@ -1,4 +1,6 @@
 import { BODY_KINDS, HAZARDS } from '../content/bodies';
+import { BUILDING_TYPES, JOB_CATEGORIES, ROBOT_TYPES } from '../content/colony';
+import { ensureColony } from './colony/colony';
 import { EVENT_KINDS } from '../content/events';
 import { RESOURCE_IDS } from '../content/resources';
 import { CRUISE_SPEED_C } from '../content/stars';
@@ -36,7 +38,48 @@ export const MIGRATIONS: Record<number, Migration> = {
     for (const [key, v] of Object.entries(isRecord(raw.vessels) ? raw.vessels : {})) vessels[key] = isRecord(v) ? { ...v, survey: null, worldId: null } : v;
     return { ...raw, vessels, starSystems: {}, worlds: {}, nextWorldId: 1 };
   },
+  // v3 → v4: worlds gain a colony. A world landed before Phase 5 gets its colony built at load.
+  3: (raw) => {
+    const worlds: Raw = {};
+    for (const [key, w] of Object.entries(isRecord(raw.worlds) ? raw.worlds : {})) worlds[key] = isRecord(w) ? { ...w, colony: null } : w;
+    return { ...raw, worlds };
+  },
 };
+
+function validateColony(c: unknown, where: string): string {
+  if (c === null) return '';
+  if (!isRecord(c)) return where;
+  if (!int(c.seed) || !int(c.size) || c.size < 8 || c.size > 256) return `${where} size`;
+  const cells = c.size * c.size;
+  const cellOk = (n: unknown): boolean => int(n) && n >= 0 && n < cells;
+  if (!isRecord(c.priorities) || JOB_CATEGORIES.some((k) => !int((c.priorities as Raw)[k]))) return `${where} priorities`;
+  if (!isRecord(c.quotas) || ROBOT_TYPES.some((k) => !int((c.quotas as Raw)[k]))) return `${where} quotas`;
+  if (!Array.isArray(c.revealed) || c.revealed.length !== cells) return `${where} revealed`;
+  if (!Array.isArray(c.nodes) || c.nodes.some((n) => !isRecord(n) || !int(n.id) || !cellOk(n.cell) || (n.kind !== 'ore' && n.kind !== 'ice') || !finite(n.richness) || typeof n.revealed !== 'boolean')) return `${where} nodes`;
+  if (!Array.isArray(c.buildings)) return `${where} buildings`;
+  const ids = new Set<number>();
+  for (const b of c.buildings) {
+    if (!isRecord(b) || !int(b.id) || !(BUILDING_TYPES as readonly unknown[]).includes(b.type) || !(b.cell === -1 || cellOk(b.cell))) return `${where} buildings`;
+    if (!finite(b.progress) || !finite(b.input) || !finite(b.output) || typeof b.paid !== 'boolean' || typeof b.auto !== 'boolean' || typeof b.working !== 'boolean') return `${where} buildings`;
+    if (b.nodeId !== null && !int(b.nodeId)) return `${where} buildings`;
+    ids.add(b.id);
+  }
+  if (!Array.isArray(c.robots)) return `${where} robots`;
+  for (const r of c.robots) {
+    if (!isRecord(r) || !int(r.id) || !(ROBOT_TYPES as readonly unknown[]).includes(r.type) || !cellOk(r.cell) || !finite(r.edge) || !finite(r.carrying)) return `${where} robots`;
+    if (!Array.isArray(r.path) || r.path.some((p) => !cellOk(p))) return `${where} robots`;
+    const j = r.job;
+    if (j !== null && (!isRecord(j) || (j.kind !== 'survey' && j.kind !== 'build' && j.kind !== 'haul'))) return `${where} robots`;
+    ids.add(r.id);
+  }
+  if (!Array.isArray(c.queue) || c.queue.some((q) => !int(q))) return `${where} queue`;
+  if (!int(c.nextId) || [...ids].some((i) => i >= (c.nextId as number))) return `${where} nextId`;
+  if (!isRecord(c.power) || !finite(c.power.supply) || !finite(c.power.demand)) return `${where} power`;
+  if (!isRecord(c.made) || !isRecord(c.rates) || typeof c.fabricatorOnline !== 'boolean') return `${where} stats`;
+  const rb = c.robotBuild;
+  if (rb !== null && (!isRecord(rb) || !(ROBOT_TYPES as readonly unknown[]).includes(rb.type) || !finite(rb.remainingHours))) return `${where} robotBuild`;
+  return '';
+}
 
 const finite = (n: unknown): n is number => typeof n === 'number' && Number.isFinite(n);
 const int = (n: unknown): n is number => Number.isInteger(n);
@@ -119,6 +162,9 @@ export function validateGalaxy(d: Raw): string {
     if (!isRecord(w) || !int(w.id) || String(w.id) !== key || !int(w.vesselId) || !int(w.starId) || !int(w.bodyId) || !finite(w.landedAt)) return `world ${key}`;
     const sys = d.starSystems[String(w.starId)];
     if (!isRecord(sys) || !Array.isArray(sys.bodies) || !sys.bodies[w.bodyId]) return `world ${key} body`;
+    if (!('colony' in w)) return `world ${key} colony`;
+    const bad = validateColony(w.colony, `world ${key} colony`);
+    if (bad) return bad;
     maxWorld = Math.max(maxWorld, w.id);
   }
   if (!int(d.nextWorldId) || d.nextWorldId <= maxWorld) return 'nextWorldId';
@@ -150,7 +196,10 @@ export function migrate(raw: unknown): { state: GalaxyState | null; reason: stri
   if (problem) return { state: null, reason: `save has a bad ${problem}` };
   const state = data as unknown as GalaxyState;
   // A Vessel in orbit from an older save gets its system now, so a paused resume can survey at once.
-  for (const v of Object.values(state.vessels)) if (v.phase === 'arrival' && v.starId !== null) ensureSystem(state, v.starId);
+  for (const v of Object.values(state.vessels)) {
+    if (v.phase === 'arrival' && v.starId !== null) ensureSystem(state, v.starId);
+    if (v.phase === 'planetside') ensureColony(state, v);
+  }
   return { state, reason: '' };
 }
 

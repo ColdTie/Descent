@@ -195,3 +195,36 @@ body {
 .body-actions button.land { border-color: #4fd1ff; }
 .body-actions button:focus-visible { outline: 2px solid #4fd1ff; outline-offset: 1px; }
 .body-actions button.land.fatal { border-color: #ff6b5a; color: #ff6b5a; }
+
+/* ---- executive panel ---- */
+.right-col { position: absolute; top: 44px; right: 10px; width: 250px; display: flex; flex-direction: column; gap: 6px; max-height: calc(100vh - 130px); overflow-y: auto; pointer-events: none; }
+.right-col > .card { flex: none; }
+.sliders, .quotas, .queue { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.sliders li { display: grid; grid-template-columns: 56px 1fr 26px; align-items: center; gap: 6px; }
+.sliders input[type='range'] { width: 100%; accent-color: #4fd1ff; }
+.sliders input:focus-visible { outline: 2px solid #4fd1ff; outline-offset: 2px; }
+.quotas li { display: grid; grid-template-columns: 10px 1fr auto 20px 20px; align-items: center; gap: 6px; }
+.quotas button, .queue button {
+  appearance: none; width: 20px; height: 18px; padding: 0; border: 1px solid #2a3047; border-radius: 3px; background: transparent; color: #4fd1ff; font: inherit; cursor: pointer;
+}
+.quotas button:disabled { color: #3a4157; cursor: default; }
+.quotas button:focus-visible, .queue button:focus-visible, .build-btn:focus-visible { outline: 2px solid #4fd1ff; outline-offset: 1px; }
+.robot-dot { width: 8px; height: 8px; border-radius: 50%; }
+.robot-dot.surveyor { background: #4fd1ff; }
+.robot-dot.builder { background: #ffb84d; }
+.robot-dot.hauler { background: #9cdb6a; }
+.build-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; }
+.build-btn {
+  appearance: none; display: flex; flex-direction: column; align-items: flex-start; gap: 1px; padding: 4px 6px; border: 1px solid #2a3047; border-radius: 3px;
+  background: transparent; color: #dfe6ff; font: inherit; font-size: 11px; cursor: pointer; text-align: left;
+}
+.build-btn:hover:not(:disabled) { border-color: #4fd1ff; background: #13203a; }
+.build-btn.short { color: #8e97ad; }
+.build-cost { color: #8e97ad; font-size: 10px; }
+.queue { margin-top: 8px; }
+.queue li { display: grid; grid-template-columns: 1fr 20px; gap: 2px 6px; padding: 4px 0; border-top: 1px solid #1d2235; }
+.queue-name { font-size: 11px; }
+.queue-state { grid-column: 1; color: #8e97ad; font-size: 10px; }
+.queue li button { grid-row: 1 / span 2; grid-column: 2; align-self: center; color: #ff8c7a; }
+.auto { color: #8e97ad; }
+.rate { color: #9cdb6a; font-size: 10px; }

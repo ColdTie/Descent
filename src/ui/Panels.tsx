@@ -5,6 +5,8 @@ import { repairBlocker, repairGain } from '../sim/commands';
 import { transitSummary } from '../sim/ledger';
 import { alertCountFor, flattenLineage, lineageTree } from '../sim/lineage';
 import { focusedVessel, starById } from '../sim/state';
+import { colonyOf } from '../sim/commands';
+import { rateText } from './colonyView';
 import { formatClock, formatDuration } from '../sim/time';
 import { Card } from './Card';
 import { formatInteger, formatStock, integrityLevel } from './gauges';
@@ -56,16 +58,21 @@ function RepairButton({ store, system }: { store: GameStore; system: (typeof SYS
 export function StockpileCard({ store }: { store: GameStore }) {
   const state = useGame(store);
   const v = focusedVessel(state);
+  const c = colonyOf(state, v);
   return (
-    <Card id="stockpile" title="STOCKPILE" defaultOpen={false}>
+    <Card id="stockpile" title="STOCKPILE" defaultOpen={c !== null}>
       <ul class="rows">
         {RESOURCE_IDS.map((id) => (
           <li key={id}>
             <span>{RESOURCE_NAMES[id]}</span>
-            <span class="num">{formatStock(v.stock[id])}</span>
+            <span class="num">
+              {id === 'power' && c ? `${formatStock(c.power.supply)} / ${formatStock(c.power.demand)}` : formatStock(v.stock[id])}
+              {c && id !== 'power' ? <span class="rate"> {rateText(c.rates[id])}</span> : null}
+            </span>
           </li>
         ))}
       </ul>
+      {c ? <div class="card-foot">Rates are what the colony made per game hour over the last step.</div> : null}
     </Card>
   );
 }
@@ -154,7 +161,10 @@ export function DestinationReadout({ store }: { store: GameStore }) {
       const world = v.worldId === null ? undefined : state.worlds[v.worldId];
       const body = world ? state.starSystems[world.starId]?.bodies[world.bodyId] : undefined;
       main = `Landed on ${body?.name ?? 'a world'}`;
-      sub = 'Planetside: robots and industry arrive in Phase 5.';
+      const col = colonyOf(state, v);
+      sub = col
+        ? `${col.robots.length} robots · ${col.buildings.filter((b) => b.progress >= 1).length} buildings · ${col.fabricatorOnline ? 'Fabricator online' : 'no Fabricator yet'}`
+        : 'Setting up the colony.';
     }
     return (
       <div class={v.phase === 'lost' ? 'readout lost' : 'readout'}>

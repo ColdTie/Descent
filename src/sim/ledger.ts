@@ -11,6 +11,7 @@ import {
 } from '../content/transit';
 import { BODY_DEFS, WEAK_SENSORS_SURVEY_MULT } from '../content/bodies';
 import { rollEvent } from './events';
+import { ensureColony, stepColony } from './colony/colony';
 import { createRng, hashString } from './rng';
 import { generateSystem, type StarSystem } from './system';
 import { appendLog, starById, type Alert, type Burn, type GalaxyState, type PendingEvent, type Vessel } from './state';
@@ -210,6 +211,10 @@ export function stepLedger(state: GalaxyState, dtSeconds: number, opts: StepOpti
   for (const vessel of Object.values(state.vessels)) {
     if (vessel.phase === 'transit') stepTransit(state, vessel, dtSeconds, report, opts);
     else if (vessel.phase === 'arrival') stepOrbit(state, vessel, dtSeconds, report);
+    else if (vessel.phase === 'planetside') {
+      const colony = ensureColony(state, vessel);
+      if (colony) stepColony(state, vessel, colony, dtSeconds, report.alerts);
+    }
   }
   state.time += dtSeconds;
   if (report.alerts.length > 0 || report.events.length > 0) state.warp = 1;

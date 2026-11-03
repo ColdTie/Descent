@@ -3,7 +3,10 @@ import { SYSTEM_IDS, type SystemId } from '../content/systems';
 import { REPAIR_AMOUNT, REPAIR_PARTS } from '../content/transit';
 import { applyChoice, choiceBlocker, choicesFor } from './events';
 import { surveySeconds } from './ledger';
-import { appendLog, type GalaxyState, getVessel, type Vessel } from './state';
+import { addToQueue, cancelBuilding, createColony, profileFor } from './colony/colony';
+import { BUILDING_DEFS, BUILDING_TYPES, JOB_CATEGORIES, PRIORITY_MAX, ROBOT_TYPES, type BuildingType, type JobCategory, type RobotType } from '../content/colony';
+import type { Colony } from './colony/types';
+import { appendLog, type GalaxyState, getVessel, type Vessel, type World } from './state';
 import { isWarp } from './time';
 
 /** Every way the player can change the galaxy. UI, hotkeys and the drone view dispatch these; nothing else writes state. */
@@ -11,9 +14,10 @@ export type Command =
   | { type: 'setWarp'; warp: number }
   | { type: 'pause'; paused: boolean }
   | { type: 'focusVessel'; vesselId: number }
-  | { type: 'setPriority'; vesselId: number; job: string; value: number }
-  | { type: 'queueBuild'; vesselId: number; building: string }
-  | { type: 'setQuota'; vesselId: number; quota: string; value: number }
+  | { type: 'setPriority'; vesselId: number; job: JobCategory; value: number }
+  | { type: 'queueBuild'; vesselId: number; building: BuildingType }
+  | { type: 'cancelBuild'; vesselId: number; buildingId: number }
+  | { type: 'setQuota'; vesselId: number; quota: RobotType; value: number }
   | { type: 'pilotRobot'; vesselId: number; robotId: number | null }
   | { type: 'resolveEvent'; eventId: number; choice: number }
   | { type: 'repair'; vesselId: number; system: SystemId }
@@ -77,6 +81,20 @@ export function landBlocker(state: GalaxyState, vessel: Vessel, bodyId: number):
   if (!body.surveyed) return 'survey it first';
   if (!BODY_DEFS[body.kind].landable) return `${BODY_DEFS[body.kind].name.toLowerCase()}: no surface`;
   return '';
+}
+
+/** The colony a planetside Vessel runs, or null. */
+export function colonyOf(state: GalaxyState, vessel: Vessel): Colony | null {
+  if (vessel.phase !== 'planetside' || vessel.worldId === null) return null;
+  return state.worlds[vessel.worldId]?.colony ?? null;
+}
+
+function colonyFor(state: GalaxyState, vesselId: number): { vessel: Vessel; colony: Colony } | string {
+  const vessel = getVessel(state, vesselId);
+  if (!vessel) return `no Vessel ${vesselId}`;
+  const colony = colonyOf(state, vessel);
+  if (!colony) return `${vessel.name} has no colony`;
+  return { vessel, colony };
 }
 
 /** Applies one command in place. */
@@ -154,17 +172,46 @@ export function applyCommand(state: GalaxyState, cmd: Command): CommandResult {
         state.warp = 1;
         return ok;
       }
-      const world = { id: state.nextWorldId++, starId: vessel.starId!, bodyId: body.id, vesselId: vessel.id, landedAt: state.time };
+      const world: World = { id: state.nextWorldId++, starId: vessel.starId!, bodyId: body.id, vesselId: vessel.id, landedAt: state.time, colony: null };
+      world.colony = createColony(state.seed, world, profileFor(state, world) ?? body.profile);
       state.worlds[world.id] = world;
       vessel.worldId = world.id;
       vessel.phase = 'planetside';
       appendLog(vessel, state.time, `Landed on ${body.name}${cost.hull > 0 ? `; the landing cost Hull −${cost.hull.toFixed(0)}` : ''}.`);
       return ok;
     }
-    // Planetside and launch arrive in Phases 5 to 7. Typed now so callers can be written against them.
-    case 'setPriority':
-    case 'queueBuild':
-    case 'setQuota':
+    case 'setPriority': {
+      const ctx = colonyFor(state, cmd.vesselId);
+      if (typeof ctx === 'string') return refuse(ctx);
+      if (!JOB_CATEGORIES.includes(cmd.job)) return refuse(`unknown job ${cmd.job}`);
+      if (!Number.isInteger(cmd.value) || cmd.value < 0 || cmd.value > PRIORITY_MAX) return refuse(`priority must be 0 to ${PRIORITY_MAX}`);
+      ctx.colony.priorities[cmd.job] = cmd.value;
+      return ok;
+    }
+    case 'setQuota': {
+      const ctx = colonyFor(state, cmd.vesselId);
+      if (typeof ctx === 'string') return refuse(ctx);
+      if (!ROBOT_TYPES.includes(cmd.quota)) return refuse(`unknown robot ${cmd.quota}`);
+      if (!Number.isInteger(cmd.value) || cmd.value < 0 || cmd.value > 20) return refuse('quota must be 0 to 20');
+      ctx.colony.quotas[cmd.quota] = cmd.value;
+      return ok;
+    }
+    case 'queueBuild': {
+      const ctx = colonyFor(state, cmd.vesselId);
+      if (typeof ctx === 'string') return refuse(ctx);
+      if (!BUILDING_TYPES.includes(cmd.building)) return refuse(`unknown building ${cmd.building}`);
+      if (BUILDING_DEFS[cmd.building].locked) return refuse(`${BUILDING_DEFS[cmd.building].name} arrives in a later phase`);
+      if (ctx.colony.queue.length >= 12) return refuse('build queue is full (12)');
+      addToQueue(ctx.colony, cmd.building);
+      appendLog(ctx.vessel, state.time, `Queued ${BUILDING_DEFS[cmd.building].name}.`);
+      return ok;
+    }
+    case 'cancelBuild': {
+      const ctx = colonyFor(state, cmd.vesselId);
+      if (typeof ctx === 'string') return refuse(ctx);
+      return cancelBuilding(ctx.colony, ctx.vessel.stock, cmd.buildingId) ? ok : refuse(`no queued building ${cmd.buildingId}`);
+    }
+    // Drone view and launch arrive in Phases 6 and 7. Typed now so callers can be written against them.
     case 'pilotRobot':
     case 'launch':
       return refuse(`${cmd.type} is not implemented yet`);

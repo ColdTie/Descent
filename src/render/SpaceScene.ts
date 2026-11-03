@@ -6,9 +6,10 @@ import { makeStarField } from './StarField';
 import { transitSummary } from '../sim/ledger';
 import { focusedVessel, starById, type GalaxyState } from '../sim/state';
 import { BODY_COLORS, spectralColor } from './palette';
+import type { ViewScene } from './ViewScene';
 
-/** Phase 0 placeholder: a Vessel in a star field with an orbit camera. Reads no sim state yet. */
-export class SpaceScene {
+/** The Vessel in space: transit, arrival and orbit. Reads sim state; never writes it. */
+export class SpaceScene implements ViewScene {
   private readonly renderer: THREE.WebGLRenderer;
   private readonly scene = new THREE.Scene();
   private readonly camera: THREE.PerspectiveCamera;
@@ -22,8 +23,8 @@ export class SpaceScene {
   private systemKey = '';
   private readonly onResize = (): void => this.resize();
 
-  constructor(canvas: HTMLCanvasElement) {
-    this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+  constructor(canvas: HTMLCanvasElement, renderer: THREE.WebGLRenderer) {
+    this.renderer = renderer;
     this.scene.background = new THREE.Color(palette.space);
 
     this.camera = new THREE.PerspectiveCamera(50, 1, 0.1, 5000);
@@ -65,6 +66,8 @@ export class SpaceScene {
     window.addEventListener('resize', this.onResize);
     this.resize();
   }
+
+  /** The renderer belongs to the SceneHost; the scene only frees its own objects. */
 
   resize(): void {
     const width = window.innerWidth;
@@ -172,6 +175,5 @@ export class SpaceScene {
       if (Array.isArray(mat)) mat.forEach((x) => x.dispose());
       else mat?.dispose();
     });
-    this.renderer.dispose();
   }
 }

@@ -2,7 +2,7 @@ import { h, render } from 'preact';
 import './style.css';
 import { installHotkeys } from './input/hotkeys';
 import { Autosaver, clearGalaxy, exportGalaxy, importGalaxy, keepUnreadable, loadGalaxy, saveGalaxy, UNREADABLE_KEY } from './persist/store';
-import { SpaceScene } from './render/SpaceScene';
+import { SceneHost } from './render/SceneHost';
 import { Game } from './sim/game';
 import { createGalaxy } from './sim/state';
 import { Dashboard, type AppActions } from './ui/Dashboard';
@@ -43,7 +43,7 @@ async function boot(): Promise<void> {
       10000,
     );
   }
-  const scene = new SpaceScene(canvas);
+  const scene = new SceneHost(canvas);
   const fps = new FpsMeter();
   const autosaver = new Autosaver(
     () => game.state,
@@ -88,6 +88,7 @@ async function boot(): Promise<void> {
   if (autosaveSafe) autosaver.start();
 
   let last = performance.now();
+  (window as unknown as { __vesselScene?: () => string }).__vesselScene = () => scene.current;
   function frame(now: number): void {
     const dt = Math.min((now - last) / 1000, 0.25);
     last = now;
@@ -95,9 +96,7 @@ async function boot(): Promise<void> {
     for (const reason of game.takeRefusals()) store.say(`Refused: ${reason}.`);
     if (report.changed) store.notify();
     store.age(dt);
-    scene.sync(game.state);
-    scene.update(dt);
-    scene.render();
+    scene.frame(game.state, dt);
     fps.sample(dt);
     requestAnimationFrame(frame);
   }

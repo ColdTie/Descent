@@ -3,6 +3,7 @@ import { focusedVessel } from '../sim/state';
 import { formatClock, formatWarp, WARP_LEVELS } from '../sim/time';
 import { EventModal } from './EventModal';
 import { SystemCard } from './SystemCard';
+import { ExecutivePanel } from './ExecutivePanel';
 import { AlertBanner, DestinationReadout, FadingLog, LineageCard, LogCard, StockpileCard, SystemsCard } from './Panels';
 import { type GameStore, useGame } from './store';
 
@@ -131,6 +132,7 @@ export function Dashboard({ store, actions }: DashboardProps) {
         <LineageCard store={store} />
         <LogCard store={store} />
       </div>
+      <ExecutivePanel store={store} />
       <FadingLog store={store} />
       <DestinationReadout store={store} />
       </div>

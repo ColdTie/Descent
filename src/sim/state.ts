@@ -5,9 +5,10 @@ import { SYSTEM_IDS, type SystemId } from '../content/systems';
 import { initialRngStates, streamRng, type RngStates } from './rng';
 import { distanceLy, generateStars, pickHopTarget, type Star } from './stars';
 import type { StarSystem } from './system';
+import type { Colony } from './colony/types';
 import type { Warp } from './time';
 
-export const SCHEMA_VERSION = 3;
+export const SCHEMA_VERSION = 4;
 
 export const PHASES = ['transit', 'arrival', 'planetside', 'replicate', 'launch', 'lost'] as const;
 export type Phase = (typeof PHASES)[number];
@@ -63,13 +64,14 @@ export interface Survey {
   totalSeconds: number;
 }
 
-/** A body a Vessel has landed on. Planetside state (nodes, buildings, robots) arrives in Phase 5. */
+/** A body a Vessel has landed on, with its colony: nodes, buildings, robots. */
 export interface World {
   id: number;
   starId: number;
   bodyId: number;
   vesselId: number;
   landedAt: number;
+  colony: Colony | null;
 }
 
 export interface LogEntry {
